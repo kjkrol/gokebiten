@@ -87,7 +87,7 @@ func (g *Game) Resume() { g.paused = false }
 func (g *Game) TogglePause() { g.paused = !g.paused }
 
 func RegComp[C any](game *Game) goke.CompID {
-	return goke.RegComp[C](game.ecs)
+	return game.ecs.RegComp[C]()
 }
 
 func (g *Game) RegSys(factory func() goke.System) goke.Runnable {

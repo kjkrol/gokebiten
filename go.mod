@@ -1,10 +1,10 @@
 module github.com/kjkrol/gokebiten
 
-go 1.26.4
+go 1.27rc3
 
 require (
 	github.com/hajimehoshi/ebiten/v2 v2.9.8
-	github.com/kjkrol/goke/v3 v3.0.0-00010101000000-000000000000
+	github.com/kjkrol/goke/v3 v3.0.0
 	github.com/kjkrol/gokg v1.2.12
 	github.com/kjkrol/uid v0.2.1
 )
@@ -17,7 +17,3 @@ require (
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect
 )
-
-// goke/v3 isn't tagged/published yet — points at the sibling checkout until
-// a real v3 release exists. Remove once github.com/kjkrol/goke/v3 is tagged.
-replace github.com/kjkrol/goke/v3 => ../goke
