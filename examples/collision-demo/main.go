@@ -10,6 +10,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten"
 	"github.com/kjkrol/gokebiten/control"
+	"github.com/kjkrol/gokebiten/physics"
 	"github.com/kjkrol/gokebiten/physics/collisions"
 	"github.com/kjkrol/gokebiten/physics/collisions/strategies/elastic"
 	"github.com/kjkrol/gokebiten/physics/collisions/strategies/stats"
@@ -68,15 +69,15 @@ func main() {
 
 	game.UseWorld(spatial.Population{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize})
 
-	physics := game.UsePhysics()
-	physics.SetCollisionHandlers(
+	physicsModule := physics.New(game.Space(), game.ECS(), RectSize, game.Step())
+	physicsModule.SetCollisionHandlers(
 		elastic.NewHandler(),
 		stats.NewHandler(&resources.Telemetry().Collision),
 	)
-	physics.SetHitExpires(100 * time.Millisecond)
+	physicsModule.SetHitExpires(100 * time.Millisecond)
 
 	game.Loop(func(ctx goke.RunCtx, d time.Duration) {
-		physics.Run(ctx, d)
+		physicsModule.RunPlan(ctx, d)
 		ctx.Sync()
 	})
 
@@ -109,6 +110,8 @@ func main() {
 			}
 		}),
 	)
+
+	game.UseModule(physicsModule)
 
 	game.Run()
 }

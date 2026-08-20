@@ -10,6 +10,8 @@ import (
 	"github.com/kjkrol/gokg"
 )
 
+var _ goke.Module = (*Physics)(nil)
+
 type Physics struct {
 	space         *gokg.Space
 	ecs           *goke.ECS
@@ -60,7 +62,18 @@ func (p *Physics) RegSys(sys goke.System) *Physics {
 	return p
 }
 
-func (p *Physics) Run(ctx goke.RunCtx, d time.Duration) {
+// RegSystems builds and registers the collision systems — see [goke.Module].
+// NarrowPhase.Init scans existing entities for Sensor tags, so this must run
+// after the world is populated, not before — RunPlan already calls it lazily
+// at the right time; call this directly only if that ordering is guaranteed
+// some other way.
+func (p *Physics) RegSystems(ecs *goke.ECS) {
+	if !p.built {
+		p.build()
+	}
+}
+
+func (p *Physics) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	if !p.built {
 		p.build()
 	}
@@ -76,6 +89,17 @@ func (p *Physics) Run(ctx goke.RunCtx, d time.Duration) {
 	for _, h := range p.extraHandles {
 		ctx.Run(h, d)
 		ctx.Sync()
+	}
+}
+
+// LoadComps lists the component types kinematics and collisions own — see
+// [goke.CompProvider].
+func (p *Physics) LoadComps() []goke.CompToken {
+	return []goke.CompToken{
+		goke.LoadComp[kinematics.Position](),
+		goke.LoadComp[kinematics.Velocity](),
+		goke.LoadComp[collisions.Collision](),
+		goke.LoadComp[collisions.Hit](),
 	}
 }
 
