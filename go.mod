@@ -6,7 +6,7 @@ require (
 	github.com/hajimehoshi/ebiten/v2 v2.9.8
 	github.com/kjkrol/goke/v3 v3.0.0
 	github.com/kjkrol/gokg v1.2.12
-	github.com/kjkrol/uid v0.2.1
+	github.com/kjkrol/uid v0.3.0
 )
 
 require (
@@ -17,3 +17,7 @@ require (
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect
 )
+
+// Temporary: goke's persistence work (Module/RegModule, Pause/Save/Load)
+// lives on its feature/persistence branch, not yet tagged.
+replace github.com/kjkrol/goke/v3 => ../goke
