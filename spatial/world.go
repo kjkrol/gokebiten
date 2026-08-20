@@ -34,12 +34,19 @@ type EntityExtras interface {
 	Init(cursor *goke.Cursor, i, index int, id uid.UID64)
 }
 
-// World owns the spatial index and population bookkeeping for one game.
-type World struct {
+// WorldModule owns the spatial index and population bookkeeping for one
+// game, and — via Populate/PopulateStatic — queues entity seeding as a
+// goke.SetupProvider: pass it to Game.Setup instead of spawning directly,
+// so world seeding participates in the same one-time ecs.Setup call as
+// other modules.
+type WorldModule struct {
 	space        *gokg.Space
 	population   Population
 	spawnedCount int
+	seeds        []goke.System
 }
+
+var _ goke.SetupProvider = (*WorldModule)(nil)
 
 // buildSpace picks a bucket resolution and capacity from world/population
 // density: capacity = round(1/sqrt(density)) clamped to [2, 8]; sparser
@@ -74,17 +81,22 @@ func buildSpace(cfg Config, pop Population) *gokg.Space {
 	return space
 }
 
-// NewWorld builds the spatial index from cfg, provisioned for pop.
-func NewWorld(cfg Config, pop Population) *World {
-	return &World{space: buildSpace(cfg, pop), population: pop}
+// NewWorldModule builds the spatial index from cfg, provisioned for pop.
+func NewWorldModule(cfg Config, pop Population) *WorldModule {
+	return &WorldModule{space: buildSpace(cfg, pop), population: pop}
 }
 
-func (w *World) Space() *gokg.Space     { return w.space }
-func (w *World) Population() Population { return w.population }
+func (w *WorldModule) Space() *gokg.Space     { return w.space }
+func (w *WorldModule) Population() Population { return w.population }
+
+// SetupSystems runs every queued Populate/PopulateStatic call, in call
+// order — see goke.SetupProvider.
+func (w *WorldModule) SetupSystems() []goke.System { return w.seeds }
 
 // reserve checks and accounts for count more entities against the
-// MaxCount declared to NewWorld, shared between Populate and PopulateStatic.
-func (w *World) reserve(count int) {
+// MaxCount declared to NewWorldModule, shared between Populate and
+// PopulateStatic.
+func (w *WorldModule) reserve(count int) {
 	if w.spawnedCount+count > w.population.MaxCount {
 		panic(fmt.Sprintf("spatial: spawning %d more would exceed Population.MaxCount %d (already spawned %d)",
 			count, w.population.MaxCount, w.spawnedCount))
@@ -92,7 +104,7 @@ func (w *World) reserve(count int) {
 	w.spawnedCount += count
 }
 
-func (w *World) validateSize(id uid.UID64, pos kinematics.Position) {
+func (w *WorldModule) validateSize(id uid.UID64, pos kinematics.Position) {
 	if pos.Size.X < w.population.MinSize || pos.Size.X > w.population.MaxSize ||
 		pos.Size.Y < w.population.MinSize || pos.Size.Y > w.population.MaxSize {
 		panic(fmt.Sprintf("spatial: entity %d size %dx%d outside declared population bounds [%d, %d]",
@@ -100,10 +112,29 @@ func (w *World) validateSize(id uid.UID64, pos kinematics.Position) {
 	}
 }
 
-// Populate spawns count moving entities: Position and Velocity from
-// populators[0] (which must implement kinematics.Spawner), everything else
-// from the rest of populators.
-func (w *World) Populate(si *goke.SysInit, count int, telemetry *kinematics.Telemetry, populators ...EntityExtras) {
+// Populate queues a spawn of count moving entities: Position and Velocity
+// from populators[0] (which must implement kinematics.Spawner), everything
+// else from the rest of populators. Runs once ecs.Setup executes this
+// module's SetupSystems — see goke.SetupProvider. Returns w for chaining.
+func (w *WorldModule) Populate(count int, telemetry *kinematics.Telemetry, populators ...EntityExtras) *WorldModule {
+	w.seeds = append(w.seeds, goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		w.populate(si, count, telemetry, populators...)
+	}})
+	return w
+}
+
+// PopulateStatic queues a spawn of count entities with Position only — e.g.
+// level geometry that never moves — from populators[0] (which must
+// implement kinematics.Placement) and the rest of populators. Runs once
+// ecs.Setup executes this module's SetupSystems. Returns w for chaining.
+func (w *WorldModule) PopulateStatic(count int, telemetry *kinematics.Telemetry, populators ...EntityExtras) *WorldModule {
+	w.seeds = append(w.seeds, goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		w.populateStatic(si, count, telemetry, populators...)
+	}})
+	return w
+}
+
+func (w *WorldModule) populate(si *goke.SysInit, count int, telemetry *kinematics.Telemetry, populators ...EntityExtras) {
 	if len(populators) == 0 {
 		panic("spatial: Populate requires a kinematics.Spawner as its first populator")
 	}
@@ -137,17 +168,14 @@ func (w *World) Populate(si *goke.SysInit, count int, telemetry *kinematics.Tele
 				p.Init(&factory.Cursor, i, index, id)
 			}
 
-			w.space.Insert(uint64(id), positions[i].AABB)
+			w.space.Insert(id, positions[i].AABB)
 			index++
 		}
 	}
 	w.space.Flush(nil)
 }
 
-// PopulateStatic spawns count entities with Position only — e.g. level
-// geometry that never moves — from populators[0] (which must implement
-// kinematics.Placement) and the rest of populators.
-func (w *World) PopulateStatic(si *goke.SysInit, count int, telemetry *kinematics.Telemetry, populators ...EntityExtras) {
+func (w *WorldModule) populateStatic(si *goke.SysInit, count int, telemetry *kinematics.Telemetry, populators ...EntityExtras) {
 	if len(populators) == 0 {
 		panic("spatial: PopulateStatic requires a kinematics.Placement as its first populator")
 	}
@@ -177,7 +205,7 @@ func (w *World) PopulateStatic(si *goke.SysInit, count int, telemetry *kinematic
 				p.Init(&factory.Cursor, i, index, id)
 			}
 
-			w.space.Insert(uint64(id), positions[i].AABB)
+			w.space.Insert(id, positions[i].AABB)
 			index++
 		}
 	}

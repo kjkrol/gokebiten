@@ -1,9 +1,13 @@
 package main
 
 import (
+	"encoding/binary"
+	"fmt"
 	"image/color"
+	"log"
 	"math"
 	"math/rand/v2"
+	"os"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -28,11 +32,30 @@ const (
 	ScreenHeight = 1024
 	RectSize     = 20
 	FillPercent  = 20
+
+	saveBasePath = "collision-demo"
 )
 
 var EntityCount = int(math.Floor(FillPercent / 100.0 * float64(ScreenWidth*ScreenHeight) / float64(RectSize*RectSize)))
 
-type State struct{}
+// State demonstrates persisting arbitrary game-owned state alongside the
+// ECS snapshot — Saves is otherwise meaningless, just something to observe
+// round-tripping across a save/load cycle.
+type State struct{ Saves int }
+
+func (s State) MarshalBinary() ([]byte, error) {
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, uint32(s.Saves))
+	return b, nil
+}
+
+func (s *State) UnmarshalBinary(data []byte) error {
+	if len(data) != 4 {
+		return fmt.Errorf("state: want 4 bytes, got %d", len(data))
+	}
+	s.Saves = int(binary.BigEndian.Uint32(data))
+	return nil
+}
 
 type Telemetry struct {
 	Kinematics kinematics.Telemetry
@@ -43,14 +66,32 @@ func (t *Telemetry) Reset() { t.Collision.Counter = 0 }
 
 var _ control.EventHandler = (*EventHandler)(nil)
 
-type EventHandler struct{ game *gokebiten.Game }
+type EventHandler struct {
+	game      *gokebiten.Game
+	resources *gokebiten.Resources[State, Telemetry]
+}
 
 func (e *EventHandler) HandleEvents(events *control.InputEvents) {
 	for _, k := range events.KeyEvents {
-		if k.Key == ebiten.KeySpace && k.Action == control.ActionPress {
+		if k.Action != control.ActionPress {
+			continue
+		}
+		switch k.Key {
+		case ebiten.KeySpace:
 			e.game.TogglePause()
+		case ebiten.KeyF5:
+			e.save()
 		}
 	}
+}
+
+func (e *EventHandler) save() {
+	e.resources.State().Saves++
+	if err := e.game.Save(saveBasePath); err != nil {
+		log.Printf("save: %v", err)
+		return
+	}
+	log.Printf("saved (save #%d)", e.resources.State().Saves)
 }
 
 func main() {
@@ -65,16 +106,43 @@ func main() {
 	)
 
 	game := gokebiten.NewGame(resources)
-	game.SetEventHandler(&EventHandler{game: game})
+	game.SetEventHandler(&EventHandler{game: game, resources: resources})
 
-	game.UseWorld(spatial.Population{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize})
+	worldModule := spatial.NewWorldModule(
+		resources.GetSpaceConfig(),
+		spatial.Population{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize},
+	)
 
-	physicsModule := physics.New(game.Space(), game.ECS(), RectSize, game.Step())
+	physicsModule := physics.New(worldModule.Space(), game.ECS(), RectSize, game.Step())
 	physicsModule.SetCollisionHandlers(
 		elastic.NewHandler(),
 		stats.NewHandler(&resources.Telemetry().Collision),
 	)
 	physicsModule.SetHitExpires(100 * time.Millisecond)
+
+	if _, err := os.Stat(saveBasePath + ".ecs"); err == nil {
+		onLoaded := func(count int) { resources.Telemetry().Kinematics.DynamicCount = count }
+		if err := game.Load(saveBasePath, worldModule.Space(), onLoaded, physicsModule); err != nil {
+			log.Fatalf("load: %v", err)
+		}
+		log.Printf("loaded saved world (save #%d)", resources.State().Saves)
+	} else {
+		worldModule.Populate(EntityCount, &resources.Telemetry().Kinematics,
+			kinematics.NewSpawner(
+				grid.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize),
+				randomvelocity.New(200, 50, 10),
+			),
+			render.NewAppearanceExtras(func(index int) render.Appearance {
+				return render.Appearance{
+					Color:    color.RGBA{R: uint8(rand.IntN(206) + 50), G: uint8(rand.IntN(206) + 50), B: uint8(rand.IntN(206) + 50), A: 255},
+					SpriteID: uint8(rand.IntN(procedural.SpriteCount)),
+				}
+			}),
+		)
+	}
+
+	game.Setup(worldModule)
+	game.UseModule(physicsModule)
 
 	game.Loop(func(ctx goke.RunCtx, d time.Duration) {
 		physicsModule.RunPlan(ctx, d)
@@ -97,21 +165,6 @@ func main() {
 			return render.NewTelemetryRenderer(resources.TPS(), entityCount, &resources.Telemetry().Collision.Counter)
 		},
 	)
-
-	game.Populate(EntityCount, &resources.Telemetry().Kinematics,
-		kinematics.NewSpawner(
-			grid.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize),
-			randomvelocity.New(200, 50, 10),
-		),
-		render.NewAppearanceExtras(func(index int) render.Appearance {
-			return render.Appearance{
-				Color:    color.RGBA{R: uint8(rand.IntN(206) + 50), G: uint8(rand.IntN(206) + 50), B: uint8(rand.IntN(206) + 50), A: 255},
-				SpriteID: uint8(rand.IntN(procedural.SpriteCount)),
-			}
-		}),
-	)
-
-	game.UseModule(physicsModule)
 
 	game.Run()
 }

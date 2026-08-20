@@ -1,6 +1,9 @@
 package gokebiten
 
 import (
+	"encoding"
+	"io"
+
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/spatial"
 )
@@ -31,6 +34,36 @@ func (r *Resources[S, T]) TPS() *int     { return &r.measuredTPS }
 func (r *Resources[S, T]) GetGameProps() *GameProps             { return r.gameProps }
 func (r *Resources[S, T]) GetSpaceConfig() spatial.Config       { return r.spaceConfig }
 func (r *Resources[S, T]) GetInputEvents() *control.InputEvents { return &r.inputs }
+
+// SaveState writes State to w — a no-op if S doesn't implement
+// encoding.BinaryMarshaler, so games with nothing worth persisting beyond
+// the ECS snapshot don't need to do anything special.
+func (r *Resources[S, T]) SaveState(w io.Writer) error {
+	bm, ok := any(&r.state).(encoding.BinaryMarshaler)
+	if !ok {
+		return nil
+	}
+	data, err := bm.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(data)
+	return err
+}
+
+// LoadState restores State from r — a no-op if S doesn't implement
+// encoding.BinaryUnmarshaler.
+func (r *Resources[S, T]) LoadState(rd io.Reader) error {
+	bu, ok := any(&r.state).(encoding.BinaryUnmarshaler)
+	if !ok {
+		return nil
+	}
+	data, err := io.ReadAll(rd)
+	if err != nil {
+		return err
+	}
+	return bu.UnmarshalBinary(data)
+}
 
 // Resettable lets Telemetry hook into each stats interval — if T implements
 // it, Reset is called right after TPS is refreshed.

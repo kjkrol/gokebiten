@@ -172,9 +172,9 @@ func (n *NarrowPhase) solve(cb *goke.CmdBuf, solverIterations int) {
 
 			isStaticB := contact.B.Vel == nil
 			if mtv1, mtv2, ok := contact.calculateMtv(boxA, boxB, isStaticB); ok {
-				n.space.Translate(uint64(contact.A.Entity), &contact.A.Pos.AABB, mtv1)
+				n.space.Translate(contact.A.Entity, &contact.A.Pos.AABB, mtv1)
 				if !isStaticB {
-					n.space.Translate(uint64(contact.B.Entity), &contact.B.Pos.AABB, mtv2)
+					n.space.Translate(contact.B.Entity, &contact.B.Pos.AABB, mtv2)
 				}
 			}
 		}

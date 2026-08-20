@@ -30,15 +30,14 @@ type Physics struct {
 	built       bool
 }
 
-// New builds Physics for the given world and registers the kinematics
-// system immediately — minEntitySize is the smallest entity size the world
-// was provisioned for, used to cap per-tick displacement so nothing can
-// tunnel through it undetected. Collision systems register lazily, on the
-// first Run, since they must be built after entities exist.
+// New builds Physics for the given world — minEntitySize is the smallest
+// entity size the world was provisioned for, used to cap per-tick
+// displacement so nothing can tunnel through it undetected. All systems
+// (kinematics included) register lazily, on the first RunPlan/RegSystems,
+// not here — so New itself never touches ecs, keeping it safe to call
+// before ECS.Load.
 func New(space *gokg.Space, ecs *goke.ECS, minEntitySize uint32, physicsStep time.Duration) *Physics {
-	p := &Physics{space: space, ecs: ecs, minEntitySize: minEntitySize, physicsStep: physicsStep}
-	p.moveSystem = p.useKinematics()
-	return p
+	return &Physics{space: space, ecs: ecs, minEntitySize: minEntitySize, physicsStep: physicsStep}
 }
 
 func (p *Physics) SetCollisionHandlers(handlers ...collisions.CollisionHandler) *Physics {
@@ -92,6 +91,10 @@ func (p *Physics) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	}
 }
 
+// SetupSystems is empty — Physics has no one-time seeding of its own — but
+// is required to satisfy goke.Module, which now embeds SetupProvider.
+func (p *Physics) SetupSystems() []goke.System { return nil }
+
 // LoadComps lists the component types kinematics and collisions own — see
 // [goke.CompProvider].
 func (p *Physics) LoadComps() []goke.CompToken {
@@ -100,10 +103,13 @@ func (p *Physics) LoadComps() []goke.CompToken {
 		goke.LoadComp[kinematics.Velocity](),
 		goke.LoadComp[collisions.Collision](),
 		goke.LoadComp[collisions.Hit](),
+		goke.LoadComp[collisions.Sensor](),
 	}
 }
 
 func (p *Physics) build() {
+	p.moveSystem = p.useKinematics()
+
 	handlers := p.handlers
 	if p.debug {
 		handlers = append(handlers, debug.NewHandler())

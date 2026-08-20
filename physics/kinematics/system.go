@@ -71,7 +71,7 @@ func (s *System) Update(_ *goke.CmdBuf, d time.Duration) {
 
 			if dx != 0 || dy != 0 {
 				delta := geom.NewVec(uint32(dx), uint32(dy))
-				s.space.Translate(uint64(entityID), &pos[i].AABB, delta)
+				s.space.Translate(entityID, &pos[i].AABB, delta)
 			}
 		}
 	}
