@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"time"
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/physics/collisions"
@@ -128,9 +129,33 @@ func (w *WorldModule) Populate(count int, telemetry *kinematics.Telemetry, popul
 // implement kinematics.Placement) and the rest of populators. Runs once
 // ecs.Setup executes this module's SetupSystems. Returns w for chaining.
 func (w *WorldModule) PopulateStatic(count int, telemetry *kinematics.Telemetry, populators ...EntityExtras) *WorldModule {
-	w.seeds = append(w.seeds, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		w.populateStatic(si, count, telemetry, populators...)
-	}})
+	var posComp goke.Comp[kinematics.Position]
+	var staticTag goke.Comp[collisions.Static]
+	var q *goke.Query
+	var staticEditor *goke.Editor
+	var ids []uid.UID64
+
+	w.seeds = append(w.seeds, goke.SystemFn{
+		OnInit: func(si *goke.SysInit) {
+			ids = w.populateStatic(si, &posComp, count, telemetry, populators...)
+			q = si.NewQueryBuilder(&posComp).Build()
+			staticEditor = q.NewEditorBuilder(&staticTag).Build()
+		},
+		// Tags the just-created entities Static, so NarrowPhase.resolveB
+		// knows to resolve them without a Velocity component — comp.Add has
+		// no zero-size restriction (unlike Factory/Track), but it does need
+		// a CmdBuf, which OnInit doesn't have; hence the second phase.
+		OnUpdate: func(cb *goke.CmdBuf, _ time.Duration) {
+			q.Pick(ids)
+			for q.Next() {
+				buf := q.BeginMigrate(cb)
+				for _, id := range q.Cursor().IDs {
+					buf.Add(id)
+				}
+				buf.Commit(staticEditor)
+			}
+		},
+	})
 	return w
 }
 
@@ -175,7 +200,7 @@ func (w *WorldModule) populate(si *goke.SysInit, count int, telemetry *kinematic
 	w.space.Flush(nil)
 }
 
-func (w *WorldModule) populateStatic(si *goke.SysInit, count int, telemetry *kinematics.Telemetry, populators ...EntityExtras) {
+func (w *WorldModule) populateStatic(si *goke.SysInit, posComp *goke.Comp[kinematics.Position], count int, telemetry *kinematics.Telemetry, populators ...EntityExtras) []uid.UID64 {
 	if len(populators) == 0 {
 		panic("spatial: PopulateStatic requires a kinematics.Placement as its first populator")
 	}
@@ -186,13 +211,13 @@ func (w *WorldModule) populateStatic(si *goke.SysInit, count int, telemetry *kin
 	w.reserve(count)
 	telemetry.StaticCount = count
 
-	var posComp goke.Comp[kinematics.Position]
-	comps := []goke.Addable{&posComp}
+	comps := []goke.Addable{posComp}
 	for _, p := range populators {
 		comps = append(comps, p.Components()...)
 	}
 	factory := si.NewFactory(comps...)
 
+	ids := make([]uid.UID64, 0, count)
 	factory.Create(count)
 	index := 0
 	for factory.Next() {
@@ -204,10 +229,12 @@ func (w *WorldModule) populateStatic(si *goke.SysInit, count int, telemetry *kin
 			for _, p := range populators {
 				p.Init(&factory.Cursor, i, index, id)
 			}
+			ids = append(ids, id)
 
 			w.space.Insert(id, positions[i].AABB)
 			index++
 		}
 	}
 	w.space.Flush(nil)
+	return ids
 }

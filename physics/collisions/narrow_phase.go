@@ -31,6 +31,7 @@ type NarrowPhase struct {
 	staticPos   goke.Comp[kinematics.Position]
 
 	sensorIDs map[uid.UID64]struct{}
+	staticIDs map[uid.UID64]struct{}
 
 	removeEditor *goke.Editor
 
@@ -46,13 +47,14 @@ func NewNarrowPhase(space *gokg.Space, handler CollisionHandler, hitDuration tim
 		space: space, handler: handler, hitDuration: hitDuration,
 		confirmed: make(map[uid.UID64]bool),
 		sensorIDs: make(map[uid.UID64]struct{}),
+		staticIDs: make(map[uid.UID64]struct{}),
 	}
 }
 
 func (n *NarrowPhase) Init(si *goke.SysInit) {
 	n.hitQry = si.NewQueryBuilder(&n.pos, &n.vel, &n.hitTag, &n.collision).Build()
 	n.dynQry = si.NewQueryBuilder(&n.dynPos, &n.dynVel).Build()
-	n.staticQuery = si.NewQueryBuilder(&n.staticPos).Exclude(goke.Exclude[kinematics.Velocity]()).Build()
+	n.staticQuery = si.NewQueryBuilder(&n.staticPos).Build()
 	if init, ok := n.handler.(Initializer); ok {
 		init.Init(si)
 	}
@@ -62,6 +64,13 @@ func (n *NarrowPhase) Init(si *goke.SysInit) {
 	for sensorQry.Next() {
 		for _, id := range sensorQry.Cursor().IDs {
 			n.sensorIDs[id] = struct{}{}
+		}
+	}
+	staticQry := si.NewQueryBuilder().Include(goke.Include[Static]()).Build()
+	staticQry.All()
+	for staticQry.Next() {
+		for _, id := range staticQry.Cursor().IDs {
+			n.staticIDs[id] = struct{}{}
 		}
 	}
 }
@@ -78,6 +87,11 @@ func (n *NarrowPhase) Update(cb *goke.CmdBuf, _ time.Duration) {
 
 func (n *NarrowPhase) isSensor(id uid.UID64) bool {
 	_, ok := n.sensorIDs[id]
+	return ok
+}
+
+func (n *NarrowPhase) isStatic(id uid.UID64) bool {
+	_, ok := n.staticIDs[id]
 	return ok
 }
 
@@ -114,26 +128,36 @@ func (n *NarrowPhase) pair() {
 	}
 }
 
+// resolveB looks up id's Position (and Velocity, for a dynamic entity) via
+// whichever of dynQry/staticQuery actually matches its archetype. Which one
+// to try is decided up front by the Static tag, not by probing — Query.Seek
+// is documented to bypass the archetype mask (it returns true for any
+// existing entity), so a "try dynQry.Seek, fall back to staticQuery.Seek"
+// probe would always succeed on the first try and read garbage bytes as a
+// static entity's Velocity.
 func (n *NarrowPhase) resolveB(id uid.UID64) (pos *kinematics.Position, vel *kinematics.Velocity, ok bool) {
+	if n.isStatic(id) {
+		ok = n.staticSeeded && n.staticQuery.SeekH(id)
+		if !ok {
+			ok = n.staticQuery.Seek(id)
+			n.staticSeeded = ok
+		}
+		if !ok {
+			return nil, nil, false
+		}
+		return n.staticPos.At(n.staticQuery.Cursor()), nil, true
+	}
+
 	ok = n.dynSeeded && n.dynQry.SeekH(id)
 	if !ok {
 		ok = n.dynQry.Seek(id)
 		n.dynSeeded = ok
 	}
-	if ok {
-		cur := n.dynQry.Cursor()
-		return n.dynPos.At(cur), n.dynVel.At(cur), true
-	}
-
-	ok = n.staticSeeded && n.staticQuery.SeekH(id)
-	if !ok {
-		ok = n.staticQuery.Seek(id)
-		n.staticSeeded = ok
-	}
 	if !ok {
 		return nil, nil, false
 	}
-	return n.staticPos.At(n.staticQuery.Cursor()), nil, true
+	cur := n.dynQry.Cursor()
+	return n.dynPos.At(cur), n.dynVel.At(cur), true
 }
 
 func (n *NarrowPhase) solve(cb *goke.CmdBuf, solverIterations int) {

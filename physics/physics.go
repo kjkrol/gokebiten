@@ -104,6 +104,7 @@ func (p *Physics) LoadComps() []goke.CompToken {
 		goke.LoadComp[collisions.Collision](),
 		goke.LoadComp[collisions.Hit](),
 		goke.LoadComp[collisions.Sensor](),
+		goke.LoadComp[collisions.Static](),
 	}
 }
 

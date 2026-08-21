@@ -4,6 +4,9 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -121,43 +124,117 @@ func (g *Game) Setup(providers ...goke.SetupProvider) {
 	}
 }
 
-// Save pauses the ECS, writes its snapshot to basePath+".ecs", and — if
-// State (S in Resources[S, T]) implements encoding.BinaryMarshaler — writes
-// it to basePath+".state". Resumes before returning either way.
-func (g *Game) Save(basePath string) error {
+// saveFilePath is where Save/Load read and write: the quicksave
+// (basePath+".game.save") when label is empty, otherwise a named save
+// (basePath+".game."+label+".save").
+func saveFilePath(basePath, label string) string {
+	if label == "" {
+		return basePath + ".game.save"
+	}
+	return basePath + ".game." + label + ".save"
+}
+
+// ListSaves returns every save found for basePath: "" first if the
+// quicksave (basePath+".game.save") exists, then every named save's label,
+// alphabetically — pass any of them to Game.Load.
+func ListSaves(basePath string) ([]string, error) {
+	var labels []string
+	if _, err := os.Stat(saveFilePath(basePath, "")); err == nil {
+		labels = append(labels, "")
+	}
+
+	matches, err := filepath.Glob(basePath + ".game.*.save")
+	if err != nil {
+		return nil, err
+	}
+	prefix, suffix := basePath+".game.", ".save"
+	var named []string
+	for _, m := range matches {
+		named = append(named, strings.TrimSuffix(strings.TrimPrefix(m, prefix), suffix))
+	}
+	sort.Strings(named)
+
+	return append(labels, named...), nil
+}
+
+// Save pauses the ECS and writes one file — State (see Resources.SaveState;
+// a zero-length marker if S doesn't implement encoding.BinaryMarshaler)
+// followed by the ECS snapshot — to saveFilePath(basePath, label). label
+// selects which save this is: "" for the quicksave slot, anything else for
+// a named save (see ListSaves to discover named saves already on disk).
+// Resumes before returning either way.
+func (g *Game) Save(basePath, label string) error {
 	g.ecs.Pause()
 	defer g.ecs.Resume()
 
-	if err := g.ecs.Save(basePath + ".ecs"); err != nil {
-		return err
-	}
-	f, err := os.Create(basePath + ".state")
+	tmp, err := os.CreateTemp("", "gokebiten-ecs-*.tmp")
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	return g.resources.SaveState(f)
-}
+	tmpPath := tmp.Name()
+	tmp.Close() // ecs.Save opens tmpPath itself (os.Create, truncating)
+	defer os.Remove(tmpPath)
 
-// Load restores a snapshot written by Save into this (must be freshly
-// constructed) Game: the ECS snapshot, State if present, and — since space
-// (the gokg spatial index) isn't part of the ECS snapshot — a rebuild of
-// space from every loaded entity's kinematics.Position, deferred to the
-// same Setup phase RenderSequence/UseModule/Setup use. onLoaded, if not
-// nil, is called once that rebuild completes, with the loaded entity count
-// (e.g. to set a telemetry field) — nil if you don't need it. providers
-// supplies component tokens the same way ProvidedComps does (e.g. your
-// physics module); render.Appearance is always included.
-func (g *Game) Load(basePath string, space *gokg.Space, onLoaded func(count int), providers ...any) error {
-	comps := append(goke.ProvidedComps(providers...), goke.LoadComp[render.Appearance]())
-	if err := g.ecs.Load(basePath+".ecs", comps...); err != nil {
+	if err := g.ecs.Save(tmpPath); err != nil {
 		return err
 	}
-	if f, err := os.Open(basePath + ".state"); err == nil {
-		defer f.Close()
-		if err := g.resources.LoadState(f); err != nil {
-			return err
-		}
+
+	out, err := os.Create(saveFilePath(basePath, label))
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if err := g.resources.SaveState(out); err != nil {
+		return err
+	}
+
+	ecsData, err := os.Open(tmpPath)
+	if err != nil {
+		return err
+	}
+	defer ecsData.Close()
+	_, err = io.Copy(out, ecsData)
+	return err
+}
+
+// Load restores a snapshot written by Save (same basePath and label) into
+// this (must be freshly constructed) Game: State, the ECS snapshot, and —
+// since space (the gokg spatial index) isn't part of the ECS snapshot — a
+// rebuild of space from every loaded entity's kinematics.Position, deferred
+// to the same Setup phase RenderSequence/UseModule/Setup use. onLoaded, if
+// not nil, is called once that rebuild completes, with the loaded entity
+// count (e.g. to set a telemetry field) — nil if you don't need it.
+// providers supplies component tokens the same way ProvidedComps does (e.g.
+// your physics module); render.Appearance is always included.
+func (g *Game) Load(basePath, label string, space *gokg.Space, onLoaded func(count int), providers ...any) error {
+	in, err := os.Open(saveFilePath(basePath, label))
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	if err := g.resources.LoadState(in); err != nil {
+		return err
+	}
+
+	tmp, err := os.CreateTemp("", "gokebiten-ecs-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if _, err := io.Copy(tmp, in); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+
+	comps := append(goke.ProvidedComps(providers...), goke.LoadComp[render.Appearance]())
+	if err := g.ecs.Load(tmpPath, comps...); err != nil {
+		return err
 	}
 
 	g.pendingSetup = append(g.pendingSetup, goke.SystemFn{OnInit: func(si *goke.SysInit) {

@@ -23,5 +23,5 @@ bin/
 .tool-versions
 
 # gokebiten save files
-*.ecs
-*.state
+*.game.save
+*.game.*.save
