@@ -4,7 +4,7 @@
   <img src=".github/docs/img/logo.png" alt="GOKe Logo" width="300">
   <br>
   <a href="https://go.dev">
-    <img src="https://img.shields.io/badge/Go-1.27rc3+-00ADD8?style=flat-square&logo=go" alt="Go Version">
+    <img src="https://img.shields.io/badge/Go-1.27.0+-00ADD8?style=flat-square&logo=go" alt="Go Version">
   </a>
   <a href="https://pkg.go.dev/github.com/kjkrol/gokebiten">
     <img src="https://img.shields.io/badge/GoDoc-Reference-007d9c?style=flat-square&logo=go" alt="GoDoc">
@@ -76,7 +76,7 @@ make run
 
 ## Prerequisites
 
-* Go 1.26+
+* Go 1.27+
 * [Ebitengine dependencies](https://ebitengine.org/en/documents/install.html) (C compiler and
   system libraries — Ebitengine uses cgo on most platforms)
 

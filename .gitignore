@@ -21,3 +21,7 @@ bin/
 
 # asdf
 .tool-versions
+
+# gokebiten save files
+*.game.save
+*.game.*.save

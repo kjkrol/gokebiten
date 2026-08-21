@@ -29,7 +29,7 @@ func NewBroadPhase(space *gokg.Space) *BroadPhase {
 
 func (b *BroadPhase) Init(si *goke.SysInit) {
 	b.query = si.NewQueryBuilder(&b.pos, &b.vel, &b.collision).Build()
-	si.ECS().RegComp[Hit]()
+	si.RegComp[Hit]()
 	b.addEditor = b.query.NewEditorBuilder(&b.hit).Build()
 }
 
@@ -47,8 +47,7 @@ func (b *BroadPhase) Update(cb *goke.CmdBuf, _ time.Duration) {
 			c := &collisionSlice[i]
 
 			checkFunc := func(boxA geom.AABB[uint32]) {
-				b.space.Query(boxA, func(idB uint64, _ plane.FragPosition) {
-					entityB := uid.UID64(idB)
+				b.space.Query(boxA, func(entityB uid.UID64, _ plane.FragPosition) {
 					if entityA == entityB {
 						return
 					}

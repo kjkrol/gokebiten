@@ -1,16 +1,21 @@
 package gokebiten
 
 import (
+	"io"
 	"log"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/physics"
 	"github.com/kjkrol/gokebiten/physics/kinematics"
 	"github.com/kjkrol/gokebiten/render"
 	"github.com/kjkrol/gokebiten/spatial"
+	"github.com/kjkrol/gokg"
 )
 
 const (
@@ -32,25 +37,23 @@ type resources interface {
 	GetSpaceConfig() spatial.Config
 	TPS() *int
 	Reset()
+	SaveState(w io.Writer) error
+	LoadState(r io.Reader) error
 }
 
 type Game struct {
-	ticks             int
-	physicsStep       time.Duration
-	timeTracker       *TimeTracker
-	resources         resources
-	ecs               *goke.ECS
-	renderSeq         []render.Renderer
-	controller        *control.DefaultController
-	controllerHandle  goke.Runnable
-	spaceConfig       spatial.Config
-	world             *spatial.World
-	kinematicsEnabled bool
-	paused            bool
+	ticks       int
+	step        time.Duration
+	timeTracker *TimeTracker
+	resources   resources
+	ecs         *goke.ECS
+	renderSeq   []render.Renderer
+	controller  *control.DefaultController
 	// pendingSetup collects everything that needs SysInit-gated construction
-	// (renderer Init, world population) across RenderSequence/Populate/
-	// PopulateStatic calls — ecs.Setup is callable only once, so it all runs
-	// together, lazily, right before the game loop starts (see Run).
+	// (renderer Init, module RegSystems, one-time world seeding) across
+	// RenderSequence/UseModule/Setup/Load calls — ecs.Setup is callable only
+	// once, so it all runs together, lazily, right before the game loop
+	// starts (see Run).
 	pendingSetup []goke.System
 }
 
@@ -64,13 +67,11 @@ func NewGame(res resources) *Game {
 	controller := control.NewDefaultController(&control.DesktopAdapter{}, res.GetInputEvents())
 	game := &Game{
 		resources:   res,
-		physicsStep: time.Second / time.Duration(targetTPS),
+		step:        time.Second / time.Duration(targetTPS),
 		timeTracker: NewTimeTracker(),
 		ecs:         goke.New(),
 		controller:  controller,
-		spaceConfig: res.GetSpaceConfig(),
 	}
-	game.controllerHandle = game.ecs.RegSys(controller)
 	return game
 }
 
@@ -78,13 +79,19 @@ func (g *Game) SetEventHandler(handler control.EventHandler) {
 	g.controller.SetHandler(handler)
 }
 
-func (g *Game) Paused() bool { return g.paused }
+func (g *Game) Paused() bool { return g.ecs.Paused() }
 
-func (g *Game) Pause() { g.paused = true }
+func (g *Game) Pause() { g.ecs.Pause() }
 
-func (g *Game) Resume() { g.paused = false }
+func (g *Game) Resume() { g.ecs.Resume() }
 
-func (g *Game) TogglePause() { g.paused = !g.paused }
+func (g *Game) TogglePause() {
+	if g.ecs.Paused() {
+		g.ecs.Resume()
+	} else {
+		g.ecs.Pause()
+	}
+}
 
 func RegComp[C any](game *Game) goke.CompID {
 	return game.ecs.RegComp[C]()
@@ -92,6 +99,163 @@ func RegComp[C any](game *Game) goke.CompID {
 
 func (g *Game) RegSys(factory func() goke.System) goke.Runnable {
 	return g.ecs.RegSys(factory())
+}
+
+func (g *Game) ECS() *goke.ECS { return g.ecs }
+
+func (g *Game) Step() time.Duration { return g.step }
+
+// UseModule defers m.RegSystems to the same Setup call RenderSequence/Setup
+// use, in call order — call it after any spatial.WorldModule that seeds
+// entities m needs to already exist (e.g. a physics module scanning for
+// Sensor tags at registration).
+func (g *Game) UseModule(m goke.Module) {
+	g.pendingSetup = append(g.pendingSetup, goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		m.RegSystems(g.ecs)
+	}})
+}
+
+// Setup defers each provider's SetupSystems to the same one-time ecs.Setup
+// call RenderSequence/UseModule feed — in call order, mirroring ecs.Setup's
+// own name and one-time-seeding spirit at the Game level.
+func (g *Game) Setup(providers ...goke.SetupProvider) {
+	for _, p := range providers {
+		g.pendingSetup = append(g.pendingSetup, p.SetupSystems()...)
+	}
+}
+
+// saveFilePath is where Save/Load read and write: the quicksave
+// (basePath+".game.save") when label is empty, otherwise a named save
+// (basePath+".game."+label+".save").
+func saveFilePath(basePath, label string) string {
+	if label == "" {
+		return basePath + ".game.save"
+	}
+	return basePath + ".game." + label + ".save"
+}
+
+// ListSaves returns every save found for basePath: "" first if the
+// quicksave (basePath+".game.save") exists, then every named save's label,
+// alphabetically — pass any of them to Game.Load.
+func ListSaves(basePath string) ([]string, error) {
+	var labels []string
+	if _, err := os.Stat(saveFilePath(basePath, "")); err == nil {
+		labels = append(labels, "")
+	}
+
+	matches, err := filepath.Glob(basePath + ".game.*.save")
+	if err != nil {
+		return nil, err
+	}
+	prefix, suffix := basePath+".game.", ".save"
+	var named []string
+	for _, m := range matches {
+		named = append(named, strings.TrimSuffix(strings.TrimPrefix(m, prefix), suffix))
+	}
+	sort.Strings(named)
+
+	return append(labels, named...), nil
+}
+
+// Save pauses the ECS and writes one file — State (see Resources.SaveState;
+// a zero-length marker if S doesn't implement encoding.BinaryMarshaler)
+// followed by the ECS snapshot — to saveFilePath(basePath, label). label
+// selects which save this is: "" for the quicksave slot, anything else for
+// a named save (see ListSaves to discover named saves already on disk).
+// Resumes before returning either way.
+func (g *Game) Save(basePath, label string) error {
+	g.ecs.Pause()
+	defer g.ecs.Resume()
+
+	tmp, err := os.CreateTemp("", "gokebiten-ecs-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	tmp.Close() // ecs.Save opens tmpPath itself (os.Create, truncating)
+	defer os.Remove(tmpPath)
+
+	if err := g.ecs.Save(tmpPath); err != nil {
+		return err
+	}
+
+	out, err := os.Create(saveFilePath(basePath, label))
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if err := g.resources.SaveState(out); err != nil {
+		return err
+	}
+
+	ecsData, err := os.Open(tmpPath)
+	if err != nil {
+		return err
+	}
+	defer ecsData.Close()
+	_, err = io.Copy(out, ecsData)
+	return err
+}
+
+// Load restores a snapshot written by Save (same basePath and label) into
+// this (must be freshly constructed) Game: State, the ECS snapshot, and —
+// since space (the gokg spatial index) isn't part of the ECS snapshot — a
+// rebuild of space from every loaded entity's kinematics.Position, deferred
+// to the same Setup phase RenderSequence/UseModule/Setup use. onLoaded, if
+// not nil, is called once that rebuild completes, with the loaded entity
+// count (e.g. to set a telemetry field) — nil if you don't need it.
+// providers supplies component tokens the same way ProvidedComps does (e.g.
+// your physics module); render.Appearance is always included.
+func (g *Game) Load(basePath, label string, space *gokg.Space, onLoaded func(count int), providers ...any) error {
+	in, err := os.Open(saveFilePath(basePath, label))
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	if err := g.resources.LoadState(in); err != nil {
+		return err
+	}
+
+	tmp, err := os.CreateTemp("", "gokebiten-ecs-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if _, err := io.Copy(tmp, in); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+
+	comps := append(goke.ProvidedComps(providers...), goke.LoadComp[render.Appearance]())
+	if err := g.ecs.Load(tmpPath, comps...); err != nil {
+		return err
+	}
+
+	g.pendingSetup = append(g.pendingSetup, goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		var pos goke.Comp[kinematics.Position]
+		query := si.NewQueryBuilder(&pos).Build()
+		query.All()
+		count := 0
+		for query.Next() {
+			cursor := query.Cursor()
+			positions := pos.Slice(cursor)
+			for i, id := range cursor.IDs {
+				space.Insert(id, positions[i].AABB)
+			}
+			count += len(cursor.IDs)
+		}
+		space.Flush(nil)
+		if onLoaded != nil {
+			onLoaded(count)
+		}
+	}})
+	return nil
 }
 
 func (g *Game) registerRenderer(factory func() render.Renderer) render.Renderer {
@@ -103,13 +267,7 @@ func (g *Game) registerRenderer(factory func() render.Renderer) render.Renderer 
 }
 
 func (g *Game) Loop(plan func(ctx goke.RunCtx, d time.Duration)) {
-	g.ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
-		ctx.Run(g.controllerHandle, d)
-		if g.paused {
-			return
-		}
-		plan(ctx, d)
-	})
+	g.ecs.SetPlan(plan)
 }
 
 func (g *Game) RenderSequence(rendererFactories ...func() render.Renderer) {
@@ -119,56 +277,18 @@ func (g *Game) RenderSequence(rendererFactories ...func() render.Renderer) {
 	}
 }
 
-// UseWorld builds the spatial index from this Game's SpaceConfig,
-// provisioned for pop. Must be called before Populate, PopulateStatic or
-// UsePhysics.
-func (g *Game) UseWorld(pop spatial.Population) {
-	g.world = spatial.NewWorld(g.spaceConfig, pop)
-}
-
-// Populate spawns count moving entities — see spatial.World.Populate.
-// Requires UseWorld and UsePhysics.
-func (g *Game) Populate(count int, telemetry *kinematics.Telemetry, populators ...spatial.EntityExtras) {
-	if g.world == nil {
-		panic("gokebiten: UseWorld must be called before Populate")
-	}
-	if !g.kinematicsEnabled {
-		panic("gokebiten: UsePhysics must be called before Populate")
-	}
-	g.pendingSetup = append(g.pendingSetup, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		g.world.Populate(si, count, telemetry, populators...)
-	}})
-}
-
-// PopulateStatic spawns count static entities — see spatial.World.PopulateStatic.
-// Requires UseWorld.
-func (g *Game) PopulateStatic(count int, telemetry *kinematics.Telemetry, populators ...spatial.EntityExtras) {
-	if g.world == nil {
-		panic("gokebiten: UseWorld must be called before PopulateStatic")
-	}
-	g.pendingSetup = append(g.pendingSetup, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		g.world.PopulateStatic(si, count, telemetry, populators...)
-	}})
-}
-
-// UsePhysics builds the Physics wrapper (kinematics + collisions) for this
-// world. Physics needs no reference to Game — it gets exactly what it needs
-// as explicit parameters.
-func (g *Game) UsePhysics() *physics.Physics {
-	if g.world == nil {
-		panic("gokebiten: UseWorld must be called before UsePhysics")
-	}
-	g.kinematicsEnabled = true
-	return physics.New(g.world.Space(), g.ecs, g.world.Population().MinSize, g.physicsStep)
-}
-
 func (g *Game) Update() error {
 	g.controller.Capture(g.resources.GetInputEvents())
+	g.controller.Update(nil, 0)
+	g.resources.GetInputEvents().ResetTransient()
 
-	steps := g.timeTracker.CalculateSteps(g.physicsStep, 5)
+	if g.ecs.Paused() {
+		return nil
+	}
+
+	steps := g.timeTracker.CalculateSteps(g.step, 5)
 	for range steps {
-		g.ecs.Tick(g.physicsStep)
-		g.resources.GetInputEvents().ResetTransient()
+		g.ecs.Tick(g.step)
 		g.ticks++
 	}
 

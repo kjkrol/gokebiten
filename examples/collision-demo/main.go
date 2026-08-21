@@ -1,15 +1,20 @@
 package main
 
 import (
+	"encoding/binary"
+	"fmt"
 	"image/color"
+	"log"
 	"math"
 	"math/rand/v2"
+	"slices"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten"
 	"github.com/kjkrol/gokebiten/control"
+	"github.com/kjkrol/gokebiten/physics"
 	"github.com/kjkrol/gokebiten/physics/collisions"
 	"github.com/kjkrol/gokebiten/physics/collisions/strategies/elastic"
 	"github.com/kjkrol/gokebiten/physics/collisions/strategies/stats"
@@ -27,30 +32,16 @@ const (
 	ScreenHeight = 1024
 	RectSize     = 20
 	FillPercent  = 20
+
+	saveBasePath = "collision-demo"
 )
 
 var EntityCount = int(math.Floor(FillPercent / 100.0 * float64(ScreenWidth*ScreenHeight) / float64(RectSize*RectSize)))
 
-type State struct{}
-
-type Telemetry struct {
-	Kinematics kinematics.Telemetry
-	Collision  stats.Stats
-}
-
-func (t *Telemetry) Reset() { t.Collision.Counter = 0 }
-
-var _ control.EventHandler = (*EventHandler)(nil)
-
-type EventHandler struct{ game *gokebiten.Game }
-
-func (e *EventHandler) HandleEvents(events *control.InputEvents) {
-	for _, k := range events.KeyEvents {
-		if k.Key == ebiten.KeySpace && k.Action == control.ActionPress {
-			e.game.TogglePause()
-		}
-	}
-}
+// State demonstrates persisting arbitrary game-owned state alongside the
+// ECS snapshot — Saves is otherwise meaningless, just something to observe
+// round-tripping across a save/load cycle.
+type State struct{ Saves int }
 
 func main() {
 	resources := gokebiten.NewResources(
@@ -64,19 +55,38 @@ func main() {
 	)
 
 	game := gokebiten.NewGame(resources)
-	game.SetEventHandler(&EventHandler{game: game})
+	game.SetEventHandler(&EventHandler{game: game, resources: resources})
 
-	game.UseWorld(spatial.Population{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize})
+	worldModule := spatial.NewWorldModule(
+		resources.GetSpaceConfig(),
+		spatial.Population{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize},
+	)
 
-	physics := game.UsePhysics()
-	physics.SetCollisionHandlers(
+	physicsModule := physics.New(worldModule.Space(), game.ECS(), RectSize, game.Step())
+	physicsModule.SetCollisionHandlers(
 		elastic.NewHandler(),
 		stats.NewHandler(&resources.Telemetry().Collision),
 	)
-	physics.SetHitExpires(100 * time.Millisecond)
+	physicsModule.SetHitExpires(100 * time.Millisecond)
+
+	saves, err := gokebiten.ListSaves(saveBasePath)
+	if err != nil {
+		log.Fatalf("list saves: %v", err)
+	}
+	if slices.Contains(saves, "") {
+		if err := loadExistingWorld(game, worldModule, resources, physicsModule); err != nil {
+			log.Fatalf("load: %v", err)
+		}
+		log.Printf("loaded saved world (save #%d)", resources.State().Saves)
+	} else {
+		populateFreshWorld(worldModule, &resources.Telemetry().Kinematics)
+	}
+
+	game.Setup(worldModule)
+	game.UseModule(physicsModule)
 
 	game.Loop(func(ctx goke.RunCtx, d time.Duration) {
-		physics.Run(ctx, d)
+		physicsModule.RunPlan(ctx, d)
 		ctx.Sync()
 	})
 
@@ -97,7 +107,67 @@ func main() {
 		},
 	)
 
-	game.Populate(EntityCount, &resources.Telemetry().Kinematics,
+	game.Run()
+}
+
+func (s State) MarshalBinary() ([]byte, error) {
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, uint32(s.Saves))
+	return b, nil
+}
+
+func (s *State) UnmarshalBinary(data []byte) error {
+	if len(data) != 4 {
+		return fmt.Errorf("state: want 4 bytes, got %d", len(data))
+	}
+	s.Saves = int(binary.BigEndian.Uint32(data))
+	return nil
+}
+
+type Telemetry struct {
+	Kinematics kinematics.Telemetry
+	Collision  stats.Stats
+}
+
+func (t *Telemetry) Reset() { t.Collision.Counter = 0 }
+
+var _ control.EventHandler = (*EventHandler)(nil)
+
+type EventHandler struct {
+	game      *gokebiten.Game
+	resources *gokebiten.Resources[State, Telemetry]
+}
+
+func (e *EventHandler) HandleEvents(events *control.InputEvents) {
+	for _, k := range events.KeyEvents {
+		if k.Action != control.ActionPress {
+			continue
+		}
+		switch k.Key {
+		case ebiten.KeySpace:
+			e.game.TogglePause()
+		case ebiten.KeyF5:
+			e.save()
+		}
+	}
+}
+
+func (e *EventHandler) save() {
+	e.resources.State().Saves++
+	if err := e.game.Save(saveBasePath, ""); err != nil {
+		log.Printf("save: %v", err)
+		return
+	}
+	log.Printf("saved (save #%d)", e.resources.State().Saves)
+}
+
+func loadExistingWorld(game *gokebiten.Game, worldModule *spatial.WorldModule, resources *gokebiten.Resources[State, Telemetry], physicsModule *physics.Physics) error {
+	onLoaded := func(count int) { resources.Telemetry().Kinematics.DynamicCount = count }
+	return game.Load(saveBasePath, "", worldModule.Space(), onLoaded, physicsModule)
+}
+
+func populateFreshWorld(worldModule *spatial.WorldModule, telemetry *kinematics.Telemetry) {
+	worldModule.Populate(EntityCount, telemetry,
 		kinematics.NewSpawner(
 			grid.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize),
 			randomvelocity.New(200, 50, 10),
@@ -109,6 +179,4 @@ func main() {
 			}
 		}),
 	)
-
-	game.Run()
 }

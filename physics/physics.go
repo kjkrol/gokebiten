@@ -10,6 +10,8 @@ import (
 	"github.com/kjkrol/gokg"
 )
 
+var _ goke.Module = (*Physics)(nil)
+
 type Physics struct {
 	space         *gokg.Space
 	ecs           *goke.ECS
@@ -28,15 +30,14 @@ type Physics struct {
 	built       bool
 }
 
-// New builds Physics for the given world and registers the kinematics
-// system immediately — minEntitySize is the smallest entity size the world
-// was provisioned for, used to cap per-tick displacement so nothing can
-// tunnel through it undetected. Collision systems register lazily, on the
-// first Run, since they must be built after entities exist.
+// New builds Physics for the given world — minEntitySize is the smallest
+// entity size the world was provisioned for, used to cap per-tick
+// displacement so nothing can tunnel through it undetected. All systems
+// (kinematics included) register lazily, on the first RunPlan/RegSystems,
+// not here — so New itself never touches ecs, keeping it safe to call
+// before ECS.Load.
 func New(space *gokg.Space, ecs *goke.ECS, minEntitySize uint32, physicsStep time.Duration) *Physics {
-	p := &Physics{space: space, ecs: ecs, minEntitySize: minEntitySize, physicsStep: physicsStep}
-	p.moveSystem = p.useKinematics()
-	return p
+	return &Physics{space: space, ecs: ecs, minEntitySize: minEntitySize, physicsStep: physicsStep}
 }
 
 func (p *Physics) SetCollisionHandlers(handlers ...collisions.CollisionHandler) *Physics {
@@ -51,7 +52,7 @@ func (p *Physics) DebugEnabled() *Physics {
 
 func (p *Physics) SetHitExpires(duration time.Duration) *Physics {
 	p.hitDuration = duration
-	p.extra = append(p.extra, NewTagExpirySystem(func(h *collisions.Hit) time.Time { return h.ExpiresAt }))
+	p.extra = append(p.extra, NewTagExpirySystem(func(h *collisions.Hit) time.Time { return h.ExpiresAt() }))
 	return p
 }
 
@@ -60,7 +61,18 @@ func (p *Physics) RegSys(sys goke.System) *Physics {
 	return p
 }
 
-func (p *Physics) Run(ctx goke.RunCtx, d time.Duration) {
+// RegSystems builds and registers the collision systems — see [goke.Module].
+// NarrowPhase.Init scans existing entities for Sensor tags, so this must run
+// after the world is populated, not before — RunPlan already calls it lazily
+// at the right time; call this directly only if that ordering is guaranteed
+// some other way.
+func (p *Physics) RegSystems(ecs *goke.ECS) {
+	if !p.built {
+		p.build()
+	}
+}
+
+func (p *Physics) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	if !p.built {
 		p.build()
 	}
@@ -79,7 +91,26 @@ func (p *Physics) Run(ctx goke.RunCtx, d time.Duration) {
 	}
 }
 
+// SetupSystems is empty — Physics has no one-time seeding of its own — but
+// is required to satisfy goke.Module, which now embeds SetupProvider.
+func (p *Physics) SetupSystems() []goke.System { return nil }
+
+// LoadComps lists the component types kinematics and collisions own — see
+// [goke.CompProvider].
+func (p *Physics) LoadComps() []goke.CompToken {
+	return []goke.CompToken{
+		goke.LoadComp[kinematics.Position](),
+		goke.LoadComp[kinematics.Velocity](),
+		goke.LoadComp[collisions.Collision](),
+		goke.LoadComp[collisions.Hit](),
+		goke.LoadComp[collisions.Sensor](),
+		goke.LoadComp[collisions.Static](),
+	}
+}
+
 func (p *Physics) build() {
+	p.moveSystem = p.useKinematics()
+
 	handlers := p.handlers
 	if p.debug {
 		handlers = append(handlers, debug.NewHandler())
