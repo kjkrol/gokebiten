@@ -12,9 +12,6 @@
   <a href="https://opensource.org/licenses/MIT">
     <img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="License">
   </a>
-  <a href="https://goreportcard.com/report/github.com/kjkrol/gokebiten">
-    <img src="https://goreportcard.com/badge/github.com/kjkrol/gokebiten" alt="Go Report Card">
-  </a>
   <a href="https://app.codecov.io/gh/kjkrol/gokebiten">
     <img src="https://img.shields.io/codecov/c/github/kjkrol/gokebiten?style=flat-square&logo=codecov" alt="Codecov Coverage">
   </a>
