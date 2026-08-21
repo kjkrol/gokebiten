@@ -20,6 +20,12 @@ jobs:
           check-latest: true
           cache: true
 
+      - name: Install Ebitengine system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libxcursor-dev libxi-dev libxinerama-dev \
+            libxrandr-dev libxxf86vm-dev libasound2-dev libx11-dev pkg-config
+
       - name: Install dependencies
         run: go mod download
 
@@ -30,4 +36,4 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          slug: kjkrol/goke
+          slug: kjkrol/gokebiten
