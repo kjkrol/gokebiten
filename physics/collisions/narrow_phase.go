@@ -196,10 +196,10 @@ func (n *NarrowPhase) finalizeHitTags(cb *goke.CmdBuf) {
 				continue
 			}
 			if confirmedThisTick {
-				tags[i].ExpiresAt = until
+				tags[i].SetExpiresAt(until)
 				continue
 			}
-			if !tags[i].ExpiresAt.IsZero() {
+			if tags[i].HasExpiry() {
 				continue
 			}
 			buf.Add(id)

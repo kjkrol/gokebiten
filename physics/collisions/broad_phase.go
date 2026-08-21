@@ -29,7 +29,7 @@ func NewBroadPhase(space *gokg.Space) *BroadPhase {
 
 func (b *BroadPhase) Init(si *goke.SysInit) {
 	b.query = si.NewQueryBuilder(&b.pos, &b.vel, &b.collision).Build()
-	si.ECS().RegComp[Hit]()
+	si.RegComp[Hit]()
 	b.addEditor = b.query.NewEditorBuilder(&b.hit).Build()
 }
 

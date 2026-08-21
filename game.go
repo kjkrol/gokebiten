@@ -108,7 +108,7 @@ func (g *Game) Step() time.Duration { return g.step }
 // Sensor tags at registration).
 func (g *Game) UseModule(m goke.Module) {
 	g.pendingSetup = append(g.pendingSetup, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		m.RegSystems(si.ECS())
+		m.RegSystems(g.ecs)
 	}})
 }
 

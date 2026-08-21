@@ -52,7 +52,7 @@ func (p *Physics) DebugEnabled() *Physics {
 
 func (p *Physics) SetHitExpires(duration time.Duration) *Physics {
 	p.hitDuration = duration
-	p.extra = append(p.extra, NewTagExpirySystem(func(h *collisions.Hit) time.Time { return h.ExpiresAt }))
+	p.extra = append(p.extra, NewTagExpirySystem(func(h *collisions.Hit) time.Time { return h.ExpiresAt() }))
 	return p
 }
 
