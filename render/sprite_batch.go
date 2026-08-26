@@ -21,13 +21,13 @@ const (
 // correct world-wrap and camera handling without duplicating the quad math.
 type spriteBatch struct {
 	atlas    AtlasSource
-	camera   *Camera
+	camera   Camera
 	vertices []ebiten.Vertex
 	indices  []uint16
 	triOpts  *ebiten.DrawTrianglesOptions
 }
 
-func newSpriteBatch(atlas AtlasSource, camera *Camera) spriteBatch {
+func newSpriteBatch(atlas AtlasSource, camera Camera) spriteBatch {
 	return spriteBatch{
 		atlas:   atlas,
 		camera:  camera,

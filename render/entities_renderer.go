@@ -26,7 +26,7 @@ type EntitiesRenderer struct {
 // NewEntitiesRenderer draws every entity with Position+Appearance, except
 // any matching an exclude filter (e.g. goke.Exclude[SomeTag]()) — for tags
 // a different Renderer (e.g. TagOverlayRenderer) already draws in full.
-func NewEntitiesRenderer(atlas AtlasSource, camera *Camera, exclude ...goke.Opt) *EntitiesRenderer {
+func NewEntitiesRenderer(atlas AtlasSource, camera Camera, exclude ...goke.Opt) *EntitiesRenderer {
 	return &EntitiesRenderer{batch: newSpriteBatch(atlas, camera), exclude: exclude}
 }
 

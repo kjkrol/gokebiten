@@ -10,37 +10,31 @@ import (
 	"github.com/kjkrol/gokebiten/physics/kinematics/spawners/grid"
 	"github.com/kjkrol/gokebiten/physics/kinematics/spawners/randomvelocity"
 	"github.com/kjkrol/gokebiten/render"
-	"github.com/kjkrol/gokebiten/spatial"
+	"github.com/kjkrol/gokebiten/world"
 )
 
-// TestSaveLoadCycle exercises the same mechanics Game.Save/Game.Load use
-// (ecs.Save/Load, WorldModule, physics.Physics as a CompProvider, the
-// post-Load Space reindex) against this demo's real component types
-// (kinematics.Position embeds gokg's plane.AABB, collisions.Hit embeds
-// time.Time), without needing an Ebiten window — Game.Run's ebiten.RunGame
-// call can't be driven headlessly, so this stays at the level below Game.
+// TestSaveLoadCycle exercises the same mechanics Game.Save/Game.Load use, below the level of Game (no Ebiten window).
 func TestSaveLoadCycle(t *testing.T) {
 	path := t.TempDir() + "/save.bin"
 
 	const count = 5
-	spaceCfg := spatial.Config{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true}
-	pop := spatial.Population{MaxCount: count, MinSize: RectSize, MaxSize: RectSize}
+	spaceCfg := world.Config{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true}
+	pop := world.Population{MaxCount: count, MinSize: RectSize, MaxSize: RectSize}
 	step := time.Second / TPS
 
-	// --- build, populate, save ---
 	ecs := goke.New()
-	world := spatial.NewWorldModule(spaceCfg, pop)
-	world.Populate(count, &kinematics.Telemetry{},
+	wm := world.NewModule(spaceCfg, pop)
+	wm.Populate(count, &kinematics.Telemetry{},
 		kinematics.NewSpawner(grid.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize), randomvelocity.New(200, 50, 10)),
 		render.NewAppearanceExtras(func(index int) render.Appearance {
 			return render.Appearance{SpriteID: uint8(index)}
 		}),
 	)
-	physicsModule := physics.New(world.Space(), ecs, RectSize, step)
+	physicsModule := physics.New(wm.Space(), ecs, RectSize, step)
 
 	var origIDs []uint64
 	var origAppearance map[uint64]uint8
-	systems := append(world.SetupSystems(),
+	systems := append(wm.SetupSystems(),
 		goke.SystemFn{OnInit: func(si *goke.SysInit) {
 			var posQ goke.Comp[kinematics.Position]
 			var appQ goke.Comp[render.Appearance]
@@ -70,10 +64,9 @@ func TestSaveLoadCycle(t *testing.T) {
 	}
 	ecs.Resume()
 
-	// --- fresh ECS, load, reindex (mirrors Game.Load) ---
 	ecs2 := goke.New()
-	world2 := spatial.NewWorldModule(spaceCfg, pop)
-	physicsModule2 := physics.New(world2.Space(), ecs2, RectSize, step)
+	wm2 := world.NewModule(spaceCfg, pop)
+	physicsModule2 := physics.New(wm2.Space(), ecs2, RectSize, step)
 
 	comps := append(goke.ProvidedComps(physicsModule2), goke.LoadComp[render.Appearance]())
 	if err := ecs2.Load(path, comps...); err != nil {
@@ -92,7 +85,7 @@ func TestSaveLoadCycle(t *testing.T) {
 			positions := posQ.Slice(cur)
 			appearances := appQ.Slice(cur)
 			for i, id := range cur.IDs {
-				world2.Space().Insert(id, positions[i].AABB)
+				wm2.Space().Insert(id, positions[i].AABB)
 				wantSprite, ok := origAppearance[uint64(id)]
 				if !ok {
 					t.Errorf("entity %d: not among originally spawned IDs", id)
@@ -103,7 +96,7 @@ func TestSaveLoadCycle(t *testing.T) {
 			}
 		}
 	}})
-	world2.Space().Flush(nil)
+	wm2.Space().Flush(nil)
 
 	if loadedCount != count {
 		t.Fatalf("loaded %d entities, want %d", loadedCount, count)

@@ -1,8 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
-	"fmt"
 	"image/color"
 	"log"
 	"math"
@@ -13,6 +11,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/physics"
 	"github.com/kjkrol/gokebiten/physics/collisions"
@@ -23,7 +22,7 @@ import (
 	"github.com/kjkrol/gokebiten/physics/kinematics/spawners/randomvelocity"
 	"github.com/kjkrol/gokebiten/render"
 	"github.com/kjkrol/gokebiten/render/atlases/procedural"
-	"github.com/kjkrol/gokebiten/spatial"
+	"github.com/kjkrol/gokebiten/world"
 )
 
 const (
@@ -38,90 +37,97 @@ const (
 
 var EntityCount = int(math.Floor(FillPercent / 100.0 * float64(ScreenWidth*ScreenHeight) / float64(RectSize*RectSize)))
 
-// State demonstrates persisting arbitrary game-owned state alongside the
-// ECS snapshot — Saves is otherwise meaningless, just something to observe
-// round-tripping across a save/load cycle.
+// State demonstrates persisting arbitrary game-owned state across a save/load cycle.
 type State struct{ Saves int }
 
 func main() {
-	resources := gokebiten.NewResources(
-		&gokebiten.GameProps{
-			Title:       "GOKe + GOKg + Ebiten Integration",
-			ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight,
-			TargetTPS: TPS},
-		spatial.Config{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
-		State{},
-		Telemetry{},
-	)
+	game := gokebiten.NewGame(&gokebiten.GameProps{
+		Title:       "GOKe + GOKg + Ebiten Integration",
+		ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight,
+		TargetTPS: TPS,
+	})
 
-	game := gokebiten.NewGame(resources)
-	game.SetEventHandler(&EventHandler{game: game, resources: resources})
+	state := &State{}
+	telemetry := &Telemetry{}
+	game.Resources().InsertResource(state)
+	game.Resources().InsertResource(telemetry)
 
-	worldModule := spatial.NewWorldModule(
-		resources.GetSpaceConfig(),
-		spatial.Population{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize},
-	)
+	game.SetEventHandlerFn(func(events *control.InputEvents) {
+		for _, k := range events.KeyEvents {
+			if k.Action != control.ActionPress {
+				continue
+			}
+			switch k.Key {
+			case ebiten.KeySpace:
+				game.TogglePause()
+			case ebiten.KeyF5:
+				state.Saves++
+				if err := game.Persistence.Save(saveBasePath, "", state); err != nil {
+					log.Printf("save: %v", err)
+					continue
+				}
+				log.Printf("saved (save #%d)", state.Saves)
+			}
+		}
+	})
 
-	physicsModule := physics.New(worldModule.Space(), game.ECS(), RectSize, game.Step())
-	physicsModule.SetCollisionHandlers(
-		elastic.NewHandler(),
-		stats.NewHandler(&resources.Telemetry().Collision),
-	)
-	physicsModule.SetHitExpires(100 * time.Millisecond)
+	worldPlugin := world.NewPlugin(
+		world.Config{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
+		world.Population{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize},
+	).OnReindexed(func(count int) { telemetry.Kinematics.DynamicCount = count })
 
-	saves, err := gokebiten.ListSaves(saveBasePath)
+	physicsPlugin := physics.NewPlugin(RectSize).
+		SetCollisionHandlers(elastic.NewHandler(), stats.NewHandler(&telemetry.Collision)).
+		SetHitExpires(100 * time.Millisecond)
+
+	cameraPlugin := camera.NewPlugin()
+
+	if err := game.UsePlugin(worldPlugin); err != nil {
+		log.Fatal(err)
+	}
+	if err := game.UsePlugin(physicsPlugin); err != nil {
+		log.Fatal(err)
+	}
+	if err := game.UsePlugin(cameraPlugin); err != nil {
+		log.Fatal(err)
+	}
+
+	saves, err := game.Persistence.List(saveBasePath)
 	if err != nil {
 		log.Fatalf("list saves: %v", err)
 	}
+
 	if slices.Contains(saves, "") {
-		if err := loadExistingWorld(game, worldModule, resources, physicsModule); err != nil {
+		if err := game.Persistence.Load(saveBasePath, "", state); err != nil {
 			log.Fatalf("load: %v", err)
 		}
-		log.Printf("loaded saved world (save #%d)", resources.State().Saves)
+		log.Printf("loaded saved world (save #%d)", state.Saves)
 	} else {
-		populateFreshWorld(worldModule, &resources.Telemetry().Kinematics)
+		populateFreshWorld(worldPlugin.World(), &telemetry.Kinematics)
 	}
 
-	game.Setup(worldModule)
-	game.UseModule(physicsModule)
-
 	game.Loop(func(ctx goke.RunCtx, d time.Duration) {
-		physicsModule.RunPlan(ctx, d)
+		physicsPlugin.Physics().RunPlan(ctx, d)
 		ctx.Sync()
 	})
 
-	camera := render.NewCamera(ScreenWidth, ScreenHeight)
 	atlas := procedural.NewAtlas()
 
 	game.RenderSequence(
 		func() render.Renderer {
-			return render.NewEntitiesRenderer(atlas, camera, goke.Exclude[collisions.Hit]())
+			return render.NewEntitiesRenderer(atlas, cameraPlugin.Camera(), goke.Exclude[collisions.Hit]())
 		},
 		func() render.Renderer {
-			return render.NewTagOverlayRenderer(atlas, camera, 0, color.RGBA{R: 255, A: 255}, goke.Include[collisions.Hit]())
+			return render.NewTagOverlayRenderer(atlas, cameraPlugin.Camera(), 0, color.RGBA{R: 255, A: 255}, goke.Include[collisions.Hit]())
 		},
 		func() render.Renderer {
-			kin := &resources.Telemetry().Kinematics
+			kin := &telemetry.Kinematics
 			entityCount := func() int { return kin.DynamicCount + kin.StaticCount }
-			return render.NewTelemetryRenderer(resources.TPS(), entityCount, &resources.Telemetry().Collision.Counter)
+			return render.NewTelemetryRenderer(&game.Resources().GetResource[*gokebiten.TPS]().Ticks, entityCount, &telemetry.Collision.Counter)
 		},
 	)
 
 	game.Run()
-}
-
-func (s State) MarshalBinary() ([]byte, error) {
-	b := make([]byte, 4)
-	binary.BigEndian.PutUint32(b, uint32(s.Saves))
-	return b, nil
-}
-
-func (s *State) UnmarshalBinary(data []byte) error {
-	if len(data) != 4 {
-		return fmt.Errorf("state: want 4 bytes, got %d", len(data))
-	}
-	s.Saves = int(binary.BigEndian.Uint32(data))
-	return nil
 }
 
 type Telemetry struct {
@@ -131,42 +137,7 @@ type Telemetry struct {
 
 func (t *Telemetry) Reset() { t.Collision.Counter = 0 }
 
-var _ control.EventHandler = (*EventHandler)(nil)
-
-type EventHandler struct {
-	game      *gokebiten.Game
-	resources *gokebiten.Resources[State, Telemetry]
-}
-
-func (e *EventHandler) HandleEvents(events *control.InputEvents) {
-	for _, k := range events.KeyEvents {
-		if k.Action != control.ActionPress {
-			continue
-		}
-		switch k.Key {
-		case ebiten.KeySpace:
-			e.game.TogglePause()
-		case ebiten.KeyF5:
-			e.save()
-		}
-	}
-}
-
-func (e *EventHandler) save() {
-	e.resources.State().Saves++
-	if err := e.game.Save(saveBasePath, ""); err != nil {
-		log.Printf("save: %v", err)
-		return
-	}
-	log.Printf("saved (save #%d)", e.resources.State().Saves)
-}
-
-func loadExistingWorld(game *gokebiten.Game, worldModule *spatial.WorldModule, resources *gokebiten.Resources[State, Telemetry], physicsModule *physics.Physics) error {
-	onLoaded := func(count int) { resources.Telemetry().Kinematics.DynamicCount = count }
-	return game.Load(saveBasePath, "", worldModule.Space(), onLoaded, physicsModule)
-}
-
-func populateFreshWorld(worldModule *spatial.WorldModule, telemetry *kinematics.Telemetry) {
+func populateFreshWorld(worldModule *world.Module, telemetry *kinematics.Telemetry) {
 	worldModule.Populate(EntityCount, telemetry,
 		kinematics.NewSpawner(
 			grid.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize),

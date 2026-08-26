@@ -1,21 +1,14 @@
 package gokebiten
 
 import (
-	"io"
 	"log"
-	"os"
-	"path/filepath"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/physics/kinematics"
+	"github.com/kjkrol/gokebiten/internal/timing"
 	"github.com/kjkrol/gokebiten/render"
-	"github.com/kjkrol/gokebiten/spatial"
-	"github.com/kjkrol/gokg"
 )
 
 const (
@@ -28,55 +21,68 @@ type GameProps struct {
 	ScreenWidth, ScreenHeight int
 }
 
-// resources is the narrow contract Game itself needs — satisfied by
-// *Resources[S, T] for any S, T. Unexported: Resources is the only, and only
-// intended, implementation.
-type resources interface {
-	GetGameProps() *GameProps
-	GetInputEvents() *control.InputEvents
-	GetSpaceConfig() spatial.Config
-	TPS() *int
-	Reset()
-	SaveState(w io.Writer) error
-	LoadState(r io.Reader) error
-}
+// TPS is the built-in measured-ticks-per-second counter, inserted by NewGame.
+type TPS struct{ Ticks int }
 
 type Game struct {
-	ticks       int
-	step        time.Duration
-	timeTracker *TimeTracker
-	resources   resources
-	ecs         *goke.ECS
-	renderSeq   []render.Renderer
-	controller  *control.DefaultController
-	// pendingSetup collects everything that needs SysInit-gated construction
-	// (renderer Init, module RegSystems, one-time world seeding) across
-	// RenderSequence/UseModule/Setup/Load calls — ecs.Setup is callable only
-	// once, so it all runs together, lazily, right before the game loop
-	// starts (see Run).
-	pendingSetup []goke.System
+	Persistence *Persistence
+
+	ticks         int
+	step          time.Duration
+	timeTracker   *timing.Tracker
+	resources     *Resources
+	props         *GameProps
+	inputs        *control.InputEvents
+	tps           *TPS
+	ecs           *goke.ECS
+	renderSeq     []render.Renderer
+	controller    *control.DefaultController
+	pluginManager *pluginManager
+	pendingSetup  []func() []goke.System
 }
 
 var _ ebiten.Game = (*Game)(nil)
 
-func NewGame(res resources) *Game {
+// NewGame builds a Game, pre-populating its resource registry with *GameProps, *control.InputEvents, and *TPS.
+func NewGame(props *GameProps) *Game {
+	resources := NewResources()
+	inputs := &control.InputEvents{}
+	tps := &TPS{}
+	resources.InsertResource(props)
+	resources.InsertResource(inputs)
+	resources.InsertResource(tps)
+
 	targetTPS := defaultTargetTPS
-	if res.GetGameProps() != nil && res.GetGameProps().TargetTPS != 0 {
-		targetTPS = res.GetGameProps().TargetTPS
+	if props != nil && props.TargetTPS != 0 {
+		targetTPS = props.TargetTPS
 	}
-	controller := control.NewDefaultController(&control.DesktopAdapter{}, res.GetInputEvents())
+	controller := control.NewDefaultController(&control.DesktopAdapter{}, inputs)
 	game := &Game{
-		resources:   res,
+		resources:   resources,
+		props:       props,
+		inputs:      inputs,
+		tps:         tps,
 		step:        time.Second / time.Duration(targetTPS),
-		timeTracker: NewTimeTracker(),
+		timeTracker: timing.New(),
 		ecs:         goke.New(),
 		controller:  controller,
 	}
+	game.Persistence = &Persistence{game: game}
+	game.pluginManager = &pluginManager{game: game}
 	return game
 }
 
+// Resources returns the game's shared resource registry.
+func (g *Game) Resources() *Resources { return g.resources }
+
+// SetEventHandler sets the handler Update calls once per tick with this tick's input events.
 func (g *Game) SetEventHandler(handler control.EventHandler) {
 	g.controller.SetHandler(handler)
+}
+
+// SetEventHandlerFn is SetEventHandler for a plain closure, letting call sites skip declaring a named type.
+func (g *Game) SetEventHandlerFn(fn func(events *control.InputEvents)) {
+	g.SetEventHandler(eventHandlerFunc(fn))
 }
 
 func (g *Game) Paused() bool { return g.ecs.Paused() }
@@ -93,179 +99,6 @@ func (g *Game) TogglePause() {
 	}
 }
 
-func RegComp[C any](game *Game) goke.CompID {
-	return game.ecs.RegComp[C]()
-}
-
-func (g *Game) RegSys(factory func() goke.System) goke.Runnable {
-	return g.ecs.RegSys(factory())
-}
-
-func (g *Game) ECS() *goke.ECS { return g.ecs }
-
-func (g *Game) Step() time.Duration { return g.step }
-
-// UseModule defers m.RegSystems to the same Setup call RenderSequence/Setup
-// use, in call order — call it after any spatial.WorldModule that seeds
-// entities m needs to already exist (e.g. a physics module scanning for
-// Sensor tags at registration).
-func (g *Game) UseModule(m goke.Module) {
-	g.pendingSetup = append(g.pendingSetup, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		m.RegSystems(g.ecs)
-	}})
-}
-
-// Setup defers each provider's SetupSystems to the same one-time ecs.Setup
-// call RenderSequence/UseModule feed — in call order, mirroring ecs.Setup's
-// own name and one-time-seeding spirit at the Game level.
-func (g *Game) Setup(providers ...goke.SetupProvider) {
-	for _, p := range providers {
-		g.pendingSetup = append(g.pendingSetup, p.SetupSystems()...)
-	}
-}
-
-// saveFilePath is where Save/Load read and write: the quicksave
-// (basePath+".game.save") when label is empty, otherwise a named save
-// (basePath+".game."+label+".save").
-func saveFilePath(basePath, label string) string {
-	if label == "" {
-		return basePath + ".game.save"
-	}
-	return basePath + ".game." + label + ".save"
-}
-
-// ListSaves returns every save found for basePath: "" first if the
-// quicksave (basePath+".game.save") exists, then every named save's label,
-// alphabetically — pass any of them to Game.Load.
-func ListSaves(basePath string) ([]string, error) {
-	var labels []string
-	if _, err := os.Stat(saveFilePath(basePath, "")); err == nil {
-		labels = append(labels, "")
-	}
-
-	matches, err := filepath.Glob(basePath + ".game.*.save")
-	if err != nil {
-		return nil, err
-	}
-	prefix, suffix := basePath+".game.", ".save"
-	var named []string
-	for _, m := range matches {
-		named = append(named, strings.TrimSuffix(strings.TrimPrefix(m, prefix), suffix))
-	}
-	sort.Strings(named)
-
-	return append(labels, named...), nil
-}
-
-// Save pauses the ECS and writes one file — State (see Resources.SaveState;
-// a zero-length marker if S doesn't implement encoding.BinaryMarshaler)
-// followed by the ECS snapshot — to saveFilePath(basePath, label). label
-// selects which save this is: "" for the quicksave slot, anything else for
-// a named save (see ListSaves to discover named saves already on disk).
-// Resumes before returning either way.
-func (g *Game) Save(basePath, label string) error {
-	g.ecs.Pause()
-	defer g.ecs.Resume()
-
-	tmp, err := os.CreateTemp("", "gokebiten-ecs-*.tmp")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmp.Name()
-	tmp.Close() // ecs.Save opens tmpPath itself (os.Create, truncating)
-	defer os.Remove(tmpPath)
-
-	if err := g.ecs.Save(tmpPath); err != nil {
-		return err
-	}
-
-	out, err := os.Create(saveFilePath(basePath, label))
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	if err := g.resources.SaveState(out); err != nil {
-		return err
-	}
-
-	ecsData, err := os.Open(tmpPath)
-	if err != nil {
-		return err
-	}
-	defer ecsData.Close()
-	_, err = io.Copy(out, ecsData)
-	return err
-}
-
-// Load restores a snapshot written by Save (same basePath and label) into
-// this (must be freshly constructed) Game: State, the ECS snapshot, and —
-// since space (the gokg spatial index) isn't part of the ECS snapshot — a
-// rebuild of space from every loaded entity's kinematics.Position, deferred
-// to the same Setup phase RenderSequence/UseModule/Setup use. onLoaded, if
-// not nil, is called once that rebuild completes, with the loaded entity
-// count (e.g. to set a telemetry field) — nil if you don't need it.
-// providers supplies component tokens the same way ProvidedComps does (e.g.
-// your physics module); render.Appearance is always included.
-func (g *Game) Load(basePath, label string, space *gokg.Space, onLoaded func(count int), providers ...any) error {
-	in, err := os.Open(saveFilePath(basePath, label))
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	if err := g.resources.LoadState(in); err != nil {
-		return err
-	}
-
-	tmp, err := os.CreateTemp("", "gokebiten-ecs-*.tmp")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath)
-	if _, err := io.Copy(tmp, in); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-
-	comps := append(goke.ProvidedComps(providers...), goke.LoadComp[render.Appearance]())
-	if err := g.ecs.Load(tmpPath, comps...); err != nil {
-		return err
-	}
-
-	g.pendingSetup = append(g.pendingSetup, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		var pos goke.Comp[kinematics.Position]
-		query := si.NewQueryBuilder(&pos).Build()
-		query.All()
-		count := 0
-		for query.Next() {
-			cursor := query.Cursor()
-			positions := pos.Slice(cursor)
-			for i, id := range cursor.IDs {
-				space.Insert(id, positions[i].AABB)
-			}
-			count += len(cursor.IDs)
-		}
-		space.Flush(nil)
-		if onLoaded != nil {
-			onLoaded(count)
-		}
-	}})
-	return nil
-}
-
-func (g *Game) registerRenderer(factory func() render.Renderer) render.Renderer {
-	renderer := factory()
-	g.pendingSetup = append(g.pendingSetup, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		renderer.Init(si)
-	}})
-	return renderer
-}
-
 func (g *Game) Loop(plan func(ctx goke.RunCtx, d time.Duration)) {
 	g.ecs.SetPlan(plan)
 }
@@ -278,9 +111,9 @@ func (g *Game) RenderSequence(rendererFactories ...func() render.Renderer) {
 }
 
 func (g *Game) Update() error {
-	g.controller.Capture(g.resources.GetInputEvents())
+	g.controller.Capture(g.inputs)
 	g.controller.Update(nil, 0)
-	g.resources.GetInputEvents().ResetTransient()
+	g.inputs.ResetTransient()
 
 	if g.ecs.Paused() {
 		return nil
@@ -293,9 +126,13 @@ func (g *Game) Update() error {
 	}
 
 	if g.timeTracker.ProcessStatsInterval() {
-		*g.resources.TPS() = g.ticks
+		g.tps.Ticks = g.ticks
 		g.ticks = 0
-		g.resources.Reset()
+		g.resources.forEach(func(v any) {
+			if r, ok := v.(Resettable); ok {
+				r.Reset()
+			}
+		})
 	}
 
 	return nil
@@ -308,23 +145,64 @@ func (g *Game) Draw(screen *ebiten.Image) {
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
-	ScreenWidth := g.resources.GetGameProps().ScreenWidth
-	ScreenHeight := g.resources.GetGameProps().ScreenHeight
-	return ScreenWidth, ScreenHeight
+	return g.props.ScreenWidth, g.props.ScreenHeight
 }
 
 func (g *Game) Run() {
-	if len(g.pendingSetup) > 0 {
-		g.ecs.Setup(g.pendingSetup...)
-		g.pendingSetup = nil
-	}
+	g.flushPendingSetup()
 
-	ScreenWidth := g.resources.GetGameProps().ScreenWidth
-	ScreenHeight := g.resources.GetGameProps().ScreenHeight
-	Title := g.resources.GetGameProps().Title
-	ebiten.SetWindowSize(ScreenWidth, ScreenHeight)
-	ebiten.SetWindowTitle(Title)
+	ebiten.SetWindowSize(g.props.ScreenWidth, g.props.ScreenHeight)
+	ebiten.SetWindowTitle(g.props.Title)
 	if err := ebiten.RunGame(g); err != nil {
 		log.Fatal(err)
 	}
 }
+
+// RegComp registers ECS component type C.
+func RegComp[C any](ctx *PluginContext) goke.CompID {
+	return ctx.game.ecs.RegComp[C]()
+}
+
+func (g *Game) regSys(factory func() goke.System) goke.Runnable {
+	return g.ecs.RegSys(factory())
+}
+
+// useModule defers m.RegSystems to the one-time Setup call and tracks m for Persistence.Load.
+func (g *Game) useModule(m goke.Module) {
+	g.pluginManager.track(m)
+	sys := goke.SystemFn{OnInit: func(si *goke.SysInit) { m.RegSystems(g.ecs) }}
+	g.pendingSetup = append(g.pendingSetup, func() []goke.System { return []goke.System{sys} })
+}
+
+// setup tracks each provider for Persistence.Load and defers its SetupSystems to the one-time ecs.Setup call.
+func (g *Game) setup(providers ...goke.SetupProvider) {
+	for _, p := range providers {
+		g.pluginManager.track(p)
+		g.pendingSetup = append(g.pendingSetup, p.SetupSystems)
+	}
+}
+
+func (g *Game) registerRenderer(factory func() render.Renderer) render.Renderer {
+	renderer := factory()
+	sys := goke.SystemFn{OnInit: func(si *goke.SysInit) { renderer.Init(si) }}
+	g.pendingSetup = append(g.pendingSetup, func() []goke.System { return []goke.System{sys} })
+	return renderer
+}
+
+// flushPendingSetup evaluates every deferred producer once and runs the result through a single ecs.Setup call.
+func (g *Game) flushPendingSetup() {
+	if len(g.pendingSetup) == 0 {
+		return
+	}
+	var systems []goke.System
+	for _, produce := range g.pendingSetup {
+		systems = append(systems, produce()...)
+	}
+	g.ecs.Setup(systems...)
+	g.pendingSetup = nil
+}
+
+// eventHandlerFunc adapts a plain closure to control.EventHandler — see Game.SetEventHandlerFn.
+type eventHandlerFunc func(events *control.InputEvents)
+
+func (f eventHandlerFunc) HandleEvents(events *control.InputEvents) { f(events) }
