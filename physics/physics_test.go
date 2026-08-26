@@ -5,13 +5,13 @@ import (
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/physics"
-	"github.com/kjkrol/gokebiten/spatial"
+	"github.com/kjkrol/gokebiten/world"
 )
 
 func TestPhysics_LoadComps_ListsOwnedComponents(t *testing.T) {
-	space := spatial.NewWorldModule(
-		spatial.Config{Width: 100, Height: 100},
-		spatial.Population{MaxCount: 1, MinSize: 1, MaxSize: 10},
+	space := world.NewModule(
+		world.Config{Width: 100, Height: 100},
+		world.Population{MaxCount: 1, MinSize: 1, MaxSize: 10},
 	).Space()
 	p := physics.New(space, goke.New(), 10, 0)
 
@@ -22,9 +22,9 @@ func TestPhysics_LoadComps_ListsOwnedComponents(t *testing.T) {
 }
 
 func TestPhysics_RegSystems_IsIdempotent(t *testing.T) {
-	space := spatial.NewWorldModule(
-		spatial.Config{Width: 100, Height: 100},
-		spatial.Population{MaxCount: 1, MinSize: 1, MaxSize: 10},
+	space := world.NewModule(
+		world.Config{Width: 100, Height: 100},
+		world.Population{MaxCount: 1, MinSize: 1, MaxSize: 10},
 	).Space()
 	ecs := goke.New()
 	p := physics.New(space, ecs, 10, 0)

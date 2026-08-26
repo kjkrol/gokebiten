@@ -2,15 +2,10 @@ package render
 
 import (
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/spatial"
 	"github.com/kjkrol/uid"
 )
 
-var _ spatial.EntityExtras = (*AppearanceExtras)(nil)
-
-// AppearanceExtras is a ready-made EntityExtras: it adds Appearance to each
-// spawned entity, calling look(index) to decide each one's initial value —
-// the game owns the actual color/sprite policy, this just wires it in.
+// AppearanceExtras is a ready-made world.EntityExtras (checked structurally): sets each entity's Appearance via look.
 type AppearanceExtras struct {
 	fAppear goke.Comp[Appearance]
 	look    func(index int) Appearance

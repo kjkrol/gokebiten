@@ -22,7 +22,7 @@ type TagOverlayRenderer struct {
 	batch    spriteBatch
 }
 
-func NewTagOverlayRenderer(atlas AtlasSource, camera *Camera, spriteID uint8, c color.RGBA, filter goke.Opt) *TagOverlayRenderer {
+func NewTagOverlayRenderer(atlas AtlasSource, camera Camera, spriteID uint8, c color.RGBA, filter goke.Opt) *TagOverlayRenderer {
 	return &TagOverlayRenderer{
 		batch:    newSpriteBatch(atlas, camera),
 		spriteID: spriteID,

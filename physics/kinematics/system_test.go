@@ -6,7 +6,7 @@ import (
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/physics/kinematics"
-	"github.com/kjkrol/gokebiten/spatial"
+	"github.com/kjkrol/gokebiten/world"
 	"github.com/kjkrol/gokg/geom"
 	"github.com/kjkrol/gokg/plane"
 )
@@ -17,9 +17,9 @@ import (
 // component handle for reading AccX/TopLeft after ticking.
 func newTestWorld(t *testing.T, maxSpeed int32, vel kinematics.Velocity) (*goke.ECS, *goke.Query, *goke.Comp[kinematics.Position]) {
 	t.Helper()
-	space := spatial.NewWorldModule(
-		spatial.Config{Width: 1000, Height: 1000},
-		spatial.Population{MaxCount: 1, MinSize: 1, MaxSize: 10},
+	space := world.NewModule(
+		world.Config{Width: 1000, Height: 1000},
+		world.Population{MaxCount: 1, MinSize: 1, MaxSize: 10},
 	).Space()
 
 	ecs := goke.New()

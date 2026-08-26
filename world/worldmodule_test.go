@@ -1,4 +1,4 @@
-package spatial_test
+package world_test
 
 import (
 	"strings"
@@ -6,15 +6,15 @@ import (
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/physics/kinematics"
-	"github.com/kjkrol/gokebiten/spatial"
+	"github.com/kjkrol/gokebiten/world"
 	"github.com/kjkrol/gokg/geom"
 	"github.com/kjkrol/gokg/plane"
 	"github.com/kjkrol/uid"
 )
 
-func testConfig() spatial.Config { return spatial.Config{Width: 1000, Height: 1000} }
-func testPopulation() spatial.Population {
-	return spatial.Population{MaxCount: 10, MinSize: 1, MaxSize: 100}
+func testConfig() world.Config { return world.Config{Width: 1000, Height: 1000} }
+func testPopulation() world.Population {
+	return world.Population{MaxCount: 10, MinSize: 1, MaxSize: 100}
 }
 
 func testPos() kinematics.Position {
@@ -40,8 +40,8 @@ type neitherSpawnerNorPlacement struct{}
 func (neitherSpawnerNorPlacement) Components() []goke.Addable             { return nil }
 func (neitherSpawnerNorPlacement) Init(*goke.Cursor, int, int, uid.UID64) {}
 
-func TestWorldModule_Populate_EndToEnd(t *testing.T) {
-	wm := spatial.NewWorldModule(testConfig(), testPopulation())
+func TestModule_Populate_EndToEnd(t *testing.T) {
+	wm := world.NewModule(testConfig(), testPopulation())
 	var tel kinematics.Telemetry
 
 	wm.Populate(3, &tel, fakeSpawner{pos: testPos()})
@@ -73,8 +73,8 @@ func TestWorldModule_Populate_EndToEnd(t *testing.T) {
 	}
 }
 
-func TestWorldModule_PopulateStatic_EndToEnd(t *testing.T) {
-	wm := spatial.NewWorldModule(testConfig(), testPopulation())
+func TestModule_PopulateStatic_EndToEnd(t *testing.T) {
+	wm := world.NewModule(testConfig(), testPopulation())
 	var tel kinematics.Telemetry
 
 	wm.PopulateStatic(2, &tel, fakePlacement{pos: testPos()})
@@ -87,8 +87,8 @@ func TestWorldModule_PopulateStatic_EndToEnd(t *testing.T) {
 	}
 }
 
-func TestWorldModule_Populate_WrongPopulatorType_Panics(t *testing.T) {
-	wm := spatial.NewWorldModule(testConfig(), testPopulation())
+func TestModule_Populate_WrongPopulatorType_Panics(t *testing.T) {
+	wm := world.NewModule(testConfig(), testPopulation())
 	var tel kinematics.Telemetry
 	wm.Populate(1, &tel, neitherSpawnerNorPlacement{})
 
@@ -105,8 +105,8 @@ func TestWorldModule_Populate_WrongPopulatorType_Panics(t *testing.T) {
 	ecs.Setup(wm.SetupSystems()...)
 }
 
-func TestWorldModule_PopulateStatic_WrongPopulatorType_Panics(t *testing.T) {
-	wm := spatial.NewWorldModule(testConfig(), testPopulation())
+func TestModule_PopulateStatic_WrongPopulatorType_Panics(t *testing.T) {
+	wm := world.NewModule(testConfig(), testPopulation())
 	var tel kinematics.Telemetry
 	wm.PopulateStatic(1, &tel, neitherSpawnerNorPlacement{})
 
@@ -123,8 +123,8 @@ func TestWorldModule_PopulateStatic_WrongPopulatorType_Panics(t *testing.T) {
 	ecs.Setup(wm.SetupSystems()...)
 }
 
-func TestWorldModule_Populate_NoPopulators_Panics(t *testing.T) {
-	wm := spatial.NewWorldModule(testConfig(), testPopulation())
+func TestModule_Populate_NoPopulators_Panics(t *testing.T) {
+	wm := world.NewModule(testConfig(), testPopulation())
 	var tel kinematics.Telemetry
 	wm.Populate(1, &tel)
 
