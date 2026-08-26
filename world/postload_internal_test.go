@@ -14,28 +14,18 @@ func testModule() *Module {
 	)
 }
 
-func TestModule_PostLoad_CallsOnReindexedWithZeroCount(t *testing.T) {
+func TestModule_PostLoad_SetsDynamicCountToZeroWhenNothingSeeded(t *testing.T) {
 	w := testModule()
-
-	var gotCount int
-	called := false
-	w.onReindexed = func(count int) { called = true; gotCount = count }
 
 	goke.New().Setup(w.PostLoad())
 
-	if !called {
-		t.Fatal("expected onReindexed to be called")
-	}
-	if gotCount != 0 {
-		t.Errorf("onReindexed count = %d, want 0 (no kinematics.Position entities seeded)", gotCount)
+	if w.telemetry.DynamicCount != 0 {
+		t.Errorf("telemetry.DynamicCount = %d, want 0 (no kinematics.Position entities seeded)", w.telemetry.DynamicCount)
 	}
 }
 
-func TestModule_PostLoad_ReindexesLoadedEntities(t *testing.T) {
+func TestModule_PostLoad_SetsDynamicCountFromLoadedEntities(t *testing.T) {
 	w := testModule()
-
-	var gotCount int
-	w.onReindexed = func(count int) { gotCount = count }
 
 	pos := kinematics.Position{}
 	pos.Size.X, pos.Size.Y = 10, 10
@@ -52,7 +42,7 @@ func TestModule_PostLoad_ReindexesLoadedEntities(t *testing.T) {
 		}
 	}}, w.PostLoad())
 
-	if gotCount != 3 {
-		t.Errorf("onReindexed count = %d, want 3", gotCount)
+	if w.telemetry.DynamicCount != 3 {
+		t.Errorf("telemetry.DynamicCount = %d, want 3", w.telemetry.DynamicCount)
 	}
 }

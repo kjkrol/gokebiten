@@ -3,7 +3,6 @@ package world_test
 import (
 	"testing"
 
-	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten"
 	"github.com/kjkrol/gokebiten/world"
 	"github.com/kjkrol/gokg"
@@ -63,26 +62,23 @@ func TestPlugin_Install_PublishesConfigResource(t *testing.T) {
 	}
 }
 
-func TestPlugin_OnReindexed_ThreadsToModule(t *testing.T) {
+func TestPlugin_Install_PublishesTelemetryResource(t *testing.T) {
 	game := gokebiten.NewGame(&gokebiten.GameProps{})
-	var gotCount int
-	called := false
 	plugin := world.NewPlugin(
 		world.Config{Width: 100, Height: 100},
 		world.Population{MaxCount: 1, MinSize: 1, MaxSize: 10},
-	).OnReindexed(func(count int) { called = true; gotCount = count })
+	)
 
 	if err := game.UsePlugin(plugin); err != nil {
 		t.Fatalf("UsePlugin: %v", err)
 	}
 
-	goke.New().Setup(plugin.World().PostLoad())
-
-	if !called {
-		t.Fatal("expected OnReindexed's callback to be called via Module.PostLoad")
+	telemetry, ok := game.Resources().TryGetResource[*world.Telemetry]()
+	if !ok {
+		t.Fatal("expected *world.Telemetry to be registered as a resource")
 	}
-	if gotCount != 0 {
-		t.Errorf("callback count = %d, want 0 (no entities loaded)", gotCount)
+	if telemetry != plugin.World().Telemetry() {
+		t.Error("registered *world.Telemetry resource is not plugin.World().Telemetry()")
 	}
 }
 

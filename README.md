@@ -35,10 +35,10 @@ resolution on top.
   ECS's `Res<T>`) for anything that isn't ECS state: `*GameProps`, input, telemetry, game-owned
   state, and whatever else a `Plugin` contributes.
 * `Plugin` — the unit of extension, and the *only* way to add functionality: one
-  `Install(ctx *PluginContext)` call wires an ECS module, one-time setup, renderers, and/or
+  `Install(ctx *GameCtx)` call wires an ECS module, one-time setup, renderers, and/or
   resources together as a single, swappable piece, installed via `Game.UsePlugin`. The
   ECS-registration primitives (`UseModule`/`Setup`/`RegSys`/raw `*goke.ECS` access) are reachable
-  only through `PluginContext`, not on `Game` itself — bypassing a `Plugin` isn't possible.
+  only through `GameCtx`, not on `Game` itself — bypassing a `Plugin` isn't possible.
   `world.Plugin`, `physics.Plugin`, and `camera.Plugin` are the built-in ones (see below);
   writing your own plugin package needs nothing beyond this repo's public API. `Plugin` itself is a
   minimal contract (`Name`/`Install`) — any plugin-specific configuration (e.g.

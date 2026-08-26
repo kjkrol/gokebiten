@@ -1,19 +1,24 @@
 package gokebiten
 
 import (
+	"errors"
 	"fmt"
+	"reflect"
+	"strings"
 
 	"github.com/kjkrol/goke/v3"
 )
 
-// pluginManager installs plugins and tracks every module/provider they register, for Persistence.Load's auto-scan.
+// pluginManager installs plugins (retrying until their dependencies are available) and tracks what they register.
 type pluginManager struct {
 	game       *Game
 	plugins    map[string]Plugin
+	pending    []Plugin
+	waitingOn  map[string]reflect.Type
 	registered []any
 }
 
-// install runs p.Install once, rejecting a duplicate Name.
+// install queues p, resolves as much of the pending queue as possible, and rejects a duplicate Name.
 func (m *pluginManager) install(p Plugin) error {
 	if m.plugins == nil {
 		m.plugins = make(map[string]Plugin)
@@ -21,12 +26,9 @@ func (m *pluginManager) install(p Plugin) error {
 	if _, dup := m.plugins[p.Name()]; dup {
 		return fmt.Errorf("gokebiten: plugin %q already installed", p.Name())
 	}
-	ctx := &PluginContext{Resources: m.game.resources, game: m.game}
-	if err := p.Install(ctx); err != nil {
-		return fmt.Errorf("gokebiten: install plugin %q: %w", p.Name(), err)
-	}
 	m.plugins[p.Name()] = p
-	return nil
+	m.pending = append(m.pending, p)
+	return m.resolvePending()
 }
 
 // track records v so providedComps/postLoadSystems can find it later.
@@ -44,4 +46,51 @@ func (m *pluginManager) postLoadSystems() []goke.System {
 		}
 	}
 	return systems
+}
+
+// resolvePending installs every pending plugin whose dependencies are satisfied, retrying until no more progress.
+func (m *pluginManager) resolvePending() error {
+	for {
+		progressed := false
+		var stillPending []Plugin
+		for _, p := range m.pending {
+			ctx := &GameCtx{Resources: m.game.resources, game: m.game}
+			err := p.Install(ctx)
+			var nr *notReadyError
+			switch {
+			case err == nil:
+				progressed = true
+			case errors.As(err, &nr):
+				if ctx.wrote {
+					panic(fmt.Sprintf("gokebiten: plugin %q wrote to Resources/ECS before returning an unmet dependency — Install must check its dependencies before any side effects", p.Name()))
+				}
+				if m.waitingOn == nil {
+					m.waitingOn = make(map[string]reflect.Type)
+				}
+				m.waitingOn[p.Name()] = nr.typ
+				stillPending = append(stillPending, p)
+			default:
+				return fmt.Errorf("gokebiten: install plugin %q: %w", p.Name(), err)
+			}
+		}
+		m.pending = stillPending
+		if len(m.pending) == 0 || !progressed {
+			return nil
+		}
+	}
+}
+
+// finalizePending retries once more, then fails loudly if any plugin never became ready.
+func (m *pluginManager) finalizePending() error {
+	if err := m.resolvePending(); err != nil {
+		return err
+	}
+	if len(m.pending) == 0 {
+		return nil
+	}
+	reasons := make([]string, len(m.pending))
+	for i, p := range m.pending {
+		reasons[i] = fmt.Sprintf("%q waits on %s", p.Name(), m.waitingOn[p.Name()])
+	}
+	return fmt.Errorf("gokebiten: plugins never became ready (missing dependency or cycle among them): %s", strings.Join(reasons, "; "))
 }

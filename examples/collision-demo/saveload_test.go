@@ -24,7 +24,7 @@ func TestSaveLoadCycle(t *testing.T) {
 
 	ecs := goke.New()
 	wm := world.NewModule(spaceCfg, pop)
-	wm.Populate(count, &kinematics.Telemetry{},
+	wm.Populate(count,
 		kinematics.NewSpawner(grid.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize), randomvelocity.New(200, 50, 10)),
 		render.NewAppearanceExtras(func(index int) render.Appearance {
 			return render.Appearance{SpriteID: uint8(index)}

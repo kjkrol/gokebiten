@@ -48,9 +48,9 @@ func NewGame(props *GameProps) *Game {
 	resources := NewResources()
 	inputs := &control.InputEvents{}
 	tps := &TPS{}
-	resources.InsertResource(props)
-	resources.InsertResource(inputs)
-	resources.InsertResource(tps)
+	resources.insertResource(props)
+	resources.insertResource(inputs)
+	resources.insertResource(tps)
 
 	targetTPS := defaultTargetTPS
 	if props != nil && props.TargetTPS != 0 {
@@ -75,14 +75,14 @@ func NewGame(props *GameProps) *Game {
 // Resources returns the game's shared resource registry.
 func (g *Game) Resources() *Resources { return g.resources }
 
-// SetEventHandler sets the handler Update calls once per tick with this tick's input events.
-func (g *Game) SetEventHandler(handler control.EventHandler) {
+// EventHandler sets the handler Update calls once per tick with this tick's input events.
+func (g *Game) EventHandler(handler control.EventHandler) {
 	g.controller.SetHandler(handler)
 }
 
-// SetEventHandlerFn is SetEventHandler for a plain closure, letting call sites skip declaring a named type.
-func (g *Game) SetEventHandlerFn(fn func(events *control.InputEvents)) {
-	g.SetEventHandler(eventHandlerFunc(fn))
+// EventHandlerFn is EventHandler for a plain closure, letting call sites skip declaring a named type.
+func (g *Game) EventHandlerFn(fn func(events *control.InputEvents)) {
+	g.EventHandler(eventHandlerFunc(fn))
 }
 
 func (g *Game) Paused() bool { return g.ecs.Paused() }
@@ -149,6 +149,9 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
 }
 
 func (g *Game) Run() {
+	if err := g.pluginManager.finalizePending(); err != nil {
+		log.Fatal(err)
+	}
 	g.flushPendingSetup()
 
 	ebiten.SetWindowSize(g.props.ScreenWidth, g.props.ScreenHeight)
@@ -159,7 +162,7 @@ func (g *Game) Run() {
 }
 
 // RegComp registers ECS component type C.
-func RegComp[C any](ctx *PluginContext) goke.CompID {
+func RegComp[C any](ctx *GameCtx) goke.CompID {
 	return ctx.game.ecs.RegComp[C]()
 }
 
@@ -202,7 +205,7 @@ func (g *Game) flushPendingSetup() {
 	g.pendingSetup = nil
 }
 
-// eventHandlerFunc adapts a plain closure to control.EventHandler — see Game.SetEventHandlerFn.
+// eventHandlerFunc adapts a plain closure to control.EventHandler — see Game.EventHandlerFn.
 type eventHandlerFunc func(events *control.InputEvents)
 
 func (f eventHandlerFunc) HandleEvents(events *control.InputEvents) { f(events) }

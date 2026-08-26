@@ -26,7 +26,7 @@ func (p *Plugin) WithViewport(viewport render.AABB) *Plugin {
 
 func (p *Plugin) Name() string { return "gokebiten.camera" }
 
-func (p *Plugin) Install(ctx *gokebiten.PluginContext) error {
+func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 	props := ctx.Resources.GetResource[*gokebiten.GameProps]()
 
 	var surface plane.Space2D[uint32]
@@ -45,7 +45,7 @@ func (p *Plugin) Install(ctx *gokebiten.PluginContext) error {
 	}
 
 	p.camera = render.NewBasicCamera(surface, viewport)
-	ctx.Resources.InsertResource[render.Camera](p.camera)
+	ctx.Provide[render.Camera](p.camera)
 	return nil
 }
 

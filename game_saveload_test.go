@@ -15,7 +15,7 @@ type saveTestResourceB struct{ S string }
 type ecsAccessor struct{ ecs *goke.ECS }
 
 func (a *ecsAccessor) Name() string { return "test.ecs-accessor" }
-func (a *ecsAccessor) Install(ctx *gokebiten.PluginContext) error {
+func (a *ecsAccessor) Install(ctx *gokebiten.GameCtx) error {
 	a.ecs = ctx.ECS()
 	return nil
 }
