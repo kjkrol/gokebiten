@@ -20,49 +20,26 @@
   </a>
 </p>
 
-**gokebiten** integrates [goke](https://github.com/kjkrol/goke) — a type-safe, archetype-based
-Entity Component System for Go — with [Ebitengine](https://ebitengine.org/). It wraps goke's
-`ECS`/`System`/`Plan` model behind a small `Game` type that implements `ebiten.Game`, and layers
-spatial indexing (via [GOKg](https://github.com/kjkrol/gokg)), kinematics, and collision
-resolution on top.
+## Description
 
-## What's here
+**gokebiten** is a modular game engine for Go: a small `Game` core wraps
+[goke](https://github.com/kjkrol/goke) — a type-safe, archetype-based Entity Component System —
+into [Ebitengine](https://ebitengine.org/)'s `Update`/`Draw`/`Layout` loop. The standard, and only,
+way to add functionality is a `Plugin`: everything beyond the tick loop and a typed `Resources`
+registry — spatial indexing, physics, camera handling, your own game logic — is installed as a
+`Plugin`, wired through the same `Require`/`Provide` mechanism regardless of install order.
 
-* `Game`/`Resources`/`Plugin` (repo root) — wires a goke `ECS` into Ebitengine's `Update`/`Draw`/
-  `Layout` loop, behind a deliberately small public API (a dozen or so methods covering lifecycle,
-  save/load, and plugging things in — nothing more). `Resources` is a typed registry (methods
-  `InsertResource[T]`/`GetResource[T]`/`TryGetResource[T]`, keyed by type — in the spirit of Bevy
-  ECS's `Res<T>`) for anything that isn't ECS state: `*GameProps`, input, telemetry, game-owned
-  state, and whatever else a `Plugin` contributes.
-* `Plugin` — the unit of extension, and the *only* way to add functionality: one
-  `Install(ctx *GameCtx)` call wires an ECS module, one-time setup, renderers, and/or
-  resources together as a single, swappable piece, installed via `Game.UsePlugin`. The
-  ECS-registration primitives (`UseModule`/`Setup`/`RegSys`/raw `*goke.ECS` access) are reachable
-  only through `GameCtx`, not on `Game` itself — bypassing a `Plugin` isn't possible.
-  `world.Plugin`, `physics.Plugin`, and `camera.Plugin` are the built-in ones (see below);
-  writing your own plugin package needs nothing beyond this repo's public API. `Plugin` itself is a
-  minimal contract (`Name`/`Install`) — any plugin-specific configuration (e.g.
-  `physics.Plugin`'s `SetCollisionHandlers`) lives on that plugin's own concrete type, via fluent
-  `NewPlugin(...).With...`/`Set...` methods, never exported struct fields.
-* `control/` — input capture and event dispatch.
-* `physics/` — kinematics (movement, boundary handling) and collision detection/resolution
-  (broad phase via `gokg.Space`, narrow phase, pluggable `CollisionHandler` strategies), exposed as
-  `physics.Plugin`.
-* `render/` — sprite batching, a small `Camera` interface (`ToScreen`/`Visible`/`Bounds`/
-  `ExtendedBounds`) plus its default `BasicCamera` implementation (wrap/clamp-aware, with zoom),
-  tag-driven overlays, telemetry HUD.
-* `world/` — population/spawn bookkeeping on top of a `gokg.Space`, exposed as `world.Plugin`.
-* `camera/` — `camera.Plugin`, the default way to get a shared `render.Camera`: sized from
-  `GameProps` (or an explicit viewport), wrap-aware when a `world.Plugin` is installed first.
-  Nothing renderer-side depends on this package — any type implementing `render.Camera` works,
-  built-in or your own.
+The library ships three built-in plugins:
 
-**Note:** this is an evolving, pre-1.0 API — `Resources[S, T]` (a fixed two-slot generic bundle)
-was replaced by the typed `Resources` registry above, `render.Camera` was later split into an
-interface (`Camera`) plus a default implementation (`BasicCamera`), and `Resources`' accessors
-moved from free functions to generic methods. Game state persisted via `Game.Save`/`Game.Load`'s
-variadic `resources` parameters is gob-encoded, so save files from before these changes are not
-compatible with the current version.
+* **`world.Plugin`** — owns the game's spatial index (via [GOKg](https://github.com/kjkrol/gokg))
+  and entity population/spawn bookkeeping.
+* **`physics.Plugin`** — kinematics and collision detection/resolution (broad + narrow phase,
+  pluggable `CollisionHandler` strategies) built on `world`'s spatial index.
+* **`camera.Plugin`** — a shared `render.Camera`, sized from the world (wrap-aware) or the screen,
+  that every renderer draws through.
+
+
+**Note:** this is an evolving, pre-1.0 API
 
 ## Installation
 
