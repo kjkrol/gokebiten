@@ -10,32 +10,49 @@ import (
 
 var _ Renderer = (*EntitiesRenderer)(nil)
 
-// EntitiesRenderer draws every entity with Position+Appearance as a
-// toroidal-fragment-aware sprite quad, batched into a single DrawTriangles
-// call. It knows nothing about why an Appearance has the color/sprite it
-// has — that's the game's job (see spatial.EntityExtras); layer other
-// Renderers (e.g. TagOverlayRenderer) on top for status-driven visuals.
+// EntitiesRenderer draws every Position+Appearance entity, running each
+// Plugin in order to resolve its final draw layers.
 type EntitiesRenderer struct {
 	renderQuery *goke.Query
 	pos         goke.Comp[kinematics.Position]
 	appearance  goke.Comp[Appearance]
-	exclude     []goke.Opt
+	plugins     []Plugin
+	layers      []Appearance
 	batch       spriteBatch
 }
 
-// NewEntitiesRenderer draws every entity with Position+Appearance, except
-// any matching an exclude filter (e.g. goke.Exclude[SomeTag]()) — for tags
-// a different Renderer (e.g. TagOverlayRenderer) already draws in full.
-func NewEntitiesRenderer(atlas AtlasSource, camera Camera, exclude ...goke.Opt) *EntitiesRenderer {
-	return &EntitiesRenderer{batch: newSpriteBatch(atlas, camera), exclude: exclude}
+// NewEntitiesRenderer draws Position+Appearance entities — chain WithPlugin to add refinements.
+func NewEntitiesRenderer(atlas AtlasSource, camera Camera) *EntitiesRenderer {
+	return &EntitiesRenderer{batch: newSpriteBatch(atlas, camera)}
+}
+
+// WithPlugin appends p to the plugins run, in order, for every entity.
+func (s *EntitiesRenderer) WithPlugin(p Plugin) *EntitiesRenderer {
+	s.plugins = append(s.plugins, p)
+	return s
+}
+
+// WithReplace adds a Component[T] plugin replacing dst[0] with with, for every entity carrying T.
+func (s *EntitiesRenderer) WithReplace[T any](with Appearance) *EntitiesRenderer {
+	return s.WithPlugin(&Component[T]{Strategy: Replace[T](with)})
+}
+
+// WithOverlay adds a Component[T] plugin appending with on top, for every entity carrying T.
+func (s *EntitiesRenderer) WithOverlay[T any](with Appearance) *EntitiesRenderer {
+	return s.WithPlugin(&Component[T]{Strategy: Overlay[T](with)})
+}
+
+// WithModify adds a Component[T] plugin transforming dst[0] via f, for every entity carrying T.
+func (s *EntitiesRenderer) WithModify[T any](f func(Appearance, T) Appearance) *EntitiesRenderer {
+	return s.WithPlugin(&Component[T]{Strategy: Modify[T](f)})
 }
 
 func (s *EntitiesRenderer) Init(si *goke.SysInit) {
-	b := si.NewQueryBuilder(&s.pos, &s.appearance)
-	if len(s.exclude) > 0 {
-		b = b.Exclude(s.exclude...)
+	qb := si.NewQueryBuilder(&s.pos, &s.appearance)
+	for _, p := range s.plugins {
+		p.Bind(qb)
 	}
-	s.renderQuery = b.Build()
+	s.renderQuery = qb.Build()
 }
 
 func (s *EntitiesRenderer) Draw(screen *ebiten.Image) {
@@ -47,8 +64,15 @@ func (s *EntitiesRenderer) Draw(screen *ebiten.Image) {
 		cursor := s.renderQuery.Cursor()
 		positions := s.pos.Slice(cursor)
 		appearances := s.appearance.Slice(cursor)
+
 		for i := range cursor.IDs {
-			s.batch.drawQuad(positions[i], appearances[i].SpriteID, appearances[i].Color)
+			s.layers = append(s.layers[:0], appearances[i])
+			for _, p := range s.plugins {
+				s.layers = p.Apply(cursor, i, s.layers)
+			}
+			for _, l := range s.layers {
+				s.batch.drawQuad(positions[i], l.SpriteID, l.Color)
+			}
 		}
 	}
 

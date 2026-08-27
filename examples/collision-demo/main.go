@@ -100,15 +100,13 @@ func main() {
 
 	game.RenderSequence(
 		func() render.Renderer {
-			return render.NewEntitiesRenderer(atlas, cameraPlugin.Camera(), goke.Exclude[collisions.Hit]())
+			return render.NewEntitiesRenderer(atlas, cameraPlugin.Camera()).
+				WithOverlay[collisions.Hit](render.Appearance{SpriteID: 0, Color: color.RGBA{R: 255, A: 255}})
 		},
 		func() render.Renderer {
-			return render.NewTagOverlayRenderer(atlas, cameraPlugin.Camera(), 0, color.RGBA{R: 255, A: 255}, goke.Include[collisions.Hit]())
-		},
-		func() render.Renderer {
-			kin := game.Resources().GetResource[*world.Telemetry]()
+			kin := game.Resources().Get[*world.Telemetry]()
 			entityCount := func() int { return kin.DynamicCount + kin.StaticCount }
-			return render.NewTelemetryRenderer(&game.Resources().GetResource[*gokebiten.TPS]().Ticks, entityCount, &physicsPlugin.Stats().Counter)
+			return render.NewTelemetryRenderer(&game.Resources().Get[*gokebiten.TPS]().Ticks, entityCount, &physicsPlugin.Stats().Counter)
 		},
 	)
 

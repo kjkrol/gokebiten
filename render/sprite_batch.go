@@ -16,9 +16,7 @@ const (
 )
 
 // spriteBatch batches textured, toroidal-fragment-aware quads from an
-// AtlasSource into a single DrawTriangles call, transformed through a
-// Camera — shared by EntitiesRenderer and TagOverlayRenderer so both get
-// correct world-wrap and camera handling without duplicating the quad math.
+// AtlasSource into a single DrawTriangles call, transformed through a Camera.
 type spriteBatch struct {
 	atlas    AtlasSource
 	camera   Camera

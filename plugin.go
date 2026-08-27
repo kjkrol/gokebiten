@@ -26,7 +26,7 @@ type GameCtx struct {
 
 // Require returns the published value of T, or an error if it isn't published yet — Install may be retried until it is.
 func (c *GameCtx) Require[T any]() (T, error) {
-	if v, ok := c.Resources.TryGetResource[T](); ok {
+	if v, ok := c.Resources.TryGet[T](); ok {
 		return v, nil
 	}
 	var zero T

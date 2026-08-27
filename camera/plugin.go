@@ -27,11 +27,11 @@ func (p *Plugin) WithViewport(viewport render.AABB) *Plugin {
 func (p *Plugin) Name() string { return "gokebiten.camera" }
 
 func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
-	props := ctx.Resources.GetResource[*gokebiten.GameProps]()
+	props := ctx.Resources.Get[*gokebiten.GameProps]()
 
 	var surface plane.Space2D[uint32]
 	viewport := p.viewport
-	if cfg, ok := ctx.Resources.TryGetResource[world.Config](); ok {
+	if cfg, ok := ctx.Resources.TryGet[world.Config](); ok {
 		if cfg.Toroidal {
 			surface = plane.NewToroidal2D(cfg.Width, cfg.Height)
 		} else {

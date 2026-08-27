@@ -63,7 +63,7 @@ func TestGame_UsePlugin_InstallErrorPropagates(t *testing.T) {
 	p := &stubPlugin{
 		name: "test.failing",
 		installFn: func(ctx *GameCtx) error {
-			_, ok := ctx.Resources.TryGetResource[*testResourceA]()
+			_, ok := ctx.Resources.TryGet[*testResourceA]()
 			if !ok {
 				return errors.New("missing testResourceA")
 			}
@@ -184,7 +184,7 @@ func TestGameCtx_InsertResource_VisibleToLaterPlugins(t *testing.T) {
 	second := &stubPlugin{
 		name: "test.consumer",
 		installFn: func(ctx *GameCtx) error {
-			gotN = ctx.Resources.GetResource[*testResourceA]().N
+			gotN = ctx.Resources.Get[*testResourceA]().N
 			return nil
 		},
 	}

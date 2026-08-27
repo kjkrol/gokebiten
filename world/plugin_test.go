@@ -19,7 +19,7 @@ func TestPlugin_Install_PublishesSpaceResource(t *testing.T) {
 		t.Fatalf("UsePlugin: %v", err)
 	}
 
-	space, ok := game.Resources().TryGetResource[*gokg.Space]()
+	space, ok := game.Resources().TryGet[*gokg.Space]()
 	if !ok {
 		t.Fatal("expected *gokg.Space to be registered as a resource")
 	}
@@ -39,7 +39,7 @@ func TestPlugin_Install_DoesNotPublishModuleResource(t *testing.T) {
 		t.Fatalf("UsePlugin: %v", err)
 	}
 
-	if _, ok := game.Resources().TryGetResource[*world.Module](); ok {
+	if _, ok := game.Resources().TryGet[*world.Module](); ok {
 		t.Error("expected *world.Module to NOT be registered as a resource")
 	}
 }
@@ -53,7 +53,7 @@ func TestPlugin_Install_PublishesConfigResource(t *testing.T) {
 		t.Fatalf("UsePlugin: %v", err)
 	}
 
-	got, ok := game.Resources().TryGetResource[world.Config]()
+	got, ok := game.Resources().TryGet[world.Config]()
 	if !ok {
 		t.Fatal("expected world.Config to be registered as a resource")
 	}
@@ -73,7 +73,7 @@ func TestPlugin_Install_PublishesTelemetryResource(t *testing.T) {
 		t.Fatalf("UsePlugin: %v", err)
 	}
 
-	telemetry, ok := game.Resources().TryGetResource[*world.Telemetry]()
+	telemetry, ok := game.Resources().TryGet[*world.Telemetry]()
 	if !ok {
 		t.Fatal("expected *world.Telemetry to be registered as a resource")
 	}
