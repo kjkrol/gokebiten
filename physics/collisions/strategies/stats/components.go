@@ -1,7 +1,9 @@
 package stats
 
-// Stats is the aggregate telemetry this strategy maintains — own it as a
-// field in your Telemetry type and hand a pointer to NewHandler.
+// Stats is the aggregate collision-count telemetry this strategy maintains — see physics.Plugin.EnableStats.
 type Stats struct {
 	Counter int
 }
+
+// Reset zeroes Counter — called each stats interval when Stats is a registered Resource.
+func (s *Stats) Reset() { s.Counter = 0 }

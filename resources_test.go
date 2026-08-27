@@ -7,7 +7,7 @@ type testResourceB struct{ S string }
 
 func TestResources_InsertGet_RoundTrip(t *testing.T) {
 	r := NewResources()
-	r.InsertResource(&testResourceA{N: 7})
+	r.insertResource(&testResourceA{N: 7})
 
 	got := r.GetResource[*testResourceA]()
 	if got.N != 7 {
@@ -35,8 +35,8 @@ func TestResources_GetResource_MissingPanics(t *testing.T) {
 
 func TestResources_InsertResource_OverwritesPreviousValue(t *testing.T) {
 	r := NewResources()
-	r.InsertResource(&testResourceA{N: 1})
-	r.InsertResource(&testResourceA{N: 2})
+	r.insertResource(&testResourceA{N: 1})
+	r.insertResource(&testResourceA{N: 2})
 
 	got := r.GetResource[*testResourceA]()
 	if got.N != 2 {
@@ -46,24 +46,14 @@ func TestResources_InsertResource_OverwritesPreviousValue(t *testing.T) {
 
 func TestResources_DifferentTypesDoNotCollide(t *testing.T) {
 	r := NewResources()
-	r.InsertResource(&testResourceA{N: 1})
-	r.InsertResource(&testResourceB{S: "hi"})
+	r.insertResource(&testResourceA{N: 1})
+	r.insertResource(&testResourceB{S: "hi"})
 
 	if got := r.GetResource[*testResourceA](); got.N != 1 {
 		t.Errorf("testResourceA.N = %d, want 1", got.N)
 	}
 	if got := r.GetResource[*testResourceB](); got.S != "hi" {
 		t.Errorf("testResourceB.S = %q, want %q", got.S, "hi")
-	}
-}
-
-func TestRemoveResource(t *testing.T) {
-	r := NewResources()
-	r.InsertResource(&testResourceA{N: 1})
-	r.RemoveResource[*testResourceA]()
-
-	if _, ok := r.TryGetResource[*testResourceA](); ok {
-		t.Error("expected resource to be gone after RemoveResource")
 	}
 }
 
@@ -74,8 +64,8 @@ func (r *resettableResource) Reset() { r.resetCalls++ }
 func TestResources_ForEach_VisitsRegisteredResources(t *testing.T) {
 	r := NewResources()
 	res := &resettableResource{}
-	r.InsertResource(res)
-	r.InsertResource(&testResourceA{N: 1})
+	r.insertResource(res)
+	r.insertResource(&testResourceA{N: 1})
 
 	visited := 0
 	r.forEach(func(v any) {

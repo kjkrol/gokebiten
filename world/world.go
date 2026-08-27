@@ -25,6 +25,12 @@ type Population struct {
 	MaxSize  uint32
 }
 
+// Telemetry is how many entities Populate/PopulateStatic/PostLoad have created — see Module.Telemetry.
+type Telemetry struct {
+	DynamicCount int
+	StaticCount  int
+}
+
 // EntityExtras supplies the components and per-entity values a spawn needs beyond Position/Velocity.
 type EntityExtras interface {
 	Components() []goke.Addable
@@ -37,7 +43,7 @@ type Module struct {
 	population   Population
 	spawnedCount int
 	seeds        []goke.System
-	onReindexed  func(count int)
+	telemetry    Telemetry
 }
 
 var _ goke.SetupProvider = (*Module)(nil)
@@ -49,6 +55,9 @@ func NewModule(cfg Config, pop Population) *Module {
 
 func (w *Module) Space() *gokg.Space     { return w.space }
 func (w *Module) Population() Population { return w.population }
+
+// Telemetry returns the entity-count telemetry Populate/PopulateStatic/PostLoad maintain.
+func (w *Module) Telemetry() *Telemetry { return &w.telemetry }
 
 // SetupSystems runs every queued Populate/PopulateStatic call, in call order.
 func (w *Module) SetupSystems() []goke.System { return w.seeds }
@@ -69,22 +78,20 @@ func (w *Module) PostLoad() goke.System {
 			count += len(cursor.IDs)
 		}
 		w.space.Flush(nil)
-		if w.onReindexed != nil {
-			w.onReindexed(count)
-		}
+		w.telemetry.DynamicCount = count
 	}}
 }
 
 // Populate queues a spawn of count moving entities from populators (populators[0] must be a kinematics.Spawner).
-func (w *Module) Populate(count int, telemetry *kinematics.Telemetry, populators ...EntityExtras) *Module {
+func (w *Module) Populate(count int, populators ...EntityExtras) *Module {
 	w.seeds = append(w.seeds, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		w.populate(si, count, telemetry, populators...)
+		w.populate(si, count, populators...)
 	}})
 	return w
 }
 
 // PopulateStatic queues a spawn of count static entities from populators (populators[0] must be a kinematics.Placement).
-func (w *Module) PopulateStatic(count int, telemetry *kinematics.Telemetry, populators ...EntityExtras) *Module {
+func (w *Module) PopulateStatic(count int, populators ...EntityExtras) *Module {
 	var posComp goke.Comp[kinematics.Position]
 	var staticTag goke.Comp[collisions.Static]
 	var q *goke.Query
@@ -93,7 +100,7 @@ func (w *Module) PopulateStatic(count int, telemetry *kinematics.Telemetry, popu
 
 	w.seeds = append(w.seeds, goke.SystemFn{
 		OnInit: func(si *goke.SysInit) {
-			ids = w.populateStatic(si, &posComp, count, telemetry, populators...)
+			ids = w.populateStatic(si, &posComp, count, populators...)
 			q = si.NewQueryBuilder(&posComp).Build()
 			staticEditor = q.NewEditorBuilder(&staticTag).Build()
 		},
@@ -157,7 +164,7 @@ func (w *Module) validateSize(id uid.UID64, pos kinematics.Position) {
 	}
 }
 
-func (w *Module) populate(si *goke.SysInit, count int, telemetry *kinematics.Telemetry, populators ...EntityExtras) {
+func (w *Module) populate(si *goke.SysInit, count int, populators ...EntityExtras) {
 	if len(populators) == 0 {
 		panic("world: Populate requires a kinematics.Spawner as its first populator")
 	}
@@ -166,7 +173,7 @@ func (w *Module) populate(si *goke.SysInit, count int, telemetry *kinematics.Tel
 		panic("world: Populate's first populator must implement kinematics.Spawner")
 	}
 	w.reserve(count)
-	telemetry.DynamicCount = count
+	w.telemetry.DynamicCount = count
 
 	var posComp goke.Comp[kinematics.Position]
 	var velComp goke.Comp[kinematics.Velocity]
@@ -198,7 +205,7 @@ func (w *Module) populate(si *goke.SysInit, count int, telemetry *kinematics.Tel
 	w.space.Flush(nil)
 }
 
-func (w *Module) populateStatic(si *goke.SysInit, posComp *goke.Comp[kinematics.Position], count int, telemetry *kinematics.Telemetry, populators ...EntityExtras) []uid.UID64 {
+func (w *Module) populateStatic(si *goke.SysInit, posComp *goke.Comp[kinematics.Position], count int, populators ...EntityExtras) []uid.UID64 {
 	if len(populators) == 0 {
 		panic("world: PopulateStatic requires a kinematics.Placement as its first populator")
 	}
@@ -207,7 +214,7 @@ func (w *Module) populateStatic(si *goke.SysInit, posComp *goke.Comp[kinematics.
 		panic("world: PopulateStatic's first populator must implement kinematics.Placement")
 	}
 	w.reserve(count)
-	telemetry.StaticCount = count
+	w.telemetry.StaticCount = count
 
 	comps := []goke.Addable{posComp}
 	for _, p := range populators {

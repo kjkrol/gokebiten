@@ -18,13 +18,6 @@ func NewResources() *Resources {
 	return &Resources{items: make(map[reflect.Type]any)}
 }
 
-// InsertResource registers v under its exact static type T, replacing whatever was there before.
-func (r *Resources) InsertResource[T any](v T) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.items[reflect.TypeFor[T]()] = v
-}
-
 // GetResource returns the T resource, panicking if none is registered.
 func (r *Resources) GetResource[T any]() T {
 	v, ok := r.TryGetResource[T]()
@@ -47,13 +40,6 @@ func (r *Resources) TryGetResource[T any]() (T, bool) {
 	return v.(T), true
 }
 
-// RemoveResource deletes the T resource, if any.
-func (r *Resources) RemoveResource[T any]() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	delete(r.items, reflect.TypeFor[T]())
-}
-
 // Resettable resources get Reset called each stats interval — see Game.Update.
 type Resettable interface{ Reset() }
 
@@ -64,4 +50,11 @@ func (r *Resources) forEach(fn func(any)) {
 	for _, v := range r.items {
 		fn(v)
 	}
+}
+
+// insertResource registers v under its exact static type T, replacing whatever was there before.
+func (r *Resources) insertResource[T any](v T) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.items[reflect.TypeFor[T]()] = v
 }

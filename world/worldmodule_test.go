@@ -42,9 +42,8 @@ func (neitherSpawnerNorPlacement) Init(*goke.Cursor, int, int, uid.UID64) {}
 
 func TestModule_Populate_EndToEnd(t *testing.T) {
 	wm := world.NewModule(testConfig(), testPopulation())
-	var tel kinematics.Telemetry
 
-	wm.Populate(3, &tel, fakeSpawner{pos: testPos()})
+	wm.Populate(3, fakeSpawner{pos: testPos()})
 
 	ecs := goke.New()
 	var pos goke.Comp[kinematics.Position]
@@ -54,8 +53,8 @@ func TestModule_Populate_EndToEnd(t *testing.T) {
 	}})
 	ecs.Setup(systems...)
 
-	if tel.DynamicCount != 3 {
-		t.Errorf("Telemetry.DynamicCount = %d, want 3", tel.DynamicCount)
+	if wm.Telemetry().DynamicCount != 3 {
+		t.Errorf("Telemetry().DynamicCount = %d, want 3", wm.Telemetry().DynamicCount)
 	}
 
 	count := 0
@@ -75,22 +74,20 @@ func TestModule_Populate_EndToEnd(t *testing.T) {
 
 func TestModule_PopulateStatic_EndToEnd(t *testing.T) {
 	wm := world.NewModule(testConfig(), testPopulation())
-	var tel kinematics.Telemetry
 
-	wm.PopulateStatic(2, &tel, fakePlacement{pos: testPos()})
+	wm.PopulateStatic(2, fakePlacement{pos: testPos()})
 
 	ecs := goke.New()
 	ecs.Setup(wm.SetupSystems()...)
 
-	if tel.StaticCount != 2 {
-		t.Errorf("Telemetry.StaticCount = %d, want 2", tel.StaticCount)
+	if wm.Telemetry().StaticCount != 2 {
+		t.Errorf("Telemetry().StaticCount = %d, want 2", wm.Telemetry().StaticCount)
 	}
 }
 
 func TestModule_Populate_WrongPopulatorType_Panics(t *testing.T) {
 	wm := world.NewModule(testConfig(), testPopulation())
-	var tel kinematics.Telemetry
-	wm.Populate(1, &tel, neitherSpawnerNorPlacement{})
+	wm.Populate(1, neitherSpawnerNorPlacement{})
 
 	defer func() {
 		r := recover()
@@ -107,8 +104,7 @@ func TestModule_Populate_WrongPopulatorType_Panics(t *testing.T) {
 
 func TestModule_PopulateStatic_WrongPopulatorType_Panics(t *testing.T) {
 	wm := world.NewModule(testConfig(), testPopulation())
-	var tel kinematics.Telemetry
-	wm.PopulateStatic(1, &tel, neitherSpawnerNorPlacement{})
+	wm.PopulateStatic(1, neitherSpawnerNorPlacement{})
 
 	defer func() {
 		r := recover()
@@ -125,8 +121,7 @@ func TestModule_PopulateStatic_WrongPopulatorType_Panics(t *testing.T) {
 
 func TestModule_Populate_NoPopulators_Panics(t *testing.T) {
 	wm := world.NewModule(testConfig(), testPopulation())
-	var tel kinematics.Telemetry
-	wm.Populate(1, &tel)
+	wm.Populate(1)
 
 	defer func() {
 		if recover() == nil {

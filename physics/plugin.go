@@ -1,22 +1,23 @@
 package physics
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten"
 	"github.com/kjkrol/gokebiten/physics/collisions"
+	"github.com/kjkrol/gokebiten/physics/collisions/strategies/stats"
 	"github.com/kjkrol/gokg"
 )
 
-// Plugin wires Physics into a Game; requires a *gokg.Space resource (e.g. from world.Plugin) registered earlier.
+// Plugin wires Physics into a Game; needs a *gokg.Space resource, published by any installed world plugin.
 type Plugin struct {
 	minEntitySize uint32
 	handlers      []collisions.CollisionHandler
 	debug         bool
 	hitExpires    time.Duration
 	extraSystems  []goke.System
+	stats         *stats.Stats
 
 	physics *Physics
 }
@@ -50,17 +51,29 @@ func (p *Plugin) RegSys(sys goke.System) *Plugin {
 	return p
 }
 
+// EnableStats wires a collision counter into the handler chain and publishes it as a *stats.Stats resource.
+func (p *Plugin) EnableStats() *Plugin {
+	p.stats = &stats.Stats{}
+	return p
+}
+
 func (p *Plugin) Name() string { return "gokebiten.physics" }
 
-func (p *Plugin) Install(ctx *gokebiten.PluginContext) error {
-	space, ok := ctx.Resources.TryGetResource[*gokg.Space]()
-	if !ok {
-		return fmt.Errorf("physics: requires a *gokg.Space resource — install a world plugin (e.g. world.Plugin) before physics.Plugin")
+func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
+	space, err := ctx.Require[*gokg.Space]()
+	if err != nil {
+		return err
+	}
+
+	handlers := p.handlers
+	if p.stats != nil {
+		handlers = append(handlers, stats.NewHandler(p.stats))
+		ctx.Provide(p.stats)
 	}
 
 	p.physics = New(space, ctx.ECS(), p.minEntitySize, ctx.Step())
-	if len(p.handlers) > 0 {
-		p.physics.SetCollisionHandlers(p.handlers...)
+	if len(handlers) > 0 {
+		p.physics.SetCollisionHandlers(handlers...)
 	}
 	if p.debug {
 		p.physics.DebugEnabled()
@@ -78,3 +91,6 @@ func (p *Plugin) Install(ctx *gokebiten.PluginContext) error {
 
 // Physics returns the underlying Physics module, built during Install — nil before that.
 func (p *Plugin) Physics() *Physics { return p.physics }
+
+// Stats returns the collision counter published during Install, or nil if EnableStats wasn't called.
+func (p *Plugin) Stats() *stats.Stats { return p.stats }

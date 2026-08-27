@@ -16,7 +16,6 @@ import (
 	"github.com/kjkrol/gokebiten/physics"
 	"github.com/kjkrol/gokebiten/physics/collisions"
 	"github.com/kjkrol/gokebiten/physics/collisions/strategies/elastic"
-	"github.com/kjkrol/gokebiten/physics/collisions/strategies/stats"
 	"github.com/kjkrol/gokebiten/physics/kinematics"
 	"github.com/kjkrol/gokebiten/physics/kinematics/spawners/grid"
 	"github.com/kjkrol/gokebiten/physics/kinematics/spawners/randomvelocity"
@@ -47,12 +46,73 @@ func main() {
 		TargetTPS: TPS,
 	})
 
-	state := &State{}
-	telemetry := &Telemetry{}
-	game.Resources().InsertResource(state)
-	game.Resources().InsertResource(telemetry)
+	worldPlugin := world.NewPlugin(
+		world.Config{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
+		world.Population{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize},
+	)
 
-	game.SetEventHandlerFn(func(events *control.InputEvents) {
+	physicsPlugin := physics.NewPlugin(RectSize).
+		SetCollisionHandlers(elastic.NewHandler()).
+		SetHitExpires(100 * time.Millisecond).
+		EnableStats()
+
+	cameraPlugin := camera.NewPlugin()
+
+	if err := game.UsePlugin(worldPlugin); err != nil {
+		log.Fatal(err)
+	}
+	if err := game.UsePlugin(physicsPlugin); err != nil {
+		log.Fatal(err)
+	}
+	if err := game.UsePlugin(cameraPlugin); err != nil {
+		log.Fatal(err)
+	}
+
+	var state *State
+	if err := game.Init(func(ctx *gokebiten.GameCtx) error {
+		state = &State{}
+		ctx.Provide(state)
+		return nil
+	}); err != nil {
+		log.Fatal(err)
+	}
+
+	saves, err := game.Persistence.List(saveBasePath)
+	if err != nil {
+		log.Fatalf("list saves: %v", err)
+	}
+
+	if slices.Contains(saves, "") {
+		if err := game.Persistence.Load(saveBasePath, "", state); err != nil {
+			log.Fatalf("load: %v", err)
+		}
+		log.Printf("loaded saved world (save #%d)", state.Saves)
+	} else {
+		populateFreshWorld(worldPlugin.World())
+	}
+
+	game.Loop(func(ctx goke.RunCtx, d time.Duration) {
+		physicsPlugin.Physics().RunPlan(ctx, d)
+		ctx.Sync()
+	})
+
+	atlas := procedural.NewAtlas()
+
+	game.RenderSequence(
+		func() render.Renderer {
+			return render.NewEntitiesRenderer(atlas, cameraPlugin.Camera(), goke.Exclude[collisions.Hit]())
+		},
+		func() render.Renderer {
+			return render.NewTagOverlayRenderer(atlas, cameraPlugin.Camera(), 0, color.RGBA{R: 255, A: 255}, goke.Include[collisions.Hit]())
+		},
+		func() render.Renderer {
+			kin := game.Resources().GetResource[*world.Telemetry]()
+			entityCount := func() int { return kin.DynamicCount + kin.StaticCount }
+			return render.NewTelemetryRenderer(&game.Resources().GetResource[*gokebiten.TPS]().Ticks, entityCount, &physicsPlugin.Stats().Counter)
+		},
+	)
+
+	game.EventHandlerFn(func(events *control.InputEvents) {
 		for _, k := range events.KeyEvents {
 			if k.Action != control.ActionPress {
 				continue
@@ -71,74 +131,11 @@ func main() {
 		}
 	})
 
-	worldPlugin := world.NewPlugin(
-		world.Config{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
-		world.Population{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize},
-	).OnReindexed(func(count int) { telemetry.Kinematics.DynamicCount = count })
-
-	physicsPlugin := physics.NewPlugin(RectSize).
-		SetCollisionHandlers(elastic.NewHandler(), stats.NewHandler(&telemetry.Collision)).
-		SetHitExpires(100 * time.Millisecond)
-
-	cameraPlugin := camera.NewPlugin()
-
-	if err := game.UsePlugin(worldPlugin); err != nil {
-		log.Fatal(err)
-	}
-	if err := game.UsePlugin(physicsPlugin); err != nil {
-		log.Fatal(err)
-	}
-	if err := game.UsePlugin(cameraPlugin); err != nil {
-		log.Fatal(err)
-	}
-
-	saves, err := game.Persistence.List(saveBasePath)
-	if err != nil {
-		log.Fatalf("list saves: %v", err)
-	}
-
-	if slices.Contains(saves, "") {
-		if err := game.Persistence.Load(saveBasePath, "", state); err != nil {
-			log.Fatalf("load: %v", err)
-		}
-		log.Printf("loaded saved world (save #%d)", state.Saves)
-	} else {
-		populateFreshWorld(worldPlugin.World(), &telemetry.Kinematics)
-	}
-
-	game.Loop(func(ctx goke.RunCtx, d time.Duration) {
-		physicsPlugin.Physics().RunPlan(ctx, d)
-		ctx.Sync()
-	})
-
-	atlas := procedural.NewAtlas()
-
-	game.RenderSequence(
-		func() render.Renderer {
-			return render.NewEntitiesRenderer(atlas, cameraPlugin.Camera(), goke.Exclude[collisions.Hit]())
-		},
-		func() render.Renderer {
-			return render.NewTagOverlayRenderer(atlas, cameraPlugin.Camera(), 0, color.RGBA{R: 255, A: 255}, goke.Include[collisions.Hit]())
-		},
-		func() render.Renderer {
-			kin := &telemetry.Kinematics
-			entityCount := func() int { return kin.DynamicCount + kin.StaticCount }
-			return render.NewTelemetryRenderer(&game.Resources().GetResource[*gokebiten.TPS]().Ticks, entityCount, &telemetry.Collision.Counter)
-		},
-	)
-
 	game.Run()
 }
 
-type Telemetry struct {
-	Kinematics kinematics.Telemetry
-	Collision  stats.Stats
-}
-
-func (t *Telemetry) Reset() { t.Collision.Counter = 0 }
-
-func populateFreshWorld(worldModule *world.Module, telemetry *kinematics.Telemetry) {
-	worldModule.Populate(EntityCount, telemetry,
+func populateFreshWorld(worldModule *world.Module) {
+	worldModule.Populate(EntityCount,
 		kinematics.NewSpawner(
 			grid.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize),
 			randomvelocity.New(200, 50, 10),
