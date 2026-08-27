@@ -18,9 +18,9 @@ func NewResources() *Resources {
 	return &Resources{items: make(map[reflect.Type]any)}
 }
 
-// GetResource returns the T resource, panicking if none is registered.
-func (r *Resources) GetResource[T any]() T {
-	v, ok := r.TryGetResource[T]()
+// Get returns the T resource, panicking if none is registered.
+func (r *Resources) Get[T any]() T {
+	v, ok := r.TryGet[T]()
 	if !ok {
 		var zero T
 		panic(fmt.Sprintf("gokebiten: resource %T not registered", zero))
@@ -28,8 +28,8 @@ func (r *Resources) GetResource[T any]() T {
 	return v
 }
 
-// TryGetResource returns the T resource and whether it was registered.
-func (r *Resources) TryGetResource[T any]() (T, bool) {
+// TryGet returns the T resource and whether it was registered.
+func (r *Resources) TryGet[T any]() (T, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	v, ok := r.items[reflect.TypeFor[T]()]

@@ -18,7 +18,7 @@ func TestPlugin_Install_PublishesRenderCameraResource(t *testing.T) {
 		t.Fatalf("UsePlugin: %v", err)
 	}
 
-	got, ok := game.Resources().TryGetResource[render.Camera]()
+	got, ok := game.Resources().TryGet[render.Camera]()
 	if !ok {
 		t.Fatal("expected render.Camera to be registered as a resource")
 	}
@@ -33,7 +33,7 @@ func TestPlugin_Install_KeyedByInterfaceNotConcrete(t *testing.T) {
 		t.Fatalf("UsePlugin: %v", err)
 	}
 
-	if _, ok := game.Resources().TryGetResource[*render.BasicCamera](); ok {
+	if _, ok := game.Resources().TryGet[*render.BasicCamera](); ok {
 		t.Error("expected *render.BasicCamera to NOT be registered under its concrete type — only render.Camera (the interface)")
 	}
 }

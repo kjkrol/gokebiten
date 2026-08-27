@@ -9,7 +9,7 @@ func TestResources_InsertGet_RoundTrip(t *testing.T) {
 	r := NewResources()
 	r.insertResource(&testResourceA{N: 7})
 
-	got := r.GetResource[*testResourceA]()
+	got := r.Get[*testResourceA]()
 	if got.N != 7 {
 		t.Errorf("GetResource[*testResourceA]().N = %d, want 7", got.N)
 	}
@@ -17,7 +17,7 @@ func TestResources_InsertGet_RoundTrip(t *testing.T) {
 
 func TestResources_TryGetResource_MissingReturnsFalse(t *testing.T) {
 	r := NewResources()
-	_, ok := r.TryGetResource[*testResourceA]()
+	_, ok := r.TryGet[*testResourceA]()
 	if ok {
 		t.Error("TryGetResource on an empty registry: ok = true, want false")
 	}
@@ -30,7 +30,7 @@ func TestResources_GetResource_MissingPanics(t *testing.T) {
 			t.Fatal("expected GetResource to panic when the resource isn't registered")
 		}
 	}()
-	r.GetResource[*testResourceA]()
+	r.Get[*testResourceA]()
 }
 
 func TestResources_InsertResource_OverwritesPreviousValue(t *testing.T) {
@@ -38,7 +38,7 @@ func TestResources_InsertResource_OverwritesPreviousValue(t *testing.T) {
 	r.insertResource(&testResourceA{N: 1})
 	r.insertResource(&testResourceA{N: 2})
 
-	got := r.GetResource[*testResourceA]()
+	got := r.Get[*testResourceA]()
 	if got.N != 2 {
 		t.Errorf("GetResource[*testResourceA]().N = %d, want 2 (last InsertResource should win)", got.N)
 	}
@@ -49,10 +49,10 @@ func TestResources_DifferentTypesDoNotCollide(t *testing.T) {
 	r.insertResource(&testResourceA{N: 1})
 	r.insertResource(&testResourceB{S: "hi"})
 
-	if got := r.GetResource[*testResourceA](); got.N != 1 {
+	if got := r.Get[*testResourceA](); got.N != 1 {
 		t.Errorf("testResourceA.N = %d, want 1", got.N)
 	}
-	if got := r.GetResource[*testResourceB](); got.S != "hi" {
+	if got := r.Get[*testResourceB](); got.S != "hi" {
 		t.Errorf("testResourceB.S = %q, want %q", got.S, "hi")
 	}
 }

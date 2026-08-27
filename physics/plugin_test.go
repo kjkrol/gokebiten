@@ -78,7 +78,7 @@ func TestPlugin_EnableStats_PublishesStatsResource(t *testing.T) {
 		t.Fatalf("UsePlugin(physicsPlugin): %v", err)
 	}
 
-	got, ok := game.Resources().TryGetResource[*stats.Stats]()
+	got, ok := game.Resources().TryGet[*stats.Stats]()
 	if !ok {
 		t.Fatal("expected *stats.Stats to be registered as a resource")
 	}
