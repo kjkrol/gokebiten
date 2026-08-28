@@ -5,9 +5,9 @@ import (
 	"github.com/kjkrol/goke/v3"
 )
 
-// Renderer draws each frame; Init runs once at registration, outside the
+// Layer draws each frame; Init runs once at registration, outside the
 // per-tick Update cycle — there is no scheduled Update here.
-type Renderer interface {
+type Layer interface {
 	Init(*goke.SysInit)
 	Draw(screen *ebiten.Image)
 }

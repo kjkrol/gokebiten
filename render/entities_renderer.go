@@ -1,14 +1,12 @@
 package render
 
 import (
-	"image/color"
-
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/physics/kinematics"
 )
 
-var _ Renderer = (*EntitiesRenderer)(nil)
+var _ Layer = (*EntitiesRenderer)(nil)
 
 // EntitiesRenderer draws every Position+Appearance entity, running each
 // Plugin in order to resolve its final draw layers.
@@ -56,7 +54,6 @@ func (s *EntitiesRenderer) Init(si *goke.SysInit) {
 }
 
 func (s *EntitiesRenderer) Draw(screen *ebiten.Image) {
-	screen.Fill(color.RGBA{R: 50, G: 50, B: 50, A: 255})
 	s.batch.reset()
 
 	s.renderQuery.All()

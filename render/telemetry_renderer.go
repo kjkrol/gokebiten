@@ -8,7 +8,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 )
 
-var _ Renderer = (*TelemetryRenderer)(nil)
+var _ Layer = (*TelemetryRenderer)(nil)
 
 type TelemetryRenderer struct {
 	measuredTPS              *int
