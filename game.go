@@ -35,7 +35,7 @@ type Game struct {
 	inputs        *control.InputEvents
 	tps           *TPS
 	ecs           *goke.ECS
-	renderSeq     []render.Renderer
+	layers        []render.Layer
 	controller    *control.DefaultController
 	pluginManager *pluginManager
 	pendingSetup  []func() []goke.System
@@ -103,10 +103,10 @@ func (g *Game) Loop(plan func(ctx goke.RunCtx, d time.Duration)) {
 	g.ecs.SetPlan(plan)
 }
 
-func (g *Game) RenderSequence(rendererFactories ...func() render.Renderer) {
-	for _, factory := range rendererFactories {
-		renderer := g.registerRenderer(factory)
-		g.renderSeq = append(g.renderSeq, renderer)
+func (g *Game) Layers(layerFactories ...func() render.Layer) {
+	for _, factory := range layerFactories {
+		layer := g.registerLayer(factory)
+		g.layers = append(g.layers, layer)
 	}
 }
 
@@ -139,8 +139,8 @@ func (g *Game) Update() error {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	for _, sys := range g.renderSeq {
-		sys.Draw(screen)
+	for _, l := range g.layers {
+		l.Draw(screen)
 	}
 }
 
@@ -185,11 +185,11 @@ func (g *Game) setup(providers ...goke.SetupProvider) {
 	}
 }
 
-func (g *Game) registerRenderer(factory func() render.Renderer) render.Renderer {
-	renderer := factory()
-	sys := goke.SystemFn{OnInit: func(si *goke.SysInit) { renderer.Init(si) }}
+func (g *Game) registerLayer(factory func() render.Layer) render.Layer {
+	layer := factory()
+	sys := goke.SystemFn{OnInit: func(si *goke.SysInit) { layer.Init(si) }}
 	g.pendingSetup = append(g.pendingSetup, func() []goke.System { return []goke.System{sys} })
-	return renderer
+	return layer
 }
 
 // flushPendingSetup evaluates every deferred producer once and runs the result through a single ecs.Setup call.

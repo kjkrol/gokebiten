@@ -98,12 +98,18 @@ func main() {
 
 	atlas := procedural.NewAtlas()
 
-	game.RenderSequence(
-		func() render.Renderer {
+	game.Layers(
+		func() render.Layer {
+			return render.NewCachedLayer(
+				render.SolidBackground{Color: color.RGBA{R: 50, G: 50, B: 50, A: 255}},
+				ScreenWidth, ScreenHeight,
+			)
+		},
+		func() render.Layer {
 			return render.NewEntitiesRenderer(atlas, cameraPlugin.Camera()).
 				WithOverlay[collisions.Hit](render.Appearance{SpriteID: 0, Color: color.RGBA{R: 255, A: 255}})
 		},
-		func() render.Renderer {
+		func() render.Layer {
 			kin := game.Resources().Get[*world.Telemetry]()
 			entityCount := func() int { return kin.DynamicCount + kin.StaticCount }
 			return render.NewTelemetryRenderer(&game.Resources().Get[*gokebiten.TPS]().Ticks, entityCount, &physicsPlugin.Stats().Counter)
