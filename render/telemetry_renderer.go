@@ -8,7 +8,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 )
 
-var _ Layer = (*TelemetryRenderer)(nil)
+var _ Renderer = (*TelemetryRenderer)(nil)
 
 type TelemetryRenderer struct {
 	measuredTPS              *int
@@ -25,6 +25,8 @@ func NewTelemetryRenderer(measuredTPS *int, entityCount func() int, measuredColl
 }
 
 func (s *TelemetryRenderer) Init(si *goke.SysInit) {}
+
+func (s *TelemetryRenderer) BindCamera(Camera) {}
 
 func (s *TelemetryRenderer) Draw(screen *ebiten.Image) {
 	avgCollisionsPerTick := float64(0)

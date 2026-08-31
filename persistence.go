@@ -3,7 +3,6 @@ package gokebiten
 import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/internal/persist"
-	"github.com/kjkrol/gokebiten/render"
 )
 
 // Persistence provides Save/Load/List for one Game's ECS and resources — see Game.Persistence.
@@ -27,7 +26,7 @@ func (p *Persistence) Save(basePath, label string, resources ...any) error {
 // Load restores a snapshot written by Save, auto-scanning tracked plugins for components and post-load systems.
 func (p *Persistence) Load(basePath, label string, resources ...any) error {
 	pm := p.game.pluginManager
-	comps := append(pm.providedComps(), goke.LoadComp[render.Appearance]())
+	comps := pm.providedComps()
 	if err := persist.Load(p.game.ecs, basePath, label, comps, resources...); err != nil {
 		return err
 	}

@@ -2,11 +2,21 @@ package gokebiten_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten"
+	"github.com/kjkrol/gokebiten/control"
+	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
 )
+
+func newTestWorldPlugin() *world.Plugin {
+	return world.NewPlugin(
+		world.Config{Width: 1000, Height: 1000},
+		world.Population{MaxCount: 10, MinSize: 1, MaxSize: 100},
+	)
+}
 
 type saveTestState struct{ N int }
 type saveTestResourceB struct{ S string }
@@ -19,6 +29,9 @@ func (a *ecsAccessor) Install(ctx *gokebiten.GameCtx) error {
 	a.ecs = ctx.ECS()
 	return nil
 }
+func (a *ecsAccessor) RunPlan(goke.RunCtx, time.Duration) {}
+func (a *ecsAccessor) Renderer() render.Renderer          { return nil }
+func (a *ecsAccessor) EventHandler() control.EventHandler { return nil }
 
 // TestGame_SaveLoad_RoundTrip guards that Game.Persistence.Save/Load correctly delegate to the game's own ECS and resources.
 func TestGame_SaveLoad_RoundTrip(t *testing.T) {
@@ -28,17 +41,20 @@ func TestGame_SaveLoad_RoundTrip(t *testing.T) {
 	state := &saveTestState{N: 42}
 	extra := &saveTestResourceB{S: "hello"}
 
+	if err := game.UsePlugin(newTestWorldPlugin()); err != nil {
+		t.Fatalf("UsePlugin(world): %v", err)
+	}
 	acc := &ecsAccessor{}
 	if err := game.UsePlugin(acc); err != nil {
 		t.Fatalf("UsePlugin(ecsAccessor): %v", err)
 	}
 
-	var appearance goke.Comp[render.Appearance]
+	var appearance goke.Comp[world.Appearance]
 	acc.ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		f := si.NewFactory(&appearance)
 		f.Create(1)
 		f.Next()
-		appearance.Slice(&f.Cursor)[0] = render.Appearance{SpriteID: 7}
+		appearance.Slice(&f.Cursor)[0] = world.Appearance{SpriteID: 7}
 	}})
 
 	if err := game.Persistence.Save(basePath, "", state, extra); err != nil {
@@ -46,6 +62,9 @@ func TestGame_SaveLoad_RoundTrip(t *testing.T) {
 	}
 
 	game2 := gokebiten.NewGame(&gokebiten.GameProps{})
+	if err := game2.UsePlugin(newTestWorldPlugin()); err != nil {
+		t.Fatalf("UsePlugin(world): %v", err)
+	}
 	acc2 := &ecsAccessor{}
 	if err := game2.UsePlugin(acc2); err != nil {
 		t.Fatalf("UsePlugin(ecsAccessor): %v", err)
@@ -64,7 +83,7 @@ func TestGame_SaveLoad_RoundTrip(t *testing.T) {
 		t.Errorf("extra2.S after Load = %q, want %q", extra2.S, "hello")
 	}
 
-	var appearance2 goke.Comp[render.Appearance]
+	var appearance2 goke.Comp[world.Appearance]
 	var q *goke.Query
 	acc2.ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		q = si.NewQueryBuilder(&appearance2).Build()
@@ -81,6 +100,6 @@ func TestGame_SaveLoad_RoundTrip(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatal("expected the saved render.Appearance entity to survive the round trip")
+		t.Fatal("expected the saved world.Appearance entity to survive the round trip")
 	}
 }

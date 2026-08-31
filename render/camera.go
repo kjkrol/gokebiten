@@ -11,6 +11,8 @@ type AABB = geom.AABB[uint32]
 // Camera is what renderers need: screen conversion, culling, viewport bounds. Control (move/zoom) is not part of it.
 type Camera interface {
 	ToScreen(x, y float32) (float32, float32)
+	// FromScreen inverts ToScreen: screen coordinates back to world coordinates.
+	FromScreen(sx, sy float32) (float32, float32)
 	Visible(box AABB) bool
 	// Bounds returns the current effective (post-zoom) world-space viewport.
 	Bounds() AABB
@@ -59,6 +61,10 @@ func (c *BasicCamera) recompute() {
 
 func (c *BasicCamera) ToScreen(x, y float32) (float32, float32) {
 	return (x - float32(c.effective.TopLeft.X)) * c.scale, (y - float32(c.effective.TopLeft.Y)) * c.scale
+}
+
+func (c *BasicCamera) FromScreen(sx, sy float32) (float32, float32) {
+	return sx/c.scale + float32(c.effective.TopLeft.X), sy/c.scale + float32(c.effective.TopLeft.Y)
 }
 
 // Visible uses strict >/< — touching edges are not visible.
