@@ -11,17 +11,16 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten"
-	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/physics"
-	"github.com/kjkrol/gokebiten/physics/collisions"
-	"github.com/kjkrol/gokebiten/physics/collisions/strategies/elastic"
-	"github.com/kjkrol/gokebiten/physics/kinematics"
-	"github.com/kjkrol/gokebiten/physics/kinematics/spawners/grid"
-	"github.com/kjkrol/gokebiten/physics/kinematics/spawners/randomvelocity"
+	"github.com/kjkrol/gokebiten/plugins/camera"
+	"github.com/kjkrol/gokebiten/plugins/collisions"
+	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/elastic"
+	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/stats"
+	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gokebiten/plugins/world/spawners/grid"
+	"github.com/kjkrol/gokebiten/plugins/world/spawners/randomvelocity"
 	"github.com/kjkrol/gokebiten/render"
 	"github.com/kjkrol/gokebiten/render/atlases/procedural"
-	"github.com/kjkrol/gokebiten/world"
 )
 
 const (
@@ -46,22 +45,24 @@ func main() {
 		TargetTPS: TPS,
 	})
 
+	atlas := procedural.NewAtlas()
+
 	worldPlugin := world.NewPlugin(
 		world.Config{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
 		world.Population{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize},
-	)
+	).WithRenderer(atlas)
 
-	physicsPlugin := physics.NewPlugin(RectSize).
-		SetCollisionHandlers(elastic.NewHandler()).
-		SetHitExpires(100 * time.Millisecond).
-		EnableStats()
+	var collisionStats stats.Stats
+	collisionsPlugin := collisions.NewPlugin().
+		SetCollisionHandlers(elastic.NewHandler(), stats.NewHandler(&collisionStats)).
+		SetHitExpires(100 * time.Millisecond)
 
 	cameraPlugin := camera.NewPlugin()
 
 	if err := game.UsePlugin(worldPlugin); err != nil {
 		log.Fatal(err)
 	}
-	if err := game.UsePlugin(physicsPlugin); err != nil {
+	if err := game.UsePlugin(collisionsPlugin); err != nil {
 		log.Fatal(err)
 	}
 	if err := game.UsePlugin(cameraPlugin); err != nil {
@@ -88,31 +89,42 @@ func main() {
 		}
 		log.Printf("loaded saved world (save #%d)", state.Saves)
 	} else {
-		populateFreshWorld(worldPlugin.World())
+		worldPlugin.World().Populate(EntityCount,
+			world.NewSpawner(
+				grid.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize),
+				randomvelocity.New(200, 50, 10),
+			),
+			world.NewAppearanceExtras(func(index int) world.Appearance {
+				return world.Appearance{
+					Color:    color.RGBA{R: uint8(rand.IntN(206) + 50), G: uint8(rand.IntN(206) + 50), B: uint8(rand.IntN(206) + 50), A: 255},
+					SpriteID: uint8(rand.IntN(procedural.SpriteCount)),
+				}
+			}),
+			collisions.NewCollidableExtras(),
+		)
 	}
 
 	game.Loop(func(ctx goke.RunCtx, d time.Duration) {
-		physicsPlugin.Physics().RunPlan(ctx, d)
+		worldPlugin.RunPlan(ctx, d)
+		collisionsPlugin.RunPlan(ctx, d)
 		ctx.Sync()
 	})
 
-	atlas := procedural.NewAtlas()
-
 	game.Layers(
-		func() render.Layer {
-			return render.NewCachedLayer(
+		func() render.Renderer {
+			return render.NewCachedRenderer(
 				render.SolidBackground{Color: color.RGBA{R: 50, G: 50, B: 50, A: 255}},
 				ScreenWidth, ScreenHeight,
 			)
 		},
-		func() render.Layer {
-			return render.NewEntitiesRenderer(atlas, cameraPlugin.Camera()).
-				WithOverlay[collisions.Hit](render.Appearance{SpriteID: 0, Color: color.RGBA{R: 255, A: 255}})
+		func() render.Renderer {
+			return worldPlugin.EntityRenderer().
+				WithOverlay[collisions.Hit](world.Appearance{SpriteID: 0, Color: color.RGBA{R: 255, A: 255}})
 		},
-		func() render.Layer {
+		func() render.Renderer {
 			kin := game.Resources().Get[*world.Telemetry]()
-			entityCount := func() int { return kin.DynamicCount + kin.StaticCount }
-			return render.NewTelemetryRenderer(&game.Resources().Get[*gokebiten.TPS]().Ticks, entityCount, &physicsPlugin.Stats().Counter)
+			entityCount := func() int { return kin.Count }
+			return render.NewTelemetryRenderer(&game.Resources().Get[*gokebiten.TPS]().Ticks, entityCount, &collisionStats.Counter)
 		},
 	)
 
@@ -136,19 +148,4 @@ func main() {
 	})
 
 	game.Run()
-}
-
-func populateFreshWorld(worldModule *world.Module) {
-	worldModule.Populate(EntityCount,
-		kinematics.NewSpawner(
-			grid.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize),
-			randomvelocity.New(200, 50, 10),
-		),
-		render.NewAppearanceExtras(func(index int) render.Appearance {
-			return render.Appearance{
-				Color:    color.RGBA{R: uint8(rand.IntN(206) + 50), G: uint8(rand.IntN(206) + 50), B: uint8(rand.IntN(206) + 50), A: 255},
-				SpriteID: uint8(rand.IntN(procedural.SpriteCount)),
-			}
-		}),
-	)
 }

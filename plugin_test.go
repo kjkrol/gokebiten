@@ -3,8 +3,11 @@ package gokebiten
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/control"
+	"github.com/kjkrol/gokebiten/render"
 )
 
 type stubPlugin struct {
@@ -21,6 +24,9 @@ func (p *stubPlugin) Install(ctx *GameCtx) error {
 	}
 	return nil
 }
+func (p *stubPlugin) RunPlan(goke.RunCtx, time.Duration) {}
+func (p *stubPlugin) Renderer() render.Renderer          { return nil }
+func (p *stubPlugin) EventHandler() control.EventHandler { return nil }
 
 func TestGame_UsePlugin_InstallsOnce(t *testing.T) {
 	game := NewGame(&GameProps{})

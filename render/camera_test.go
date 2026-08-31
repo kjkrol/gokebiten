@@ -129,6 +129,39 @@ func TestBasicCamera_ImplementsCameraInterface(t *testing.T) {
 	var _ Camera = (*BasicCamera)(nil)
 }
 
+func TestBasicCamera_FromScreen_InvertsToScreen(t *testing.T) {
+	surface := plane.NewEuclidean2D[uint32](1000, 1000)
+	c := NewBasicCamera(surface, testViewport(100, 100, 200, 200))
+
+	cases := []struct {
+		name string
+		zoom float32
+		x, y float32
+	}{
+		{"no zoom, origin", 1, 100, 100},
+		{"no zoom, interior point", 1, 150, 180},
+		{"zoomed in", 2.5, 200, 220},
+		{"zoomed out", 0.5, 120, 260},
+	}
+
+	for _, c2 := range cases {
+		t.Run(c2.name, func(t *testing.T) {
+			c.ZoomIn(c2.zoom / c.Zoom())
+
+			sx, sy := c.ToScreen(c2.x, c2.y)
+			gotX, gotY := c.FromScreen(sx, sy)
+
+			const tol = 0.01
+			if diff := gotX - c2.x; diff < -tol || diff > tol {
+				t.Errorf("FromScreen(ToScreen(%v,%v)).X = %v, want ~%v", c2.x, c2.y, gotX, c2.x)
+			}
+			if diff := gotY - c2.y; diff < -tol || diff > tol {
+				t.Errorf("FromScreen(ToScreen(%v,%v)).Y = %v, want ~%v", c2.x, c2.y, gotY, c2.y)
+			}
+		})
+	}
+}
+
 // TestBasicCamera_GobRoundTrip_SilentlyDropsUnexportedState documents that gob drops unexported fields without erroring.
 func TestBasicCamera_GobRoundTrip_SilentlyDropsUnexportedState(t *testing.T) {
 	surface := plane.NewEuclidean2D[uint32](1000, 1000)

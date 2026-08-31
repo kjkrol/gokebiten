@@ -3,6 +3,7 @@ package control
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/kjkrol/gokg/geom"
 )
 
 type DesktopAdapter struct{}
@@ -16,16 +17,21 @@ func (a *DesktopAdapter) Capture(e *InputEvents) {
 	}
 
 	currX, currY := ebiten.CursorPosition()
-	e.CursorDelta.X = currX - e.MousePos.X
-	e.CursorDelta.Y = currY - e.MousePos.Y
-	e.MousePos.X = currX
-	e.MousePos.Y = currY
+	next := geom.NewVec(int32(currX), int32(currY))
+	e.CursorDelta = geom.NewVec(next.X-e.MousePos.X, next.Y-e.MousePos.Y)
+	e.MousePos = next
 
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		e.AddClickEvent(currX, currY, ebiten.MouseButtonLeft, ActionPress)
 	}
 	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
 		e.AddClickEvent(currX, currY, ebiten.MouseButtonLeft, ActionRelease)
+	}
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
+		e.AddClickEvent(currX, currY, ebiten.MouseButtonRight, ActionPress)
+	}
+	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonRight) {
+		e.AddClickEvent(currX, currY, ebiten.MouseButtonRight, ActionRelease)
 	}
 
 	e.Modifiers.Shift = ebiten.IsKeyPressed(ebiten.KeyShift)

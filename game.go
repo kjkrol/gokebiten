@@ -35,7 +35,7 @@ type Game struct {
 	inputs        *control.InputEvents
 	tps           *TPS
 	ecs           *goke.ECS
-	layers        []render.Layer
+	layers        []render.Renderer
 	controller    *control.DefaultController
 	pluginManager *pluginManager
 	pendingSetup  []func() []goke.System
@@ -82,7 +82,7 @@ func (g *Game) EventHandler(handler control.EventHandler) {
 
 // EventHandlerFn is EventHandler for a plain closure, letting call sites skip declaring a named type.
 func (g *Game) EventHandlerFn(fn func(events *control.InputEvents)) {
-	g.EventHandler(eventHandlerFunc(fn))
+	g.EventHandler(control.HandlerFn(fn))
 }
 
 func (g *Game) Paused() bool { return g.ecs.Paused() }
@@ -103,9 +103,9 @@ func (g *Game) Loop(plan func(ctx goke.RunCtx, d time.Duration)) {
 	g.ecs.SetPlan(plan)
 }
 
-func (g *Game) Layers(layerFactories ...func() render.Layer) {
+func (g *Game) Layers(layerFactories ...func() render.Renderer) {
 	for _, factory := range layerFactories {
-		layer := g.registerLayer(factory)
+		layer := g.registerRenderer(factory)
 		g.layers = append(g.layers, layer)
 	}
 }
@@ -161,10 +161,29 @@ func (g *Game) Run() {
 	}
 }
 
-// RegComp registers ECS component type C.
-func RegComp[C any](ctx *GameCtx) goke.CompID {
-	return ctx.game.ecs.RegComp[C]()
+// UsePlugin installs p once its dependencies are available, retrying automatically as other plugins install, and rejects a duplicate Name.
+func (g *Game) UsePlugin(p Plugin) error { return g.pluginManager.install(p) }
+
+// Init runs fn to build the game's own logic — only one is allowed per Game.
+func (g *Game) Init(fn func(ctx *GameCtx) error) error {
+	return g.UsePlugin(&gameInitPlugin{fn: fn})
 }
+
+// gameInitPlugin adapts a plain closure to Plugin — see Game.Init.
+type gameInitPlugin struct{ fn func(ctx *GameCtx) error }
+
+func (p *gameInitPlugin) Name() string { return "gokebiten.game" }
+
+func (p *gameInitPlugin) Install(ctx *GameCtx) error { return p.fn(ctx) }
+
+// RunPlan is a no-op — gameInitPlugin has no per-tick work of its own.
+func (p *gameInitPlugin) RunPlan(goke.RunCtx, time.Duration) {}
+
+// Renderer is a no-op — gameInitPlugin has no render.Renderer of its own.
+func (p *gameInitPlugin) Renderer() render.Renderer { return nil }
+
+// EventHandler is a no-op — gameInitPlugin has no control.EventHandler of its own.
+func (p *gameInitPlugin) EventHandler() control.EventHandler { return nil }
 
 func (g *Game) regSys(factory func() goke.System) goke.Runnable {
 	return g.ecs.RegSys(factory())
@@ -185,11 +204,14 @@ func (g *Game) setup(providers ...goke.SetupProvider) {
 	}
 }
 
-func (g *Game) registerLayer(factory func() render.Layer) render.Layer {
-	layer := factory()
-	sys := goke.SystemFn{OnInit: func(si *goke.SysInit) { layer.Init(si) }}
+func (g *Game) registerRenderer(factory func() render.Renderer) render.Renderer {
+	r := factory()
+	if camera, ok := g.resources.TryGet[render.Camera](); ok {
+		r.BindCamera(camera)
+	}
+	sys := goke.SystemFn{OnInit: func(si *goke.SysInit) { r.Init(si) }}
 	g.pendingSetup = append(g.pendingSetup, func() []goke.System { return []goke.System{sys} })
-	return layer
+	return r
 }
 
 // flushPendingSetup evaluates every deferred producer once and runs the result through a single ecs.Setup call.
@@ -204,8 +226,3 @@ func (g *Game) flushPendingSetup() {
 	g.ecs.Setup(systems...)
 	g.pendingSetup = nil
 }
-
-// eventHandlerFunc adapts a plain closure to control.EventHandler — see Game.EventHandlerFn.
-type eventHandlerFunc func(events *control.InputEvents)
-
-func (f eventHandlerFunc) HandleEvents(events *control.InputEvents) { f(events) }

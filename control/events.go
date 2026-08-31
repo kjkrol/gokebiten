@@ -1,9 +1,8 @@
 package control
 
 import (
-	"image"
-
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/kjkrol/gokg/geom"
 )
 
 type KeyAction int
@@ -19,14 +18,14 @@ type KeyEvent struct {
 }
 
 type ClickEvent struct {
-	Pos    image.Point
+	Pos    geom.Vec[int32]
 	Button ebiten.MouseButton
 	Action KeyAction
 }
 
 type InputEvents struct {
-	MousePos    image.Point
-	CursorDelta image.Point
+	MousePos    geom.Vec[int32]
+	CursorDelta geom.Vec[int32]
 	Modifiers   struct {
 		Shift, Ctrl, Alt bool
 	}
@@ -40,16 +39,17 @@ func (e *InputEvents) ResetTransient() {
 	e.ClickQueue = e.ClickQueue[:0]
 	e.KeyEvents = e.KeyEvents[:0]
 	e.ScrollDelta = 0
-	e.CursorDelta = image.Pt(0, 0)
+	e.CursorDelta = geom.Vec[int32]{}
 }
 
 func (e *InputEvents) AddKeyEvent(key ebiten.Key, action KeyAction) {
 	e.KeyEvents = append(e.KeyEvents, KeyEvent{Key: key, Action: action})
 }
 
+// AddClickEvent takes plain int for caller ergonomics — stored as geom.Vec[int32].
 func (e *InputEvents) AddClickEvent(x, y int, button ebiten.MouseButton, action KeyAction) {
 	e.ClickQueue = append(e.ClickQueue, ClickEvent{
-		Pos:    image.Pt(x, y),
+		Pos:    geom.NewVec(int32(x), int32(y)),
 		Button: button,
 		Action: action,
 	})
