@@ -3,7 +3,6 @@ package board
 import (
 	"time"
 
-	"github.com/kjkrol/astar"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugins/selection"
 )
@@ -13,11 +12,10 @@ import (
 // the target — an unreachable one (wall, occupied cell) is silently
 // skipped, leaving that entity's current order untouched.
 type CommandSystem struct {
-	grid      Grid
-	terrain   Terrain
-	occupancy Occupancy
-	solver    *astar.Solver[CellID]
-	state     *CommandState
+	terrain    Terrain
+	occupancy  Occupancy
+	pathFinder *PathFinder
+	state      *CommandState
 
 	query    *goke.Query
 	cell     goke.Comp[Cell]
@@ -30,11 +28,11 @@ type CommandSystem struct {
 var _ goke.Module = (*CommandSystem)(nil)
 var _ goke.System = (*CommandSystem)(nil)
 
-// NewCommandSystem builds a CommandSystem issuing move orders over grid/terrain/occupancy, driven by state.
-func NewCommandSystem(grid Grid, terrain Terrain, occupancy Occupancy, state *CommandState) *CommandSystem {
+// NewCommandSystem builds a CommandSystem issuing move orders via pathFinder, respecting terrain/occupancy, driven by state.
+func NewCommandSystem(pathFinder *PathFinder, terrain Terrain, occupancy Occupancy, state *CommandState) *CommandSystem {
 	return &CommandSystem{
-		grid: grid, terrain: terrain, occupancy: occupancy, state: state,
-		solver: astar.New[CellID](func(a, b CellID) float64 { return grid.Distance(a, b) }),
+		terrain: terrain, occupancy: occupancy, state: state,
+		pathFinder: pathFinder,
 	}
 }
 
@@ -56,7 +54,7 @@ func (s *CommandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 		cursor := s.query.Cursor()
 		cells := s.cell.Slice(cursor)
 		for i, id := range cursor.IDs {
-			newPath, ok := findPath(s.solver, s.grid, s.terrain, s.occupancy, id, cells[i].ID, target)
+			newPath, ok := s.pathFinder.FindPath(s.terrain, s.occupancy, id, cells[i].ID, target)
 			if !ok {
 				continue
 			}

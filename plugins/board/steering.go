@@ -4,7 +4,6 @@ import (
 	"math"
 	"time"
 
-	"github.com/kjkrol/astar"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten"
 	"github.com/kjkrol/gokebiten/plugins/world"
@@ -27,12 +26,12 @@ type CellEntered struct{ ID CellID }
 // SteeringSystem paths MoveTo-commanded entities toward their target,
 // setting Velocity's direction and base speed toward the next waypoint.
 type SteeringSystem struct {
-	grid      Grid
-	terrain   Terrain
-	occupancy Occupancy
-	speed     int32
-	space     *gokg.Space
-	solver    *astar.Solver[CellID]
+	grid       Grid
+	terrain    Terrain
+	occupancy  Occupancy
+	speed      int32
+	space      *gokg.Space
+	pathFinder *PathFinder
 
 	query  *goke.Query
 	cell   goke.Comp[Cell]
@@ -60,10 +59,11 @@ var _ gokebiten.PostLoader = (*SteeringSystem)(nil)
 const arrivalEpsilon = 2.0
 
 // NewSteeringSystem builds a SteeringSystem whose base steering speed, before any world.SpeedModifier scales it, is speed world-units/sec.
-func NewSteeringSystem(grid Grid, terrain Terrain, occupancy Occupancy, speed int32) *SteeringSystem {
-	s := &SteeringSystem{grid: grid, terrain: terrain, occupancy: occupancy, speed: speed}
-	s.solver = astar.New[CellID](func(a, b CellID) float64 { return grid.Distance(a, b) })
-	return s
+func NewSteeringSystem(pathFinder *PathFinder, terrain Terrain, occupancy Occupancy, speed int32) *SteeringSystem {
+	return &SteeringSystem{
+		grid: pathFinder.Grid(), terrain: terrain, occupancy: occupancy, speed: speed,
+		pathFinder: pathFinder,
+	}
 }
 
 // BindSpace attaches the shared spatial index — arrivals snap to the cell center once bound; no-op (best-effort stop) if never called.
@@ -128,7 +128,7 @@ func (s *SteeringSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 			}
 
 			if (p.Length == 0 || p.Index >= p.Length) && actual != target {
-				newPath, found := findPath(s.solver, s.grid, s.terrain, s.occupancy, id, actual, target)
+				newPath, found := s.pathFinder.FindPath(s.terrain, s.occupancy, id, actual, target)
 				if !found {
 					continue
 				}

@@ -20,6 +20,7 @@ type Plugin struct {
 	commands     *CommandSystem
 	commandState *CommandState
 	occupancy    Occupancy
+	pathFinder   *PathFinder
 	camera       render.Camera
 }
 
@@ -27,11 +28,13 @@ var _ gokebiten.Plugin = (*Plugin)(nil)
 
 // NewPlugin builds a board over grid/terrain, steering occupancy-tracked entities at speed world-units/sec before scaling.
 func NewPlugin(grid Grid, terrain Terrain, occupancy Occupancy, speed int32) *Plugin {
+	pathFinder := NewPathFinder(grid)
 	return &Plugin{
 		board:        NewBoard(grid, terrain),
-		steering:     NewSteeringSystem(grid, terrain, occupancy, speed),
+		steering:     NewSteeringSystem(pathFinder, terrain, occupancy, speed),
 		terrainSpeed: NewTerrainSpeedModifier(grid, terrain),
 		occupancy:    occupancy,
+		pathFinder:   pathFinder,
 	}
 }
 
@@ -83,7 +86,7 @@ func (p *Plugin) CellRenderer() *Renderer { return p.renderer }
 // WithCommands enables right-click move orders for Selected, en-route entities.
 func (p *Plugin) WithCommands() *Plugin {
 	p.commandState = &CommandState{}
-	p.commands = NewCommandSystem(p.board, p.board, p.occupancy, p.commandState)
+	p.commands = NewCommandSystem(p.pathFinder, p.board, p.occupancy, p.commandState)
 	return p
 }
 
