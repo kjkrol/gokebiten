@@ -11,6 +11,7 @@ import (
 	"github.com/kjkrol/gokebiten"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins/board"
+	"github.com/kjkrol/gokebiten/plugins/board/grids"
 	"github.com/kjkrol/gokebiten/plugins/camera"
 	"github.com/kjkrol/gokebiten/plugins/selection"
 	"github.com/kjkrol/gokebiten/plugins/world"
@@ -46,7 +47,7 @@ func main() {
 		TargetTPS: TPS,
 	})
 
-	grid := board.NewSquareGrid(GridWidth, GridHeight, CellSize)
+	grid := grids.NewSquareGrid(GridWidth, GridHeight, CellSize)
 	terrain := board.NewTerrainMap(board.CellProps{Cost: 1, Passable: true})
 	buildWall(grid, terrain)
 	occupancy := &board.SingleOccupancy{}
@@ -161,7 +162,7 @@ var boardShowsGrid = true
 
 // buildWall makes column wallCol impassable except its top two rows, so a
 // unit on the left must detour to the top to reach the right side.
-func buildWall(grid *board.SquareGrid, terrain *board.TerrainMap) {
+func buildWall(grid *grids.SquareGrid, terrain *board.TerrainMap) {
 	for y := uint32(2); y < GridHeight; y++ {
 		terrain.Set(cellAt(grid, wallCol, y), board.CellProps{Cost: 1, Passable: false})
 	}
@@ -170,11 +171,11 @@ func buildWall(grid *board.SquareGrid, terrain *board.TerrainMap) {
 // buildShortcut opens a fast gap through the wall at shortcutRow — pressing
 // R calls this live, demonstrating that SteeringSystem re-paths around
 // changed terrain as soon as an in-flight unit next deviates from its route.
-func buildShortcut(grid *board.SquareGrid, terrain *board.TerrainMap) {
+func buildShortcut(grid *grids.SquareGrid, terrain *board.TerrainMap) {
 	terrain.Set(cellAt(grid, wallCol, shortcutRow), board.CellProps{Cost: 0.4, Passable: true})
 }
 
-func cellAt(grid *board.SquareGrid, x, y uint32) board.CellID {
+func cellAt(grid *grids.SquareGrid, x, y uint32) board.CellID {
 	c, _ := grid.CellAt(geom.NewVec(float64(x)*CellSize+1, float64(y)*CellSize+1))
 	return c
 }
@@ -210,7 +211,7 @@ var spawns = []struct {
 // unitSpawner places each unit at spawns[index]'s start cell and enters it
 // into occupancy — implements world.Spawner (populators[0] for Populate).
 type unitSpawner struct {
-	grid      *board.SquareGrid
+	grid      *grids.SquareGrid
 	occupancy *board.SingleOccupancy
 	lastStart board.CellID
 	spawned   []uid.UID64
@@ -221,7 +222,7 @@ type unitSpawner struct {
 	app    goke.Comp[world.Appearance]
 }
 
-func newUnitSpawner(grid *board.SquareGrid, occupancy *board.SingleOccupancy) *unitSpawner {
+func newUnitSpawner(grid *grids.SquareGrid, occupancy *board.SingleOccupancy) *unitSpawner {
 	return &unitSpawner{grid: grid, occupancy: occupancy}
 }
 

@@ -1,4 +1,4 @@
-package board
+package grids
 
 import "testing"
 

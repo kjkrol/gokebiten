@@ -1,12 +1,13 @@
-package board
+package grids
 
 import (
 	"math"
 
+	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokg/geom"
 )
 
-// SquareGrid is a Grid over a Width x Height array of square cells,
+// SquareGrid is a board.Grid over a Width x Height array of square cells,
 // CellSize world-pixels on a side, with 4-directional (N/S/E/W) neighbors.
 type SquareGrid struct {
 	Width, Height uint32
@@ -14,19 +15,21 @@ type SquareGrid struct {
 	Toroidal      bool
 }
 
-var _ Grid = (*SquareGrid)(nil)
+var _ board.Grid = (*SquareGrid)(nil)
 
 func NewSquareGrid(width, height, cellSize uint32) *SquareGrid {
 	return &SquareGrid{Width: width, Height: height, CellSize: cellSize}
 }
 
-func (g *SquareGrid) idAt(x, y uint32) CellID { return CellID(uint64(y)*uint64(g.Width) + uint64(x)) }
+func (g *SquareGrid) idAt(x, y uint32) board.CellID {
+	return board.CellID(uint64(y)*uint64(g.Width) + uint64(x))
+}
 
-func (g *SquareGrid) cellXY(c CellID) (x, y uint32) {
+func (g *SquareGrid) cellXY(c board.CellID) (x, y uint32) {
 	return uint32(uint64(c) % uint64(g.Width)), uint32(uint64(c) / uint64(g.Width))
 }
 
-func (g *SquareGrid) Contains(c CellID) bool {
+func (g *SquareGrid) Contains(c board.CellID) bool {
 	if g.Toroidal {
 		return true
 	}
@@ -36,9 +39,9 @@ func (g *SquareGrid) Contains(c CellID) bool {
 
 var squareDirs = [4][2]int64{{0, -1}, {0, 1}, {-1, 0}, {1, 0}}
 
-func (g *SquareGrid) Neighbors(c CellID) []CellID {
+func (g *SquareGrid) Neighbors(c board.CellID) []board.CellID {
 	x, y := g.cellXY(c)
-	out := make([]CellID, 0, 4)
+	out := make([]board.CellID, 0, 4)
 	for _, d := range squareDirs {
 		nx, ny := int64(x)+d[0], int64(y)+d[1]
 		if g.Toroidal {
@@ -51,13 +54,13 @@ func (g *SquareGrid) Neighbors(c CellID) []CellID {
 	return out
 }
 
-func (g *SquareGrid) CellCenter(c CellID) geom.Vec[float64] {
+func (g *SquareGrid) CellCenter(c board.CellID) geom.Vec[float64] {
 	x, y := g.cellXY(c)
 	half := float64(g.CellSize) / 2
 	return geom.NewVec(float64(x)*float64(g.CellSize)+half, float64(y)*float64(g.CellSize)+half)
 }
 
-func (g *SquareGrid) CellAt(pos geom.Vec[float64]) (CellID, bool) {
+func (g *SquareGrid) CellAt(pos geom.Vec[float64]) (board.CellID, bool) {
 	if g.CellSize == 0 {
 		return 0, false
 	}
@@ -76,7 +79,7 @@ func (g *SquareGrid) CellAt(pos geom.Vec[float64]) (CellID, bool) {
 }
 
 // Distance is Manhattan distance, admissible for this grid's 4-directional Neighbors.
-func (g *SquareGrid) Distance(a, b CellID) float64 {
+func (g *SquareGrid) Distance(a, b board.CellID) float64 {
 	ax, ay := g.cellXY(a)
 	bx, by := g.cellXY(b)
 	width, height := uint32(0), uint32(0)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugins/board"
+	"github.com/kjkrol/gokebiten/plugins/board/grids"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokg"
 	"github.com/kjkrol/gokg/geom"
@@ -56,10 +57,10 @@ func (p *pushOnce) Update(_ *goke.CmdBuf, _ time.Duration) {
 }
 
 func TestSteeringSystem_Update_DeviationTriggersRepath(t *testing.T) {
-	grid := board.NewSquareGrid(5, 1, 10)
+	grid := grids.NewSquareGrid(5, 1, 10)
 	terrain := board.NewTerrainMap(board.CellProps{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
-	steering := board.NewSteeringSystem(grid, terrain, occupancy, 20)
+	steering := board.NewSteeringSystem(board.NewPathFinder(grid), terrain, occupancy, 20)
 	pusher := &pushOnce{grid: grid, size: 8}
 
 	start := cellAtXY(grid, 0, 0)
@@ -130,10 +131,10 @@ func TestSteeringSystem_Update_DeviationTriggersRepath(t *testing.T) {
 // Velocity — since the entity never matches this system's query again once
 // MoveTo is gone, nothing ever stopped it, and it drifted off the board.
 func TestSteeringSystem_Update_ArrivalStopsEntity(t *testing.T) {
-	grid := board.NewSquareGrid(5, 1, 10)
+	grid := grids.NewSquareGrid(5, 1, 10)
 	terrain := board.NewTerrainMap(board.CellProps{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
-	steering := board.NewSteeringSystem(grid, terrain, occupancy, 20)
+	steering := board.NewSteeringSystem(board.NewPathFinder(grid), terrain, occupancy, 20)
 
 	start := cellAtXY(grid, 2, 0)
 	target := start // already at the target — arrives on the very first tick
@@ -190,10 +191,10 @@ func TestSteeringSystem_Update_ArrivalStopsEntity(t *testing.T) {
 // a cell boundary at an arbitrary point) ends up exactly centered — needed
 // for a board game, where units are expected to sit precisely on a cell.
 func TestSteeringSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
-	grid := board.NewSquareGrid(5, 1, 10)
+	grid := grids.NewSquareGrid(5, 1, 10)
 	terrain := board.NewTerrainMap(board.CellProps{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
-	steering := board.NewSteeringSystem(grid, terrain, occupancy, 20)
+	steering := board.NewSteeringSystem(board.NewPathFinder(grid), terrain, occupancy, 20)
 	space := testSpace(t)
 	steering.BindSpace(space)
 
@@ -259,10 +260,10 @@ func TestSteeringSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
 // in a single tick, visibly popping the entity into place. Arrival must
 // glide in bounded steps and still land exactly on center.
 func TestSteeringSystem_Update_ArrivalGlidesSmoothlyToCellCenter(t *testing.T) {
-	grid := board.NewSquareGrid(5, 1, 10)
+	grid := grids.NewSquareGrid(5, 1, 10)
 	terrain := board.NewTerrainMap(board.CellProps{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
-	steering := board.NewSteeringSystem(grid, terrain, occupancy, 20)
+	steering := board.NewSteeringSystem(board.NewPathFinder(grid), terrain, occupancy, 20)
 	space := testSpace(t)
 	steering.BindSpace(space)
 

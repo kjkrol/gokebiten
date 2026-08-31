@@ -8,6 +8,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins/board"
+	"github.com/kjkrol/gokebiten/plugins/board/grids"
 	"github.com/kjkrol/gokebiten/plugins/selection"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
@@ -17,7 +18,7 @@ import (
 )
 
 func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
-	grid := board.NewSquareGrid(10, 1, 10)
+	grid := grids.NewSquareGrid(10, 1, 10)
 	terrain := board.NewTerrainMap(board.CellProps{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
 
@@ -29,7 +30,7 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 	camera := render.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
 
 	cmdState := &board.CommandState{}
-	cmds := board.NewCommandSystem(grid, terrain, occupancy, cmdState)
+	cmds := board.NewCommandSystem(board.NewPathFinder(grid), terrain, occupancy, cmdState)
 	cmdHandler := board.NewDefaultCommandEventHandler(grid, camera, cmdState)
 	selState := &selection.State{}
 	selSys := selection.NewSystem(selState)
@@ -122,7 +123,7 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 // entirely, so a right-click must still be able to give that idle, Selected
 // entity a brand new order — not just retarget units already in transit.
 func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T) {
-	grid := board.NewSquareGrid(10, 1, 10)
+	grid := grids.NewSquareGrid(10, 1, 10)
 	terrain := board.NewTerrainMap(board.CellProps{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
 
@@ -133,7 +134,7 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 	camera := render.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
 
 	cmdState := &board.CommandState{}
-	cmds := board.NewCommandSystem(grid, terrain, occupancy, cmdState)
+	cmds := board.NewCommandSystem(board.NewPathFinder(grid), terrain, occupancy, cmdState)
 	cmdHandler := board.NewDefaultCommandEventHandler(grid, camera, cmdState)
 	selState := &selection.State{}
 	selSys := selection.NewSystem(selState)
@@ -224,7 +225,7 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 // to a wall (or an occupied cell) must not interrupt its current route —
 // the order is silently dropped, not queued with a corrupted/wrong target.
 func TestCommandSystem_Update_UnreachableTargetLeavesInFlightEntityUntouched(t *testing.T) {
-	grid := board.NewSquareGrid(10, 1, 10)
+	grid := grids.NewSquareGrid(10, 1, 10)
 	terrain := board.NewTerrainMap(board.CellProps{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
 
@@ -237,7 +238,7 @@ func TestCommandSystem_Update_UnreachableTargetLeavesInFlightEntityUntouched(t *
 	camera := render.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
 
 	cmdState := &board.CommandState{}
-	cmds := board.NewCommandSystem(grid, terrain, occupancy, cmdState)
+	cmds := board.NewCommandSystem(board.NewPathFinder(grid), terrain, occupancy, cmdState)
 	cmdHandler := board.NewDefaultCommandEventHandler(grid, camera, cmdState)
 	selState := &selection.State{}
 	selSys := selection.NewSystem(selState)
