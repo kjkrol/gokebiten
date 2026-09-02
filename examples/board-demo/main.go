@@ -28,22 +28,12 @@ const (
 	ScreenHeight = GridHeight * CellSize
 	EntitySize   = 22
 	UnitSpeed    = CellSize * 2
-
-	// TODO: should accept more entities
-	MaxEntCount = len(unitRoster)
+	MaxEntCount  = 10
 
 	saveBasePath = "board-rts-demo"
 )
 
 var (
-	unitRoster = [...]struct {
-		startX, startY uint32
-		targetX        uint32
-	}{
-		{startX: 2, startY: 4, targetX: GridWidth - 3},
-		{startX: 2, startY: 12, targetX: GridWidth - 3},
-	}
-
 	Grass = board.CellKind{Name: "grass", Cost: 1, Passable: true}
 	Wall  = board.CellKind{Name: "wall", Cost: 1, Passable: false}
 	Road  = board.CellKind{Name: "road", Cost: 0.4, Passable: true}
@@ -68,7 +58,6 @@ func main() {
 	redSprite := atlas.Register(render.Solid(color.RGBA{R: 220, G: 90, B: 90, A: 255}))
 	blueSprite := atlas.Register(render.Solid(color.RGBA{R: 90, G: 140, B: 220, A: 255}))
 	atlas.Close()
-	unitSprites := [len(unitRoster)]render.SpriteID{redSprite, blueSprite}
 
 	boardCellStyle := func(kind board.CellKind) render.SpriteID {
 		switch kind {
@@ -125,9 +114,17 @@ func main() {
 			}
 			log.Printf("loaded saved board (save #%d)", state.Saves)
 		} else {
+			unitRoster := [...]struct {
+				startX, startY uint32
+				targetX        uint32
+				sprite         render.SpriteID
+			}{
+				{startX: 2, startY: 4, targetX: GridWidth - 3, sprite: redSprite},
+				{startX: 2, startY: 12, targetX: GridWidth - 3, sprite: blueSprite},
+			}
 			terrain.SetAll(Grass)
 			buildWall(grid, terrain)
-			worldPlugin.World().Populate(MaxEntCount,
+			worldPlugin.World().Populate(len(unitRoster),
 				world.SpawnerFunc(func(index, count int) (world.Position, world.Velocity) {
 					spawn := unitRoster[index]
 					start, _ := grid.CellIndex(spawn.startX, spawn.startY)
@@ -146,7 +143,7 @@ func main() {
 					return navigation.MoveOrder{Target: target}
 				}),
 				world.NewValueExtras(func(index int) world.Appearance {
-					return world.Appearance{SpriteID: unitSprites[index]}
+					return world.Appearance{SpriteID: unitRoster[index].sprite}
 				}),
 				world.NewValueExtras(func(index int) selection.Selected { return selection.Selected{} }))
 		}
@@ -166,6 +163,7 @@ func main() {
 
 	selectionCmdHandler := selectionPlugin.EventHandler()
 	navigationCmdHandler := navigationPlugin.EventHandler()
+	renderState := game.Resources().Get[*board.RenderState]()
 	game.EventHandlerFn(func(events *control.InputEvents) {
 		selectionCmdHandler.HandleEvents(events)
 		navigationCmdHandler.HandleEvents(events)
@@ -177,7 +175,7 @@ func main() {
 			case ebiten.KeySpace:
 				game.TogglePause()
 			case ebiten.KeyB:
-				boardPlugin.CellRenderer().ToggleGridLines()
+				renderState.ShowGridLines = !renderState.ShowGridLines
 			case ebiten.KeyR:
 				buildShortcut(grid, terrain)
 				log.Print("built a road through the wall — in-flight units re-path onto it as soon as they deviate")

@@ -16,6 +16,13 @@ var colorGridLine = color.RGBA{R: 20, G: 20, B: 20, A: 120}
 // palette, Renderer only asks.
 type CellStyle func(kind CellKind) render.SpriteID
 
+// RenderState is the board renderer's live display toggles — published to
+// Resources by Plugin.WithRenderer, so a game can flip them directly (e.g.
+// bind a key to renderState.ShowGridLines = !renderState.ShowGridLines).
+type RenderState struct {
+	ShowGridLines bool
+}
+
 // Renderer draws Board's cells — register it before the entities layer in
 // Game.Layers so terrain sits underneath.
 type Renderer struct {
@@ -23,7 +30,7 @@ type Renderer struct {
 	camera    render.Camera
 	cellSize  float32
 	style     CellStyle
-	showGrid  bool
+	state     *RenderState
 	batch     *render.QuadBatch
 	gridLines []gridLine
 }
@@ -34,18 +41,12 @@ type gridLine struct{ x0, y0, x1, y1 float32 }
 
 var _ render.Renderer = (*Renderer)(nil)
 
-func newRenderer(board *Board, cellSize float32, atlas render.AtlasSource, style CellStyle) *Renderer {
-	return &Renderer{board: board, cellSize: cellSize, style: style, showGrid: true, batch: render.NewQuadBatch(atlas)}
+func newRenderer(board *Board, cellSize float32, atlas render.AtlasSource, style CellStyle, state *RenderState) *Renderer {
+	return &Renderer{board: board, cellSize: cellSize, style: style, state: state, batch: render.NewQuadBatch(atlas)}
 }
 
 // BindCamera attaches camera — Draw needs it, so call this before the first Draw.
 func (l *Renderer) BindCamera(camera render.Camera) { l.camera = camera; l.batch.BindCamera(camera) }
-
-// SetShowGridLines toggles lines between cells — cell fill always draws.
-func (l *Renderer) SetShowGridLines(show bool) { l.showGrid = show }
-
-// ToggleGridLines flips whether lines between cells are drawn — cell fill always draws.
-func (l *Renderer) ToggleGridLines() { l.showGrid = !l.showGrid }
 
 func (l *Renderer) Init(*goke.SysInit) {}
 
@@ -87,7 +88,7 @@ func (l *Renderer) drawCell(c CellID) {
 
 	l.batch.AppendQuad(float32(x0), float32(y0), float32(x1), float32(y1), l.style(l.board.Kind(c)))
 
-	if l.showGrid {
+	if l.state.ShowGridLines {
 		sx0, sy0 := l.camera.ToScreen(float32(x0), float32(y0))
 		sx1, sy1 := l.camera.ToScreen(float32(x1), float32(y1))
 		l.gridLines = append(l.gridLines, gridLine{sx0, sy0, sx1, sy1})

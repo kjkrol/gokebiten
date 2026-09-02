@@ -19,6 +19,7 @@ type Plugin struct {
 	terrainSpeed *TerrainSpeedModifier
 	occupancy    Occupancy
 	renderer     *Renderer
+	renderState  *RenderState
 }
 
 var _ gokebiten.Plugin = (*Plugin)(nil)
@@ -45,6 +46,9 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 	ctx.Provide(p.board)
 	ctx.Provide(p.terrain)
 	ctx.Provide(p)
+	if p.renderState != nil {
+		ctx.Provide(p.renderState)
+	}
 	worldPlugin.RegisterSpeedModifier(p.terrainSpeed)
 	return nil
 }
@@ -63,7 +67,8 @@ func (p *Plugin) SaveTargets() []any { return []any{p.terrain} }
 
 // WithRenderer builds this plugin's own board renderer (cellSize world-pixels per cell, style picks the sprite to draw).
 func (p *Plugin) WithRenderer(cellSize float32, atlas render.AtlasSource, style CellStyle) *Plugin {
-	p.renderer = newRenderer(p.board, cellSize, atlas, style)
+	p.renderState = &RenderState{ShowGridLines: true}
+	p.renderer = newRenderer(p.board, cellSize, atlas, style, p.renderState)
 	return p
 }
 
@@ -74,9 +79,6 @@ func (p *Plugin) Renderer() render.Renderer {
 	}
 	return p.renderer
 }
-
-// CellRenderer returns the concrete board renderer for further interaction (SetShowGridLines), or nil.
-func (p *Plugin) CellRenderer() *Renderer { return p.renderer }
 
 // RunPlan is a no-op — board has no per-tick work of its own; see plugins/navigation.
 func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {}

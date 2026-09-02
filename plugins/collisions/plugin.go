@@ -13,9 +13,8 @@ import (
 // Plugin wires Collisions into a Game — optional, borrows world.Plugin's own
 // Space. Must never import collisions/strategies/*; compose handlers via SetCollisionHandlers instead.
 type Plugin struct {
-	handlers     []CollisionHandler
-	hitExpires   time.Duration
-	extraSystems []goke.System
+	handlers   []CollisionHandler
+	hitExpires time.Duration
 
 	collisions *Collisions
 }
@@ -35,12 +34,6 @@ func (p *Plugin) SetHitExpires(d time.Duration) *Plugin {
 	return p
 }
 
-// RegSys registers an extra system via Collisions.RegSys, in call order.
-func (p *Plugin) RegSys(sys goke.System) *Plugin {
-	p.extraSystems = append(p.extraSystems, sys)
-	return p
-}
-
 func (p *Plugin) Name() string { return "gokebiten.collisions" }
 
 func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
@@ -57,16 +50,10 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 	if p.hitExpires > 0 {
 		p.collisions.SetHitExpires(p.hitExpires)
 	}
-	for _, sys := range p.extraSystems {
-		p.collisions.RegSys(sys)
-	}
 
 	ctx.UseModule(p.collisions)
 	return nil
 }
-
-// Collisions returns the underlying Collisions engine, built during Install — nil before that.
-func (p *Plugin) Collisions() *Collisions { return p.collisions }
 
 // RunPlan runs the collision engine for this tick — call from your own Game.Loop closure.
 func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) { p.collisions.RunPlan(ctx, d) }

@@ -42,12 +42,6 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 	return nil
 }
 
-// System returns the underlying System.
-func (p *Plugin) System() *System { return p.system }
-
-// State returns the published input state — write to it yourself for a custom EventHandler, or read EventHandler for the default one.
-func (p *Plugin) State() *State { return p.state }
-
 // WithRenderer builds this plugin's own highlight renderer (outline for every Selected entity, plus the drag marquee).
 func (p *Plugin) WithRenderer() *Plugin {
 	p.renderer = NewRenderer(p.state)

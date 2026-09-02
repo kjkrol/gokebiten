@@ -60,9 +60,6 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 	return nil
 }
 
-// Camera returns the concrete *render.BasicCamera built during Install — nil before that.
-func (p *Plugin) Camera() *render.BasicCamera { return p.camera }
-
 // RunPlan is a no-op — camera has no per-tick work of its own.
 func (p *Plugin) RunPlan(goke.RunCtx, time.Duration) {}
 
