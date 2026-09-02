@@ -7,10 +7,10 @@ import (
 )
 
 func testModule() *Module {
-	return NewModule(
-		Config{Width: 1000, Height: 1000},
-		Population{MaxCount: 10, MinSize: 1, MaxSize: 100},
-	)
+	return NewModule(Config{
+		Space:    SpaceCfg{Width: 1000, Height: 1000},
+		Entities: EntitiesCfg{MaxCount: 10, MinSize: 1, MaxSize: 100},
+	})
 }
 
 func TestModule_PostLoad_SetsCountToZeroWhenNothingSeeded(t *testing.T) {

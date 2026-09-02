@@ -30,10 +30,10 @@ func TestPlugin_Install_ResolvesWhenRegisteredBeforeWorld(t *testing.T) {
 		t.Fatal("expected Collisions() to be nil before world.Plugin installs")
 	}
 
-	worldPlugin := world.NewPlugin(
-		world.Config{Width: 100, Height: 100},
-		world.Population{MaxCount: 1, MinSize: 1, MaxSize: 10},
-	)
+	worldPlugin := world.NewPlugin(world.Config{
+		Space:    world.SpaceCfg{Width: 100, Height: 100},
+		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
+	})
 	if err := game.UsePlugin(worldPlugin); err != nil {
 		t.Fatalf("UsePlugin(worldPlugin): %v", err)
 	}
@@ -45,10 +45,10 @@ func TestPlugin_Install_ResolvesWhenRegisteredBeforeWorld(t *testing.T) {
 
 func TestPlugin_Install_BuildsCollisionsAfterWorld(t *testing.T) {
 	game := gokebiten.NewGame(&gokebiten.GameProps{})
-	worldPlugin := world.NewPlugin(
-		world.Config{Width: 100, Height: 100},
-		world.Population{MaxCount: 1, MinSize: 1, MaxSize: 10},
-	)
+	worldPlugin := world.NewPlugin(world.Config{
+		Space:    world.SpaceCfg{Width: 100, Height: 100},
+		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
+	})
 	if err := game.UsePlugin(worldPlugin); err != nil {
 		t.Fatalf("UsePlugin(worldPlugin): %v", err)
 	}

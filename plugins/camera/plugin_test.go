@@ -74,10 +74,10 @@ func TestPlugin_Install_WithViewportOverride(t *testing.T) {
 
 func TestPlugin_Install_TogglesToroidalSurface(t *testing.T) {
 	game := gokebiten.NewGame(&gokebiten.GameProps{ScreenWidth: 20, ScreenHeight: 20})
-	worldPlugin := world.NewPlugin(
-		world.Config{Width: 20, Height: 20, Toroidal: true},
-		world.Population{MaxCount: 1, MinSize: 1, MaxSize: 2},
-	)
+	worldPlugin := world.NewPlugin(world.Config{
+		Space:    world.SpaceCfg{Width: 20, Height: 20, Toroidal: true},
+		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 2},
+	})
 	if err := game.UsePlugin(worldPlugin); err != nil {
 		t.Fatalf("UsePlugin(worldPlugin): %v", err)
 	}

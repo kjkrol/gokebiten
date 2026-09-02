@@ -31,7 +31,7 @@ func (m *pluginManager) install(p Plugin) error {
 	return m.resolvePending()
 }
 
-// track records v so providedComps/postLoadSystems can find it later.
+// track records v so providedComps/postLoadSystems/saveTargets can find it later.
 func (m *pluginManager) track(v any) { m.registered = append(m.registered, v) }
 
 // providedComps collects LoadComps from every tracked value implementing goke.CompProvider.
@@ -48,6 +48,17 @@ func (m *pluginManager) postLoadSystems() []goke.System {
 	return systems
 }
 
+// saveTargets collects SaveTargets from every tracked value implementing Saveable.
+func (m *pluginManager) saveTargets() []any {
+	var out []any
+	for _, v := range m.registered {
+		if s, ok := v.(Saveable); ok {
+			out = append(out, s.SaveTargets()...)
+		}
+	}
+	return out
+}
+
 // resolvePending installs every pending plugin whose dependencies are satisfied, retrying until no more progress.
 func (m *pluginManager) resolvePending() error {
 	for {
@@ -60,6 +71,7 @@ func (m *pluginManager) resolvePending() error {
 			switch {
 			case err == nil:
 				progressed = true
+				m.track(p)
 			case errors.As(err, &nr):
 				if ctx.wrote {
 					panic(fmt.Sprintf("gokebiten: plugin %q wrote to Resources/ECS before returning an unmet dependency — Install must check its dependencies before any side effects", p.Name()))

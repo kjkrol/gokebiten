@@ -7,8 +7,6 @@ import (
 	"github.com/kjkrol/gokg/geom"
 )
 
-var _ world.Motion = (*RandomVelocity)(nil)
-
 // RandomVelocity assigns a random velocity, X and Y independently drawn
 // from [-Range, Range]; an X component whose magnitude falls below DeadZone
 // is clamped up to MinSpeed so entities don't start nearly stationary.

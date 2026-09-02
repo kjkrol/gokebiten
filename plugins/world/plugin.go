@@ -10,10 +10,9 @@ import (
 )
 
 // Plugin builds a Module — the mandatory foundation for any game with
-// moving, drawable entities — and publishes Config/Population as resources.
+// moving, drawable entities — and publishes Config as a resource.
 type Plugin struct {
-	config     Config
-	population Population
+	config Config
 
 	world    *Module
 	renderer *Renderer
@@ -22,8 +21,8 @@ type Plugin struct {
 var _ gokebiten.Plugin = (*Plugin)(nil)
 var _ gokebiten.PostLoader = (*Module)(nil)
 
-func NewPlugin(cfg Config, pop Population) *Plugin {
-	return &Plugin{config: cfg, population: pop}
+func NewPlugin(cfg Config) *Plugin {
+	return &Plugin{config: cfg}
 }
 
 func (p *Plugin) Name() string { return "gokebiten.world" }
@@ -34,12 +33,11 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 			return err
 		}
 	}
-	p.world = NewModule(p.config, p.population)
+	p.world = NewModule(p.config)
 	p.world.step = ctx.Step()
 	p.world.ecs = ctx.ECS()
 	ctx.Setup(p.world)
 	ctx.Provide(p.config)
-	ctx.Provide(p.population)
 	ctx.Provide(p.world.Telemetry())
 	ctx.Provide(p)
 	return nil

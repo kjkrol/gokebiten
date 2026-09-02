@@ -1,10 +1,11 @@
-package board_test
+package navigation_test
 
 import (
 	"testing"
 
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/board/grids"
+	"github.com/kjkrol/gokebiten/plugins/navigation"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokg/geom"
 )
@@ -15,7 +16,7 @@ func TestPathPoints_NoPathYet_StraightToTarget(t *testing.T) {
 	target := cellAtXY(grid, 4, 0)
 	pos := positionAt(grid, start)
 
-	points := board.PathPoints(grid, pos, board.Path{}, target)
+	points := navigation.PathPoints(grid, pos, navigation.MoveOrder{Target: target})
 
 	want := []geom.Vec[float64]{board.Center(pos), grid.CellCenter(target)}
 	assertPoints(t, points, want)
@@ -29,14 +30,14 @@ func TestPathPoints_PartiallyConsumedPath_SkipsPassedSteps(t *testing.T) {
 	target := cellAtXY(grid, 3, 0)
 	pos := positionAt(grid, start)
 
-	var p board.Path
+	var p navigation.Path
 	p.Steps[0] = c1
 	p.Steps[1] = c2
 	p.Steps[2] = target
 	p.Length = 3
 	p.Index = 1 // c1 already consumed
 
-	points := board.PathPoints(grid, pos, p, target)
+	points := navigation.PathPoints(grid, pos, navigation.MoveOrder{Target: target, Path: p})
 
 	want := []geom.Vec[float64]{board.Center(pos), grid.CellCenter(c2), grid.CellCenter(target)}
 	assertPoints(t, points, want)
@@ -48,12 +49,12 @@ func TestPathPoints_LastPointAlwaysTarget(t *testing.T) {
 	target := cellAtXY(grid, 2, 0)
 	pos := positionAt(grid, start)
 
-	var p board.Path
+	var p navigation.Path
 	p.Steps[0] = target
 	p.Length = 1
 	p.Index = 0
 
-	points := board.PathPoints(grid, pos, p, target)
+	points := navigation.PathPoints(grid, pos, navigation.MoveOrder{Target: target, Path: p})
 
 	last := points[len(points)-1]
 	wantLast := grid.CellCenter(target)

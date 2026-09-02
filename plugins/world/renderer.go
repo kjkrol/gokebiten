@@ -24,7 +24,7 @@ func newRenderer(atlas render.AtlasSource) *Renderer {
 }
 
 // BindCamera attaches camera — Draw needs it, so call this before the first Draw.
-func (s *Renderer) BindCamera(camera render.Camera) { s.batch.camera = camera }
+func (s *Renderer) BindCamera(camera render.Camera) { s.batch.bindCamera(camera) }
 
 func (s *Renderer) Init(si *goke.SysInit) {
 	qb := si.NewQueryBuilder(&s.pos, &s.appearance)
@@ -49,7 +49,7 @@ func (s *Renderer) Draw(screen *ebiten.Image) {
 				s.layers = m.Apply(cursor, i, s.layers)
 			}
 			for _, l := range s.layers {
-				s.batch.drawQuad(positions[i], l.SpriteID, l.Color)
+				s.batch.drawQuad(positions[i], l.SpriteID)
 			}
 		}
 	}

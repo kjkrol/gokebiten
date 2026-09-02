@@ -1,4 +1,4 @@
-package board_test
+package navigation_test
 
 import (
 	"github.com/kjkrol/gokebiten/plugins/board"

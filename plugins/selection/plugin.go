@@ -12,8 +12,9 @@ import (
 
 // Plugin wires System into a Game — depends on world (shared spatial index) and a registered camera plugin (screen<->world conversion).
 type Plugin struct {
-	state  *State
-	system *System
+	state    *State
+	system   *System
+	renderer *Renderer
 }
 
 var _ gokebiten.Plugin = (*Plugin)(nil)
@@ -47,7 +48,18 @@ func (p *Plugin) System() *System { return p.system }
 // State returns the published input state — write to it yourself for a custom EventHandler, or read EventHandler for the default one.
 func (p *Plugin) State() *State { return p.state }
 
-func (p *Plugin) Renderer() render.Renderer { return nil }
+// WithRenderer builds this plugin's own highlight renderer (outline for every Selected entity, plus the drag marquee).
+func (p *Plugin) WithRenderer() *Plugin {
+	p.renderer = NewRenderer(p.state)
+	return p
+}
+
+func (p *Plugin) Renderer() render.Renderer {
+	if p.renderer == nil {
+		return nil
+	}
+	return p.renderer
+}
 
 // EventHandler returns the default left-click/drag control.EventHandler for selection — write your own against State for a different binding scheme.
 func (p *Plugin) EventHandler() control.EventHandler { return NewDefaultEventHandler(p.state) }

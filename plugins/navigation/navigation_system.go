@@ -1,4 +1,4 @@
-package board
+package navigation
 
 import (
 	"math"
@@ -6,39 +6,39 @@ import (
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten"
+	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokg"
 	"github.com/kjkrol/gokg/geom"
 	"github.com/kjkrol/uid"
 )
 
-// Cell is an entity's logical position on the board.
-type Cell struct{ ID CellID }
-
-// MoveTo commands an entity to path toward Target until it arrives —
-// SteeringSystem removes it (with Path) once Target is reached.
-type MoveTo struct{ Target CellID }
+// MoveOrder commands an entity to path toward Target until it arrives —
+// NavigationSystem removes it once Target is reached.
+type MoveOrder struct {
+	Target board.CellID
+	Path   Path
+}
 
 // CellEntered is a one-tick tag added the tick an entity's Cell changes —
 // query it to react to a unit stepping onto a cell.
-type CellEntered struct{ ID CellID }
+type CellEntered struct{ ID board.CellID }
 
-// SteeringSystem paths MoveTo-commanded entities toward their target,
+// NavigationSystem paths MoveOrder-commanded entities toward their target,
 // setting Velocity's direction and base speed toward the next waypoint.
-type SteeringSystem struct {
-	grid       Grid
-	terrain    Terrain
-	occupancy  Occupancy
+type NavigationSystem struct {
+	grid       board.Grid
+	terrain    board.Terrain
+	occupancy  board.Occupancy
 	speed      int32
 	space      *gokg.Space
 	pathFinder *PathFinder
 
-	query  *goke.Query
-	cell   goke.Comp[Cell]
-	pos    goke.Comp[world.Position]
-	vel    goke.Comp[world.Velocity]
-	moveTo goke.OptComp[MoveTo]
-	path   goke.OptComp[Path]
+	query *goke.Query
+	cell  goke.Comp[board.Cell]
+	pos   goke.Comp[world.Position]
+	vel   goke.Comp[world.Velocity]
+	order goke.OptComp[MoveOrder]
 
 	cellEnteredAdd goke.Comp[CellEntered]
 	enterVM        *goke.ValueEditor
@@ -51,45 +51,44 @@ type SteeringSystem struct {
 	sys goke.Runnable
 }
 
-var _ goke.Module = (*SteeringSystem)(nil)
-var _ goke.System = (*SteeringSystem)(nil)
-var _ gokebiten.PostLoader = (*SteeringSystem)(nil)
+var _ goke.Module = (*NavigationSystem)(nil)
+var _ goke.System = (*NavigationSystem)(nil)
+var _ gokebiten.PostLoader = (*NavigationSystem)(nil)
 
 // arrivalEpsilon is how close (world-units) counts as "reached" a waypoint — small enough that the final snap is imperceptible.
 const arrivalEpsilon = 2.0
 
-// NewSteeringSystem builds a SteeringSystem whose base steering speed, before any world.SpeedModifier scales it, is speed world-units/sec.
-func NewSteeringSystem(pathFinder *PathFinder, terrain Terrain, occupancy Occupancy, speed int32) *SteeringSystem {
-	return &SteeringSystem{
+// NewNavigationSystem builds a NavigationSystem whose base movement speed, before any world.SpeedModifier scales it, is speed world-units/sec.
+func NewNavigationSystem(pathFinder *PathFinder, terrain board.Terrain, occupancy board.Occupancy, speed int32) *NavigationSystem {
+	return &NavigationSystem{
 		grid: pathFinder.Grid(), terrain: terrain, occupancy: occupancy, speed: speed,
 		pathFinder: pathFinder,
 	}
 }
 
 // BindSpace attaches the shared spatial index — arrivals snap to the cell center once bound; no-op (best-effort stop) if never called.
-func (s *SteeringSystem) BindSpace(space *gokg.Space) { s.space = space }
+func (s *NavigationSystem) BindSpace(space *gokg.Space) { s.space = space }
 
-func (s *SteeringSystem) Init(si *goke.SysInit) {
+func (s *NavigationSystem) Init(si *goke.SysInit) {
 	s.query = si.NewQueryBuilder(&s.cell, &s.pos, &s.vel).
-		Optional(&s.moveTo, &s.path).
+		Optional(&s.order).
 		Build()
-	s.arrivedEditor = s.query.NewEditorBuilder().Remove(goke.Remove[MoveTo](), goke.Remove[Path]()).Build()
+	s.arrivedEditor = s.query.NewEditorBuilder().Remove(goke.Remove[MoveOrder]()).Build()
 	s.enterVM = s.query.NewValueEditorBuilder(&s.cellEnteredAdd).Build()
 
 	s.enteredQuery = si.NewQueryBuilder(&s.cellEnteredClear).Build()
 	s.clearEditor = s.enteredQuery.NewEditorBuilder().Remove(goke.Remove[CellEntered]()).Build()
 }
 
-func (s *SteeringSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
+func (s *NavigationSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 	s.clearEnteredTags(cb)
 
 	snapped := false
 	s.query.All()
 	for s.query.Next() {
 		cursor := s.query.Cursor()
-		targets := s.moveTo.Slice(cursor)
-		paths := s.path.Slice(cursor)
-		if targets == nil {
+		orders := s.order.Slice(cursor)
+		if orders == nil {
 			continue
 		}
 
@@ -103,10 +102,10 @@ func (s *SteeringSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 		var arrivedIDs []uid.UID64
 
 		for i, id := range cursor.IDs {
-			target := targets[i].Target
-			p := &paths[i]
+			target := orders[i].Target
+			p := &orders[i].Path
 			previous := cells[i].ID
-			actual, ok := s.grid.CellAt(center(positions[i]))
+			actual, ok := s.grid.CellAt(board.Center(positions[i]))
 			if !ok {
 				actual = previous
 			}
@@ -123,7 +122,11 @@ func (s *SteeringSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 					expected = p.Steps[p.Index]
 				}
 				if actual != expected {
-					p.Length = 0
+					c1, c2, diag := s.grid.DiagonalNeighbors(previous, expected)
+					isFlanker := diag && (actual == c1 || actual == c2)
+					if !isFlanker {
+						p.Length = 0
+					}
 				}
 			}
 
@@ -141,14 +144,13 @@ func (s *SteeringSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 			}
 
 			if actual != waypoint {
-				_, passable := s.terrain.MovementCost(waypoint)
-				if !passable || !s.occupancy.CanEnter(waypoint, id) {
+				if !s.terrain.Kind(waypoint).Passable || !s.occupancy.CanEnter(waypoint, id) {
 					continue
 				}
 			}
 
 			want := s.grid.CellCenter(waypoint)
-			have := center(positions[i])
+			have := board.Center(positions[i])
 			dx, dy := want.X-have.X, want.Y-have.Y
 			dist := math.Hypot(dx, dy)
 			if dist > arrivalEpsilon {
@@ -159,14 +161,15 @@ func (s *SteeringSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 
 			velocities[i].Value = 0
 
-			if waypoint == target {
-				if s.space != nil {
-					ix, iy := int32(dx), int32(dy)
-					if ix != 0 || iy != 0 {
-						s.space.Translate(id, &positions[i].AABB, geom.NewVec(uint32(ix), uint32(iy)))
-						snapped = true
-					}
+			if s.space != nil {
+				ix, iy := int32(dx), int32(dy)
+				if ix != 0 || iy != 0 {
+					s.space.Translate(id, &positions[i].AABB, geom.NewVec(uint32(ix), uint32(iy)))
+					snapped = true
 				}
+			}
+
+			if waypoint == target {
 				arrivedIDs = append(arrivedIDs, id)
 				continue
 			}
@@ -192,7 +195,7 @@ func (s *SteeringSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 	}
 }
 
-func (s *SteeringSystem) clearEnteredTags(cb *goke.CmdBuf) {
+func (s *NavigationSystem) clearEnteredTags(cb *goke.CmdBuf) {
 	s.enteredQuery.All()
 	for s.enteredQuery.Next() {
 		cursor := s.enteredQuery.Cursor()
@@ -204,40 +207,35 @@ func (s *SteeringSystem) clearEnteredTags(cb *goke.CmdBuf) {
 	}
 }
 
-func center(pos world.Position) geom.Vec[float64] {
-	return geom.NewVec(float64(pos.TopLeft.X)+float64(pos.Size.X)/2, float64(pos.TopLeft.Y)+float64(pos.Size.Y)/2)
-}
-
-// RegSystems registers SteeringSystem itself as the per-tick system — see [goke.Module].
-func (s *SteeringSystem) RegSystems(ecs *goke.ECS) {
+// RegSystems registers NavigationSystem itself as the per-tick system — see [goke.Module].
+func (s *NavigationSystem) RegSystems(ecs *goke.ECS) {
 	if s.sys == nil {
 		s.sys = ecs.RegSys(s)
 	}
 }
 
-// RunPlan runs SteeringSystem's Update for this tick — call from your own Game.Loop closure.
-func (s *SteeringSystem) RunPlan(ctx goke.RunCtx, d time.Duration) {
+// RunPlan runs NavigationSystem's Update for this tick — call from your own Game.Loop closure.
+func (s *NavigationSystem) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	ctx.Run(s.sys, d)
 	ctx.Sync()
 }
 
 // SetupSystems is empty — spawning board entities is the game's responsibility.
-func (s *SteeringSystem) SetupSystems() []goke.System { return nil }
+func (s *NavigationSystem) SetupSystems() []goke.System { return nil }
 
-// LoadComps lists the component types SteeringSystem owns — see [goke.CompProvider].
-func (s *SteeringSystem) LoadComps() []goke.CompToken {
+// LoadComps lists the component types NavigationSystem owns — see [goke.CompProvider].
+func (s *NavigationSystem) LoadComps() []goke.CompToken {
 	return []goke.CompToken{
-		goke.LoadComp[Cell](),
-		goke.LoadComp[Path](),
-		goke.LoadComp[MoveTo](),
+		goke.LoadComp[board.Cell](),
+		goke.LoadComp[MoveOrder](),
 		goke.LoadComp[CellEntered](),
 	}
 }
 
-// PostLoad rebuilds Occupancy from every loaded entity's Cell component.
-func (s *SteeringSystem) PostLoad() goke.System {
+// PostLoad rebuilds board.Occupancy from every loaded entity's Cell component.
+func (s *NavigationSystem) PostLoad() goke.System {
 	return goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		var cell goke.Comp[Cell]
+		var cell goke.Comp[board.Cell]
 		query := si.NewQueryBuilder(&cell).Build()
 		query.All()
 		for query.Next() {

@@ -12,35 +12,46 @@ import (
 
 var colorGridLine = color.RGBA{R: 20, G: 20, B: 20, A: 120}
 
-// CellStyle picks a cell's fill color from its terrain — the game decides
-// the palette, Renderer only asks.
-type CellStyle func(c CellID, cost float64, passable bool) color.RGBA
+// CellStyle picks a cell's sprite from its terrain — the game decides the
+// palette, Renderer only asks.
+type CellStyle func(kind CellKind) render.SpriteID
 
 // Renderer draws Board's cells — register it before the entities layer in
 // Game.Layers so terrain sits underneath.
 type Renderer struct {
-	board    *Board
-	camera   render.Camera
-	cellSize float32
-	style    CellStyle
-	showGrid bool
+	board     *Board
+	camera    render.Camera
+	cellSize  float32
+	style     CellStyle
+	showGrid  bool
+	batch     *render.QuadBatch
+	gridLines []gridLine
 }
+
+// gridLine is one cell's screen-space grid-line rect, drawn after the
+// batched fill so it isn't painted over by it.
+type gridLine struct{ x0, y0, x1, y1 float32 }
 
 var _ render.Renderer = (*Renderer)(nil)
 
-func newRenderer(board *Board, cellSize float32, style CellStyle) *Renderer {
-	return &Renderer{board: board, cellSize: cellSize, style: style, showGrid: true}
+func newRenderer(board *Board, cellSize float32, atlas render.AtlasSource, style CellStyle) *Renderer {
+	return &Renderer{board: board, cellSize: cellSize, style: style, showGrid: true, batch: render.NewQuadBatch(atlas)}
 }
 
 // BindCamera attaches camera — Draw needs it, so call this before the first Draw.
-func (l *Renderer) BindCamera(camera render.Camera) { l.camera = camera }
+func (l *Renderer) BindCamera(camera render.Camera) { l.camera = camera; l.batch.BindCamera(camera) }
 
 // SetShowGridLines toggles lines between cells — cell fill always draws.
 func (l *Renderer) SetShowGridLines(show bool) { l.showGrid = show }
 
+// ToggleGridLines flips whether lines between cells are drawn — cell fill always draws.
+func (l *Renderer) ToggleGridLines() { l.showGrid = !l.showGrid }
+
 func (l *Renderer) Init(*goke.SysInit) {}
 
 func (l *Renderer) Draw(screen *ebiten.Image) {
+	l.batch.Reset()
+	l.gridLines = l.gridLines[:0]
 	step := float64(l.cellSize)
 	if step <= 0 {
 		step = 1
@@ -58,22 +69,27 @@ func (l *Renderer) Draw(screen *ebiten.Image) {
 				continue
 			}
 			visited[c] = struct{}{}
-			l.drawCell(screen, c)
+			l.drawCell(c)
 		}
+	}
+	l.batch.Flush(screen)
+
+	for _, gl := range l.gridLines {
+		vector.StrokeRect(screen, gl.x0, gl.y0, gl.x1-gl.x0, gl.y1-gl.y0, 1, colorGridLine, false)
 	}
 }
 
-func (l *Renderer) drawCell(screen *ebiten.Image, c CellID) {
+func (l *Renderer) drawCell(c CellID) {
 	center := l.board.CellCenter(c)
 	half := float64(l.cellSize) / 2
-	sx0, sy0 := l.camera.ToScreen(float32(center.X-half), float32(center.Y-half))
-	sx1, sy1 := l.camera.ToScreen(float32(center.X+half), float32(center.Y+half))
+	x0, y0 := center.X-half, center.Y-half
+	x1, y1 := center.X+half, center.Y+half
 
-	cost, passable := l.board.MovementCost(c)
-	fill := l.style(c, cost, passable)
+	l.batch.AppendQuad(float32(x0), float32(y0), float32(x1), float32(y1), l.style(l.board.Kind(c)))
 
-	vector.FillRect(screen, sx0, sy0, sx1-sx0, sy1-sy0, fill, false)
 	if l.showGrid {
-		vector.StrokeRect(screen, sx0, sy0, sx1-sx0, sy1-sy0, 1, colorGridLine, false)
+		sx0, sy0 := l.camera.ToScreen(float32(x0), float32(y0))
+		sx1, sy1 := l.camera.ToScreen(float32(x1), float32(y1))
+		l.gridLines = append(l.gridLines, gridLine{sx0, sy0, sx1, sy1})
 	}
 }

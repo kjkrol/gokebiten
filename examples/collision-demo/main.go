@@ -20,7 +20,6 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/world/spawners/grid"
 	"github.com/kjkrol/gokebiten/plugins/world/spawners/randomvelocity"
 	"github.com/kjkrol/gokebiten/render"
-	"github.com/kjkrol/gokebiten/render/atlases/procedural"
 )
 
 const (
@@ -45,12 +44,31 @@ func main() {
 		TargetTPS: TPS,
 	})
 
-	atlas := procedural.NewAtlas()
+	atlas := render.NewAtlas(RectSize, 40)
+	palette := [8]color.RGBA{
+		{R: 80, G: 120, B: 220, A: 255},  // blue
+		{R: 90, G: 200, B: 110, A: 255},  // green
+		{R: 80, G: 200, B: 210, A: 255},  // cyan
+		{R: 150, G: 100, B: 220, A: 255}, // purple
+		{R: 220, G: 210, B: 80, A: 255},  // yellow
+		{R: 230, G: 160, B: 60, A: 255},  // amber
+		{R: 60, G: 160, B: 150, A: 255},  // teal
+		{R: 200, G: 100, B: 180, A: 255}, // magenta
+	}
+	shapes := [4]func(color.RGBA) render.SpriteDrawer{render.Solid, render.Border, render.Diamond, render.Cross}
+	var entitySprites [8][4]render.SpriteID
+	for ci, c := range palette {
+		for si, shape := range shapes {
+			entitySprites[ci][si] = atlas.Register(shape(c))
+		}
+	}
+	hitSprite := atlas.Register(render.Solid(color.RGBA{R: 255, A: 255}))
+	atlas.Close()
 
-	worldPlugin := world.NewPlugin(
-		world.Config{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
-		world.Population{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize},
-	).WithRenderer(atlas)
+	worldPlugin := world.NewPlugin(world.Config{
+		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
+		Entities: world.EntitiesCfg{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize},
+	}).WithRenderer(atlas)
 
 	var collisionStats stats.Stats
 	collisionsPlugin := collisions.NewPlugin().
@@ -89,18 +107,16 @@ func main() {
 		}
 		log.Printf("loaded saved world (save #%d)", state.Saves)
 	} else {
+		placement := grid.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize)
+		motion := randomvelocity.New(200, 50, 10)
 		worldPlugin.World().Populate(EntityCount,
-			world.NewSpawner(
-				grid.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize),
-				randomvelocity.New(200, 50, 10),
-			),
-			world.NewAppearanceExtras(func(index int) world.Appearance {
-				return world.Appearance{
-					Color:    color.RGBA{R: uint8(rand.IntN(206) + 50), G: uint8(rand.IntN(206) + 50), B: uint8(rand.IntN(206) + 50), A: 255},
-					SpriteID: uint8(rand.IntN(procedural.SpriteCount)),
-				}
+			world.SpawnerFunc(func(index, count int) (world.Position, world.Velocity) {
+				return placement.Place(index, count), motion.InitialVelocity(index, count)
 			}),
-			collisions.NewCollidableExtras(),
+			world.NewValueExtras(func(index int) world.Appearance {
+				return world.Appearance{SpriteID: entitySprites[rand.IntN(8)][rand.IntN(4)]}
+			}),
+			world.NewValueExtras(func(index int) collisions.Collision { return collisions.Collision{} }),
 		)
 	}
 
@@ -119,7 +135,7 @@ func main() {
 		},
 		func() render.Renderer {
 			return worldPlugin.EntityRenderer().
-				WithOverlay[collisions.Hit](world.Appearance{SpriteID: 0, Color: color.RGBA{R: 255, A: 255}})
+				WithOverlay[collisions.Hit](world.Appearance{SpriteID: hitSprite})
 		},
 		func() render.Renderer {
 			kin := game.Resources().Get[*world.Telemetry]()

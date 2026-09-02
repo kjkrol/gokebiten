@@ -1,4 +1,4 @@
-package board
+package navigation
 
 import (
 	"image/color"
@@ -6,6 +6,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/selection"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
@@ -48,14 +49,14 @@ func DefaultPathStyle() PathStyle {
 
 // pathPoints returns the world-space centers PathRenderer should draw
 // through: the entity's current position, then every remaining Path step,
-// ending at target.
-func pathPoints(grid Grid, pos world.Position, path Path, target CellID) []geom.Vec[float64] {
-	points := []geom.Vec[float64]{center(pos)}
-	for s := path.Index; s < path.Length; s++ {
-		points = append(points, grid.CellCenter(path.Steps[s]))
+// ending at mt.Target.
+func pathPoints(grid board.Grid, pos world.Position, mt MoveOrder) []geom.Vec[float64] {
+	points := []geom.Vec[float64]{board.Center(pos)}
+	for s := mt.Path.Index; s < mt.Path.Length; s++ {
+		points = append(points, grid.CellCenter(mt.Path.Steps[s]))
 	}
-	if path.Length == 0 || path.Index >= path.Length {
-		points = append(points, grid.CellCenter(target))
+	if mt.Path.Length == 0 || mt.Path.Index >= mt.Path.Length {
+		points = append(points, grid.CellCenter(mt.Target))
 	}
 	return points
 }
@@ -63,20 +64,19 @@ func pathPoints(grid Grid, pos world.Position, path Path, target CellID) []geom.
 // PathRenderer draws the remaining route for every selection.Selected
 // entity — register alongside Renderer for a selection/debug overlay.
 type PathRenderer struct {
-	grid   Grid
+	grid   board.Grid
 	camera render.Camera
 	style  PathStyle
 
-	query  *goke.Query
-	pos    goke.Comp[world.Position]
-	path   goke.Comp[Path]
-	moveTo goke.Comp[MoveTo]
+	query *goke.Query
+	pos   goke.Comp[world.Position]
+	order goke.Comp[MoveOrder]
 }
 
 var _ render.Renderer = (*PathRenderer)(nil)
 
 // NewPathRenderer builds a PathRenderer over grid, with DefaultPathStyle — override via WithStyle.
-func NewPathRenderer(grid Grid) *PathRenderer {
+func NewPathRenderer(grid board.Grid) *PathRenderer {
 	return &PathRenderer{grid: grid, style: DefaultPathStyle()}
 }
 
@@ -90,7 +90,7 @@ func (r *PathRenderer) WithStyle(style PathStyle) *PathRenderer {
 func (r *PathRenderer) BindCamera(camera render.Camera) { r.camera = camera }
 
 func (r *PathRenderer) Init(si *goke.SysInit) {
-	r.query = si.NewQueryBuilder(&r.pos, &r.path, &r.moveTo).
+	r.query = si.NewQueryBuilder(&r.pos, &r.order).
 		Include(goke.Include[selection.Selected]()).
 		Build()
 }
@@ -100,10 +100,9 @@ func (r *PathRenderer) Draw(screen *ebiten.Image) {
 	for r.query.Next() {
 		cursor := r.query.Cursor()
 		positions := r.pos.Slice(cursor)
-		paths := r.path.Slice(cursor)
-		moveTos := r.moveTo.Slice(cursor)
+		orders := r.order.Slice(cursor)
 		for i := range cursor.IDs {
-			points := pathPoints(r.grid, positions[i], paths[i], moveTos[i].Target)
+			points := pathPoints(r.grid, positions[i], orders[i])
 			r.style.Draw(screen, r.camera, points)
 		}
 	}

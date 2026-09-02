@@ -1,26 +1,24 @@
-package board
+package navigation
 
 import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/selection"
 )
 
-// CommandSystem issues move orders: a right-click sets a freshly computed
-// MoveTo/Path for every currently Selected entity that can actually reach
-// the target — an unreachable one (wall, occupied cell) is silently
-// skipped, leaving that entity's current order untouched.
+// CommandSystem issues move orders: a right-click gives every Selected
+// entity a fresh MoveOrder/Path, unless the target is unreachable.
 type CommandSystem struct {
-	terrain    Terrain
-	occupancy  Occupancy
+	terrain    board.Terrain
+	occupancy  board.Occupancy
 	pathFinder *PathFinder
 	state      *CommandState
 
-	query    *goke.Query
-	cell     goke.Comp[Cell]
-	moveToID goke.CompID
-	pathID   goke.CompID
+	query   *goke.Query
+	cell    goke.Comp[board.Cell]
+	orderID goke.CompID
 
 	sys goke.Runnable
 }
@@ -29,7 +27,7 @@ var _ goke.Module = (*CommandSystem)(nil)
 var _ goke.System = (*CommandSystem)(nil)
 
 // NewCommandSystem builds a CommandSystem issuing move orders via pathFinder, respecting terrain/occupancy, driven by state.
-func NewCommandSystem(pathFinder *PathFinder, terrain Terrain, occupancy Occupancy, state *CommandState) *CommandSystem {
+func NewCommandSystem(pathFinder *PathFinder, terrain board.Terrain, occupancy board.Occupancy, state *CommandState) *CommandSystem {
 	return &CommandSystem{
 		terrain: terrain, occupancy: occupancy, state: state,
 		pathFinder: pathFinder,
@@ -38,8 +36,7 @@ func NewCommandSystem(pathFinder *PathFinder, terrain Terrain, occupancy Occupan
 
 func (s *CommandSystem) Init(si *goke.SysInit) {
 	s.query = si.NewQueryBuilder(&s.cell).Include(goke.Include[selection.Selected]()).Build()
-	s.moveToID = si.RegComp[MoveTo]()
-	s.pathID = si.RegComp[Path]()
+	s.orderID = si.RegComp[MoveOrder]()
 }
 
 func (s *CommandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
@@ -58,8 +55,7 @@ func (s *CommandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 			if !ok {
 				continue
 			}
-			cb.AddOne(id, s.moveToID, MoveTo{Target: target})
-			cb.AddOne(id, s.pathID, newPath)
+			cb.AddOne(id, s.orderID, MoveOrder{Target: target, Path: newPath})
 		}
 	}
 }
@@ -80,5 +76,5 @@ func (s *CommandSystem) RunPlan(ctx goke.RunCtx, d time.Duration) {
 // SetupSystems is empty — CommandSystem has no one-time seeding of its own.
 func (s *CommandSystem) SetupSystems() []goke.System { return nil }
 
-// LoadComps is empty — MoveTo/Path/Cell are already owned by SteeringSystem.
+// LoadComps is empty — MoveOrder/Cell are already owned by NavigationSystem.
 func (s *CommandSystem) LoadComps() []goke.CompToken { return nil }

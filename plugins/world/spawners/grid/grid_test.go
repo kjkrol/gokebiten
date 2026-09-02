@@ -54,11 +54,3 @@ func TestGridPlacement_Place_SingleEntity_Centers(t *testing.T) {
 		t.Errorf("Place(0, 1) = (%d,%d), want (45,45) (single cell spanning the whole grid, entity centered)", pos.TopLeft.X, pos.TopLeft.Y)
 	}
 }
-
-func TestGridPlacement_ComponentsAndInit_AreNoops(t *testing.T) {
-	p := grid.NewGridPlacement(100, 100, 10)
-	if p.Components() != nil {
-		t.Errorf("Components() = %v, want nil", p.Components())
-	}
-	p.Init(nil, 0, 0, 0) // must not panic
-}

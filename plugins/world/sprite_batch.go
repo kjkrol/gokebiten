@@ -1,8 +1,6 @@
 package world
 
 import (
-	"image/color"
-
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/gokebiten/render"
 	"github.com/kjkrol/gokg/geom"
@@ -15,102 +13,56 @@ const (
 	fragScreenTopLeft = plane.FRAG_BOTTOM_RIGHT
 )
 
-// spriteBatch batches textured, toroidal-fragment-aware quads from an
-// AtlasSource into a single DrawTriangles call, transformed through a Camera.
+// spriteBatch is render.QuadBatch plus toroidal-fragment-aware slicing —
+// a wrapped entity draws only the sliver of its sprite that actually
+// crossed the world edge, not a full duplicate.
 type spriteBatch struct {
-	atlas    render.AtlasSource
-	camera   render.Camera
-	vertices []ebiten.Vertex
-	indices  []uint16
-	triOpts  *ebiten.DrawTrianglesOptions
+	batch  *render.QuadBatch
+	camera render.Camera
 }
 
 func newSpriteBatch(atlas render.AtlasSource) spriteBatch {
-	return spriteBatch{
-		atlas:   atlas,
-		triOpts: &ebiten.DrawTrianglesOptions{},
-	}
+	return spriteBatch{batch: render.NewQuadBatch(atlas)}
 }
 
-func (b *spriteBatch) reset() {
-	b.vertices = b.vertices[:0]
-	b.indices = b.indices[:0]
+func (b *spriteBatch) bindCamera(camera render.Camera) {
+	b.camera = camera
+	b.batch.BindCamera(camera)
 }
 
-func (b *spriteBatch) drawQuad(pos Position, spriteID uint8, c color.RGBA) {
+func (b *spriteBatch) reset() { b.batch.Reset() }
+
+func (b *spriteBatch) drawQuad(pos Position, id render.SpriteID) {
 	if !b.camera.Visible(pos.AABB.AABB) {
 		return
 	}
-
-	sx0, sy0, sx1, sy1 := b.atlas.UV(spriteID)
-	r, g, bl, a := colorToFloats(c)
-
-	mainBox := pos.AABB.AABB
-	hasFragments := false
 	sizeX := float32(pos.AABB.Size.X)
 	sizeY := float32(pos.AABB.Size.Y)
 
 	pos.AABB.VisitFragments(func(fp plane.FragPosition, fragBox geom.AABB[uint32]) bool {
-		hasFragments = true
-		tlx := float32(fragBox.TopLeft.X)
-		tly := float32(fragBox.TopLeft.Y)
-		brx := float32(fragBox.BottomRight.X)
-		bry := float32(fragBox.BottomRight.Y)
+		tlx, tly := float32(fragBox.TopLeft.X), float32(fragBox.TopLeft.Y)
+		brx, bry := float32(fragBox.BottomRight.X), float32(fragBox.BottomRight.Y)
+		fw, fh := brx-tlx, bry-tly
 
+		var u0, v0, u1, v1 float32 = 0, 0, 1, 1
 		switch fp {
-		case fragScreenLeft:
-			tlx = brx - sizeX
-			bry = tly + sizeY
-		case fragScreenTop:
-			tly = bry - sizeY
-			brx = tlx + sizeX
-		case fragScreenTopLeft:
-			tlx = brx - sizeX
-			tly = bry - sizeY
+		case fragScreenLeft: // FRAG_RIGHT
+			u0 = 1 - fw/sizeX
+		case fragScreenTop: // FRAG_BOTTOM
+			v0 = 1 - fh/sizeY
+		case fragScreenTopLeft: // FRAG_BOTTOM_RIGHT
+			u0, v0 = 1-fw/sizeX, 1-fh/sizeY
 		default:
 			return true
 		}
-		b.appendFullQuad(tlx, tly, brx, bry, sx0, sy0, sx1, sy1, r, g, bl, a)
+		b.batch.AppendQuadUV(tlx, tly, brx, bry, id, u0, v0, u1, v1)
 		return true
 	})
 
-	brx := float32(mainBox.BottomRight.X)
-	bry := float32(mainBox.BottomRight.Y)
-	tlx := float32(mainBox.TopLeft.X)
-	tly := float32(mainBox.TopLeft.Y)
-
-	if hasFragments {
-		brx = tlx + sizeX
-		bry = tly + sizeY
-	}
-
-	b.appendFullQuad(tlx, tly, brx, bry, sx0, sy0, sx1, sy1, r, g, bl, a)
+	mainBox := pos.AABB.AABB
+	tlx, tly := float32(mainBox.TopLeft.X), float32(mainBox.TopLeft.Y)
+	brx, bry := float32(mainBox.BottomRight.X), float32(mainBox.BottomRight.Y)
+	b.batch.AppendQuadUV(tlx, tly, brx, bry, id, 0, 0, (brx-tlx)/sizeX, (bry-tly)/sizeY)
 }
 
-func (b *spriteBatch) appendFullQuad(
-	x0, y0, x1, y1 float32,
-	sx0, sy0, sx1, sy1 float32,
-	r, g, bl, a float32,
-) {
-	x0, y0 = b.camera.ToScreen(x0, y0)
-	x1, y1 = b.camera.ToScreen(x1, y1)
-
-	idx := uint16(len(b.vertices))
-	b.vertices = append(b.vertices,
-		ebiten.Vertex{DstX: x0, DstY: y0, SrcX: sx0, SrcY: sy0, ColorR: r, ColorG: g, ColorB: bl, ColorA: a},
-		ebiten.Vertex{DstX: x1, DstY: y0, SrcX: sx1, SrcY: sy0, ColorR: r, ColorG: g, ColorB: bl, ColorA: a},
-		ebiten.Vertex{DstX: x0, DstY: y1, SrcX: sx0, SrcY: sy1, ColorR: r, ColorG: g, ColorB: bl, ColorA: a},
-		ebiten.Vertex{DstX: x1, DstY: y1, SrcX: sx1, SrcY: sy1, ColorR: r, ColorG: g, ColorB: bl, ColorA: a},
-	)
-	b.indices = append(b.indices, idx, idx+1, idx+2, idx+1, idx+2, idx+3)
-}
-
-func (b *spriteBatch) flush(screen *ebiten.Image) {
-	if len(b.indices) > 0 {
-		screen.DrawTriangles(b.vertices, b.indices, b.atlas.Atlas(), b.triOpts)
-	}
-}
-
-func colorToFloats(c color.RGBA) (r, g, b, a float32) {
-	return float32(c.R) / 255, float32(c.G) / 255, float32(c.B) / 255, float32(c.A) / 255
-}
+func (b *spriteBatch) flush(screen *ebiten.Image) { b.batch.Flush(screen) }

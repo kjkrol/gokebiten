@@ -12,8 +12,12 @@ import (
 	"github.com/kjkrol/gokg/plane"
 )
 
-// Plugin builds a render.BasicCamera sized from world.Config if a world.Plugin published one, else from GameProps.
-// Publishes itself as a render.Camera resource.
+// Plugin builds a render.BasicCamera sized from world.Config if a
+// world.Plugin published one, else from GameProps, and publishes it as a
+// render.Camera resource. It's a plugin to resolve that world.Config
+// dependency safely regardless of registration order — not to make Camera
+// implementations swappable (any render.Camera can already be provided
+// without this plugin).
 type Plugin struct {
 	viewport render.AABB
 
@@ -39,10 +43,10 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 	var surface plane.Space2D[uint32]
 	viewport := p.viewport
 	if cfg, ok := ctx.Resources.TryGet[world.Config](); ok {
-		if cfg.Toroidal {
-			surface = plane.NewToroidal2D(cfg.Width, cfg.Height)
+		if cfg.Space.Toroidal {
+			surface = plane.NewToroidal2D(cfg.Space.Width, cfg.Space.Height)
 		} else {
-			surface = plane.NewEuclidean2D(cfg.Width, cfg.Height)
+			surface = plane.NewEuclidean2D(cfg.Space.Width, cfg.Space.Height)
 		}
 	} else {
 		surface = plane.NewEuclidean2D(uint32(props.ScreenWidth), uint32(props.ScreenHeight))

@@ -1,6 +1,7 @@
 package grids_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/kjkrol/gokebiten/plugins/board"
@@ -11,8 +12,8 @@ import (
 func TestSquareGrid_NonToroidal_EdgeExcludesNeighbors(t *testing.T) {
 	g := grids.NewSquareGrid(4, 4, 10)
 	corner := g.Neighbors(cellAtXY(g, 0, 0))
-	if len(corner) != 2 {
-		t.Errorf("corner cell has %d neighbors, want 2 (no wrap)", len(corner))
+	if len(corner) != 3 {
+		t.Errorf("corner cell has %d neighbors, want 3 (2 orthogonal + 1 diagonal, no wrap)", len(corner))
 	}
 	if !g.Contains(cellAtXY(g, 3, 3)) {
 		t.Error("expected the last cell to be contained")
@@ -24,8 +25,8 @@ func TestSquareGrid_Toroidal_EdgeWrapsNeighborsAndDistance(t *testing.T) {
 
 	first, last := cellAtXY(g, 0, 0), cellAtXY(g, 3, 0)
 	neighbors := g.Neighbors(first)
-	if len(neighbors) != 4 {
-		t.Fatalf("toroidal corner has %d neighbors, want 4", len(neighbors))
+	if len(neighbors) != 8 {
+		t.Fatalf("toroidal corner has %d neighbors, want 8", len(neighbors))
 	}
 	found := false
 	for _, n := range neighbors {
@@ -58,6 +59,61 @@ func TestSquareGrid_Toroidal_CellAtWrapsNegativePositions(t *testing.T) {
 }
 
 func cellAtXY(g *grids.SquareGrid, x, y uint32) board.CellID {
-	c, _ := g.CellAt(geom.NewVec(float64(x)*float64(g.CellSize)+1, float64(y)*float64(g.CellSize)+1))
+	c, _ := g.CellIndex(x, y)
 	return c
+}
+
+func TestSquareGrid_CellIndex_NonToroidal(t *testing.T) {
+	g := grids.NewSquareGrid(4, 4, 10)
+	c, ok := g.CellIndex(2, 1)
+	if !ok || c != cellAtXY(g, 2, 1) {
+		t.Errorf("CellIndex(2,1) = (%v,%v), want (%v,true)", c, ok, cellAtXY(g, 2, 1))
+	}
+	if _, ok := g.CellIndex(4, 0); ok {
+		t.Error("expected col==Width to be out of bounds on a non-toroidal grid")
+	}
+}
+
+func TestSquareGrid_CellIndex_ToroidalWraps(t *testing.T) {
+	g := &grids.SquareGrid{Width: 4, Height: 4, CellSize: 10, Toroidal: true}
+	c, ok := g.CellIndex(4, 0)
+	origin, _ := g.CellIndex(0, 0)
+	if !ok || c != origin {
+		t.Errorf("CellIndex(4,0) = (%v,%v), want same cell as CellIndex(0,0)", c, ok)
+	}
+}
+
+func TestSquareGrid_NeighborCost_OrthogonalVsDiagonal(t *testing.T) {
+	g := grids.NewSquareGrid(4, 4, 10)
+	orthogonal := g.NeighborCost(cellAtXY(g, 1, 1), cellAtXY(g, 1, 2))
+	if orthogonal != 1 {
+		t.Errorf("NeighborCost(orthogonal) = %v, want 1", orthogonal)
+	}
+	diagonal := g.NeighborCost(cellAtXY(g, 1, 1), cellAtXY(g, 2, 2))
+	if want := math.Sqrt2; diagonal != want {
+		t.Errorf("NeighborCost(diagonal) = %v, want %v", diagonal, want)
+	}
+}
+
+func TestSquareGrid_Distance_OctileNeverOverestimatesDiagonalCost(t *testing.T) {
+	g := grids.NewSquareGrid(4, 4, 10)
+	d := g.Distance(cellAtXY(g, 0, 0), cellAtXY(g, 3, 3))
+	if want := 3 * math.Sqrt2; d > want+1e-9 {
+		t.Errorf("Distance(diagonal pair) = %v, want <= %v (true diagonal-move cost, must never overestimate)", d, want)
+	}
+}
+
+func TestSquareGrid_DiagonalNeighbors_ReturnsFlankingCells(t *testing.T) {
+	g := grids.NewSquareGrid(4, 4, 10)
+	c1, c2, ok := g.DiagonalNeighbors(cellAtXY(g, 1, 1), cellAtXY(g, 2, 2))
+	if !ok {
+		t.Fatal("expected (1,1)->(2,2) to be recognized as a diagonal step")
+	}
+	want1, want2 := cellAtXY(g, 2, 1), cellAtXY(g, 1, 2)
+	if (c1 != want1 || c2 != want2) && (c1 != want2 || c2 != want1) {
+		t.Errorf("DiagonalNeighbors = (%v,%v), want (%v,%v) in either order", c1, c2, want1, want2)
+	}
+	if _, _, ok := g.DiagonalNeighbors(cellAtXY(g, 1, 1), cellAtXY(g, 1, 2)); ok {
+		t.Error("expected an orthogonal pair to report ok=false")
+	}
 }

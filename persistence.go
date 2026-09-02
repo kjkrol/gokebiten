@@ -15,19 +15,28 @@ type PostLoader interface {
 	PostLoad() goke.System
 }
 
+// Saveable is implemented by a tracked plugin/module contributing its own
+// state to every Persistence.Save/Load call, alongside whatever the caller
+// passes explicitly.
+type Saveable interface {
+	SaveTargets() []any
+}
+
 // List returns every save found for basePath, "" (quicksave) first.
 func (p *Persistence) List(basePath string) ([]string, error) { return persist.ListSaves(basePath) }
 
-// Save writes resources and the ECS snapshot to disk under basePath/label.
+// Save writes resources and the ECS snapshot to disk under basePath/label, auto-including every tracked Saveable's targets.
 func (p *Persistence) Save(basePath, label string, resources ...any) error {
-	return persist.Save(p.game.ecs, basePath, label, resources...)
+	all := append(p.game.pluginManager.saveTargets(), resources...)
+	return persist.Save(p.game.ecs, basePath, label, all...)
 }
 
-// Load restores a snapshot written by Save, auto-scanning tracked plugins for components and post-load systems.
+// Load restores a snapshot written by Save, auto-scanning tracked plugins for components, Saveable targets, and post-load systems.
 func (p *Persistence) Load(basePath, label string, resources ...any) error {
 	pm := p.game.pluginManager
 	comps := pm.providedComps()
-	if err := persist.Load(p.game.ecs, basePath, label, comps, resources...); err != nil {
+	all := append(pm.saveTargets(), resources...)
+	if err := persist.Load(p.game.ecs, basePath, label, comps, all...); err != nil {
 		return err
 	}
 	systems := pm.postLoadSystems()

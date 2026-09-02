@@ -26,13 +26,13 @@ func (t *TerrainSpeedModifier) Apply(cur *goke.Cursor, i int, acc float64) float
 	if positions == nil {
 		return acc
 	}
-	cell, ok := t.grid.CellAt(center(positions[i]))
+	cell, ok := t.grid.CellAt(Center(positions[i]))
 	if !ok {
 		return acc
 	}
-	cost, passable := t.terrain.MovementCost(cell)
-	if !passable || cost <= 0 {
+	kind := t.terrain.Kind(cell)
+	if !kind.Passable || kind.Cost <= 0 {
 		return acc
 	}
-	return acc / cost
+	return acc / kind.Cost
 }

@@ -13,11 +13,10 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/board/grids"
 	"github.com/kjkrol/gokebiten/plugins/camera"
+	"github.com/kjkrol/gokebiten/plugins/navigation"
 	"github.com/kjkrol/gokebiten/plugins/selection"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
-	"github.com/kjkrol/gokebiten/render/atlases/procedural"
-	"github.com/kjkrol/gokg/geom"
 	"github.com/kjkrol/uid"
 )
 
@@ -31,13 +30,26 @@ const (
 	EntitySize   = 22
 	UnitSpeed    = CellSize * 2
 
-	wallCol      = 12
-	shortcutRow  = 8
+	// TODO: should accept more entities
+	MaxEntCount = len(unitRoster)
+
 	saveBasePath = "board-rts-demo"
 )
 
-// State demonstrates persisting arbitrary game-owned state across a
-// save/load cycle, alongside the mutable terrain — see main's Persistence calls.
+var (
+	unitRoster = [...]struct {
+		startX, startY uint32
+		targetX        uint32
+	}{
+		{startX: 2, startY: 4, targetX: GridWidth - 3},
+		{startX: 2, startY: 12, targetX: GridWidth - 3},
+	}
+
+	Grass = board.CellKind{Name: "grass", Cost: 1, Passable: true}
+	Wall  = board.CellKind{Name: "wall", Cost: 1, Passable: false}
+	Road  = board.CellKind{Name: "road", Cost: 0.4, Passable: true}
+)
+
 type State struct{ Saves int }
 
 func main() {
@@ -48,24 +60,44 @@ func main() {
 	})
 
 	grid := grids.NewSquareGrid(GridWidth, GridHeight, CellSize)
-	terrain := board.NewTerrainMap(board.CellProps{Cost: 1, Passable: true})
-	buildWall(grid, terrain)
 	occupancy := &board.SingleOccupancy{}
 
-	atlas := procedural.NewAtlas()
+	atlas := render.NewAtlas(16, 8)
+	grassSprite := atlas.Register(render.Solid(color.RGBA{R: 60, G: 95, B: 60, A: 255}))
+	wallSprite := atlas.Register(render.Solid(color.RGBA{R: 40, G: 40, B: 40, A: 255}))
+	roadSprite := atlas.Register(render.Solid(color.RGBA{R: 150, G: 130, B: 80, A: 255}))
+	redSprite := atlas.Register(render.Solid(color.RGBA{R: 220, G: 90, B: 90, A: 255}))
+	blueSprite := atlas.Register(render.Solid(color.RGBA{R: 90, G: 140, B: 220, A: 255}))
+	atlas.Close()
+	unitSprites := [len(unitRoster)]render.SpriteID{redSprite, blueSprite}
 
-	worldPlugin := world.NewPlugin(
-		world.Config{Width: ScreenWidth, Height: ScreenHeight, Toroidal: false},
-		world.Population{MaxCount: len(spawns), MinSize: EntitySize, MaxSize: EntitySize},
-	).WithRenderer(atlas)
-	boardPlugin := board.NewPlugin(grid, terrain, occupancy, UnitSpeed).WithRenderer(CellSize, boardCellStyle).WithCommands()
+	boardCellStyle := func(kind board.CellKind) render.SpriteID {
+		switch kind {
+		case Wall:
+			return wallSprite
+		case Road:
+			return roadSprite
+		default:
+			return grassSprite
+		}
+	}
+
+	worldPlugin := world.NewPlugin(world.Config{
+		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: false},
+		Entities: world.EntitiesCfg{MaxCount: MaxEntCount, MinSize: EntitySize, MaxSize: EntitySize},
+	}).WithRenderer(atlas)
+	boardPlugin := board.NewPlugin(grid, occupancy).WithRenderer(CellSize, atlas, boardCellStyle)
+	navigationPlugin := navigation.NewPlugin(UnitSpeed).WithCommands().WithRenderer()
 	cameraPlugin := camera.NewPlugin()
-	selectionPlugin := selection.NewPlugin()
+	selectionPlugin := selection.NewPlugin().WithRenderer()
 
 	if err := game.UsePlugin(worldPlugin); err != nil {
 		log.Fatal(err)
 	}
 	if err := game.UsePlugin(boardPlugin); err != nil {
+		log.Fatal(err)
+	}
+	if err := game.UsePlugin(navigationPlugin); err != nil {
 		log.Fatal(err)
 	}
 	if err := game.UsePlugin(cameraPlugin); err != nil {
@@ -82,54 +114,62 @@ func main() {
 	hasSave := slices.Contains(saves, "")
 
 	var state *State
-	var cellWatcher goke.Runnable
-	var autoSelectHandle goke.Runnable
+	var terrain *board.TerrainMap
 	if err := game.Init(func(ctx *gokebiten.GameCtx) error {
 		state = &State{}
 		ctx.Provide(state)
-		cellWatcher = ctx.RegSys(func() goke.System { return newCellEnteredWatcher() })
-		if !hasSave {
-			spawner := newUnitSpawner(grid, occupancy)
-			worldPlugin.World().Populate(len(spawns), spawner)
-			autoSelectHandle = ctx.RegSys(func() goke.System {
-				return &autoSelector{spawner: spawner, sys: selectionPlugin.System()}
-			})
+		terrain = boardPlugin.Terrain()
+
+		if hasSave {
+			if err := game.Persistence.Load(saveBasePath, "", state); err != nil {
+				log.Fatalf("load: %v", err)
+			}
+			log.Printf("loaded saved board (save #%d)", state.Saves)
+		} else {
+			terrain.SetAll(Grass)
+			buildWall(grid, terrain)
+			worldPlugin.World().Populate(MaxEntCount,
+				world.SpawnerFunc(func(index, count int) (world.Position, world.Velocity) {
+					spawn := unitRoster[index]
+					start, _ := grid.CellIndex(spawn.startX, spawn.startY)
+					return world.Position{AABB: board.CellAABB(grid, start, EntitySize)}, world.Velocity{}
+				}),
+				world.NewValueExtras(func(index int) board.Cell {
+					spawn := unitRoster[index]
+					c, _ := grid.CellIndex(spawn.startX, spawn.startY)
+					return board.Cell{ID: c}
+				}).WithEffect(func(c board.Cell, id uid.UID64) {
+					occupancy.Enter(c.ID, id)
+				}),
+				world.NewValueExtras(func(index int) navigation.MoveOrder {
+					spawn := unitRoster[index]
+					target, _ := grid.CellIndex(spawn.targetX, spawn.startY)
+					return navigation.MoveOrder{Target: target}
+				}),
+				world.NewValueExtras(func(index int) world.Appearance {
+					return world.Appearance{SpriteID: unitSprites[index]}
+				}),
+				world.NewValueExtras(func(index int) selection.Selected { return selection.Selected{} }))
 		}
 		return nil
 	}); err != nil {
 		log.Fatal(err)
 	}
 
-	if hasSave {
-		if err := game.Persistence.Load(saveBasePath, "", state, terrain); err != nil {
-			log.Fatalf("load: %v", err)
-		}
-		log.Printf("loaded saved board (save #%d)", state.Saves)
-	}
-
-	pathRenderer := board.NewPathRenderer(boardPlugin.Board())
-	selectionRenderer := selection.NewRenderer(selectionPlugin.State())
-
 	game.Loop(func(ctx goke.RunCtx, d time.Duration) {
-		if autoSelectHandle != nil {
-			ctx.Run(autoSelectHandle, d)
-		}
-		boardPlugin.RunPlan(ctx, d)
+		navigationPlugin.RunPlan(ctx, d)
 		worldPlugin.RunPlan(ctx, d)
 		selectionPlugin.RunPlan(ctx, d)
-		ctx.Run(cellWatcher, d)
 		ctx.Sync()
 	})
 
-	game.Layers(boardPlugin.Renderer, worldPlugin.Renderer,
-		func() render.Renderer { return pathRenderer },
-		func() render.Renderer { return selectionRenderer })
+	game.Layers(boardPlugin.Renderer, worldPlugin.Renderer, navigationPlugin.Renderer, selectionPlugin.Renderer)
 
-	selHandler := selectionPlugin.EventHandler()
-	cmdHandler := boardPlugin.EventHandler()
+	selectionCmdHandler := selectionPlugin.EventHandler()
+	navigationCmdHandler := navigationPlugin.EventHandler()
 	game.EventHandlerFn(func(events *control.InputEvents) {
-		selHandler.HandleEvents(events)
-		cmdHandler.HandleEvents(events)
+		selectionCmdHandler.HandleEvents(events)
+		navigationCmdHandler.HandleEvents(events)
 		for _, k := range events.KeyEvents {
 			if k.Action != control.ActionPress {
 				continue
@@ -138,14 +178,13 @@ func main() {
 			case ebiten.KeySpace:
 				game.TogglePause()
 			case ebiten.KeyB:
-				boardPlugin.CellRenderer().SetShowGridLines(!boardShowsGrid)
-				boardShowsGrid = !boardShowsGrid
+				boardPlugin.CellRenderer().ToggleGridLines()
 			case ebiten.KeyR:
 				buildShortcut(grid, terrain)
 				log.Print("built a road through the wall — in-flight units re-path onto it as soon as they deviate")
 			case ebiten.KeyF5:
 				state.Saves++
-				if err := game.Persistence.Save(saveBasePath, "", state, terrain); err != nil {
+				if err := game.Persistence.Save(saveBasePath, "", state); err != nil {
 					log.Printf("save: %v", err)
 					continue
 				}
@@ -156,138 +195,21 @@ func main() {
 	game.Run()
 }
 
-// boardShowsGrid mirrors Renderer's internal toggle state so the B key
-// can flip it — Renderer has no getter since nothing else needs to read it back.
-var boardShowsGrid = true
-
-// buildWall makes column wallCol impassable except its top two rows, so a
-// unit on the left must detour to the top to reach the right side.
-func buildWall(grid *grids.SquareGrid, terrain *board.TerrainMap) {
-	for y := uint32(2); y < GridHeight; y++ {
-		terrain.Set(cellAt(grid, wallCol, y), board.CellProps{Cost: 1, Passable: false})
-	}
-}
-
-// buildShortcut opens a fast gap through the wall at shortcutRow — pressing
-// R calls this live, demonstrating that SteeringSystem re-paths around
-// changed terrain as soon as an in-flight unit next deviates from its route.
-func buildShortcut(grid *grids.SquareGrid, terrain *board.TerrainMap) {
-	terrain.Set(cellAt(grid, wallCol, shortcutRow), board.CellProps{Cost: 0.4, Passable: true})
-}
-
-func cellAt(grid *grids.SquareGrid, x, y uint32) board.CellID {
-	c, _ := grid.CellAt(geom.NewVec(float64(x)*CellSize+1, float64(y)*CellSize+1))
-	return c
-}
-
-var (
-	colorImpassable = color.RGBA{R: 40, G: 40, B: 40, A: 255}
-	colorRoad       = color.RGBA{R: 150, G: 130, B: 80, A: 255}
-	colorGround     = color.RGBA{R: 60, G: 95, B: 60, A: 255}
+const (
+	wallCol     = 12
+	shortcutRow = 8
 )
 
-// boardCellStyle is this demo's board.CellStyle: dark for walls, a lighter
-// tan for anything cheaper than the baseline (roads), green otherwise.
-func boardCellStyle(_ board.CellID, cost float64, passable bool) color.RGBA {
-	switch {
-	case !passable:
-		return colorImpassable
-	case cost < 1:
-		return colorRoad
-	default:
-		return colorGround
+func buildWall(grid board.Grid, terrain *board.TerrainMap) {
+	var cells []board.CellID
+	for y := uint32(2); y < GridHeight; y++ {
+		c, _ := grid.CellIndex(wallCol, y)
+		cells = append(cells, c)
 	}
+	terrain.SetMany(cells, Wall)
 }
 
-var spawns = []struct {
-	startX, startY uint32
-	targetX        uint32
-	color          color.RGBA
-}{
-	{startX: 2, startY: 4, targetX: GridWidth - 3, color: color.RGBA{R: 220, G: 90, B: 90, A: 255}},
-	{startX: 2, startY: 12, targetX: GridWidth - 3, color: color.RGBA{R: 90, G: 140, B: 220, A: 255}},
-}
-
-// unitSpawner places each unit at spawns[index]'s start cell and enters it
-// into occupancy — implements world.Spawner (populators[0] for Populate).
-type unitSpawner struct {
-	grid      *grids.SquareGrid
-	occupancy *board.SingleOccupancy
-	lastStart board.CellID
-	spawned   []uid.UID64
-
-	cell   goke.Comp[board.Cell]
-	moveTo goke.Comp[board.MoveTo]
-	path   goke.Comp[board.Path]
-	app    goke.Comp[world.Appearance]
-}
-
-func newUnitSpawner(grid *grids.SquareGrid, occupancy *board.SingleOccupancy) *unitSpawner {
-	return &unitSpawner{grid: grid, occupancy: occupancy}
-}
-
-func (u *unitSpawner) Spawn(index, count int) (world.Position, world.Velocity) {
-	spawn := spawns[index]
-	u.lastStart = cellAt(u.grid, spawn.startX, spawn.startY)
-	return world.Position{AABB: board.CellAABB(u.grid, u.lastStart, EntitySize)}, world.Velocity{}
-}
-
-func (u *unitSpawner) Components() []goke.Addable {
-	return []goke.Addable{&u.cell, &u.moveTo, &u.path, &u.app}
-}
-
-func (u *unitSpawner) Init(cursor *goke.Cursor, i, index int, id uid.UID64) {
-	spawn := spawns[index]
-	target := cellAt(u.grid, spawn.targetX, spawn.startY)
-
-	u.cell.Slice(cursor)[i] = board.Cell{ID: u.lastStart}
-	u.moveTo.Slice(cursor)[i] = board.MoveTo{Target: target}
-	u.app.Slice(cursor)[i] = world.Appearance{Color: spawn.color, SpriteID: 0}
-
-	u.occupancy.Enter(u.lastStart, id)
-	u.spawned = append(u.spawned, id)
-}
-
-// autoSelector tags every unit unitSpawner spawned as Selected, once, on
-// its first tick — Populate only queues the spawn, so the entity IDs aren't
-// real until the ECS's one-time Setup flush has run.
-type autoSelector struct {
-	spawner *unitSpawner
-	sys     *selection.System
-	done    bool
-}
-
-func (a *autoSelector) Init(*goke.SysInit) {}
-
-func (a *autoSelector) Update(_ *goke.CmdBuf, _ time.Duration) {
-	if a.done {
-		return
-	}
-	a.done = true
-	a.sys.Select(a.spawner.spawned)
-}
-
-// cellEnteredWatcher demonstrates reacting to board.CellEntered from
-// outside the board package — it never touches board's internals, only the
-// public tag component.
-type cellEnteredWatcher struct {
-	query *goke.Query
-	tag   goke.Comp[board.CellEntered]
-}
-
-func newCellEnteredWatcher() *cellEnteredWatcher { return &cellEnteredWatcher{} }
-
-func (w *cellEnteredWatcher) Init(si *goke.SysInit) {
-	w.query = si.NewQueryBuilder(&w.tag).Build()
-}
-
-func (w *cellEnteredWatcher) Update(_ *goke.CmdBuf, _ time.Duration) {
-	w.query.All()
-	for w.query.Next() {
-		cursor := w.query.Cursor()
-		tags := w.tag.Slice(cursor)
-		for i, id := range cursor.IDs {
-			log.Printf("unit %v entered cell %v", id, tags[i].ID)
-		}
-	}
+func buildShortcut(grid board.Grid, terrain *board.TerrainMap) {
+	c, _ := grid.CellIndex(wallCol, shortcutRow)
+	terrain.Set(c, Road)
 }

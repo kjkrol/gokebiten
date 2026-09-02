@@ -1,37 +1,52 @@
 package board
 
-// Terrain reports the movement cost and passability of a cell, independent
-// of the Grid's topology.
+// Terrain reports one cell's terrain kind, independent of the Grid's topology.
 type Terrain interface {
-	// MovementCost's cost is relative to 1 (baseline); passable gates entry entirely.
-	MovementCost(c CellID) (cost float64, passable bool)
+	Kind(c CellID) CellKind
 }
 
-// CellProps is one cell's terrain data in a TerrainMap.
-type CellProps struct {
+// CellKind identifies a terrain kind (e.g. grass, wall, road) and its
+// movement properties — the game defines its own named values (comparable
+// via == / switch, since Name makes each one distinct).
+type CellKind struct {
+	Name string
+	// Cost is relative to 1 (baseline); Passable gates entry entirely.
 	Cost     float64
 	Passable bool
 }
 
 // TerrainMap is a Terrain backed by a plain, gob-encodable map — mutate it
-// directly (Set) to change terrain at runtime, e.g. to build a road.
+// directly (Set/SetMany) to change terrain at runtime, e.g. to build a road.
 type TerrainMap struct {
-	Cells   map[CellID]CellProps
-	Default CellProps
+	Cells   map[CellID]CellKind
+	Default CellKind
 }
 
 var _ Terrain = (*TerrainMap)(nil)
 
-func NewTerrainMap(defaultProps CellProps) *TerrainMap {
-	return &TerrainMap{Cells: make(map[CellID]CellProps), Default: defaultProps}
+func NewTerrainMap() *TerrainMap {
+	return &TerrainMap{Cells: make(map[CellID]CellKind)}
 }
 
-func (t *TerrainMap) MovementCost(c CellID) (float64, bool) {
-	if props, ok := t.Cells[c]; ok {
-		return props.Cost, props.Passable
+func (t *TerrainMap) Kind(c CellID) CellKind {
+	if kind, ok := t.Cells[c]; ok {
+		return kind
 	}
-	return t.Default.Cost, t.Default.Passable
+	return t.Default
 }
 
-// Set assigns c's terrain properties, taking effect immediately.
-func (t *TerrainMap) Set(c CellID, props CellProps) { t.Cells[c] = props }
+// Set assigns c's terrain kind, taking effect immediately.
+func (t *TerrainMap) Set(c CellID, kind CellKind) { t.Cells[c] = kind }
+
+// SetMany assigns kind to every cell in cells in one call, instead of looping Set per cell.
+func (t *TerrainMap) SetMany(cells []CellID, kind CellKind) {
+	for _, c := range cells {
+		t.Cells[c] = kind
+	}
+}
+
+// SetAll resets every cell's terrain kind to kind, discarding any prior Set/SetMany overrides.
+func (t *TerrainMap) SetAll(kind CellKind) {
+	clear(t.Cells)
+	t.Default = kind
+}

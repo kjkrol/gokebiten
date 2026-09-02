@@ -37,3 +37,21 @@ func TestPluginManager_ProvidedComps_SkipsValuesWithoutCompProvider(t *testing.T
 		t.Errorf("providedComps() = %v, want empty (stubPostLoader isn't a CompProvider)", got)
 	}
 }
+
+type stubSaveable struct{ targets []any }
+
+func (s *stubSaveable) SaveTargets() []any { return s.targets }
+
+type saveTargetPayload struct{ N int }
+
+func TestPluginManager_SaveTargets_CollectsTrackedSaveable(t *testing.T) {
+	game := NewGame(&GameProps{})
+	a, b := &saveTargetPayload{N: 1}, &saveTargetPayload{N: 2}
+	game.pluginManager.track(&stubSaveable{targets: []any{a, b}})
+	game.pluginManager.track(&stubPostLoader{})
+
+	got := game.pluginManager.saveTargets()
+	if len(got) != 2 || got[0] != any(a) || got[1] != any(b) {
+		t.Errorf("saveTargets() = %v, want [%v %v]", got, a, b)
+	}
+}

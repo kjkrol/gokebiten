@@ -48,3 +48,23 @@ func TestHexGrid_Toroidal_NeighborsWrapToCanonicalRange(t *testing.T) {
 		}
 	}
 }
+
+func TestHexGrid_CellIndex_NonToroidal(t *testing.T) {
+	g := NewHexGrid(4, 4, 10)
+	c, ok := g.CellIndex(2, 1)
+	if !ok || c != packAxial(2, 1) {
+		t.Errorf("CellIndex(2,1) = (%v,%v), want (%v,true)", c, ok, packAxial(2, 1))
+	}
+	if _, ok := g.CellIndex(4, 0); ok {
+		t.Error("expected q==Width to be out of bounds on a non-toroidal grid")
+	}
+}
+
+func TestHexGrid_CellIndex_ToroidalWraps(t *testing.T) {
+	g := &HexGrid{Width: 4, Height: 4, Size: 10, Toroidal: true}
+	c, ok := g.CellIndex(4, 0)
+	origin, _ := g.CellIndex(0, 0)
+	if !ok || c != origin {
+		t.Errorf("CellIndex(4,0) = (%v,%v), want same cell as CellIndex(0,0)", c, ok)
+	}
+}

@@ -12,10 +12,10 @@ import (
 )
 
 func newTestWorldPlugin() *world.Plugin {
-	return world.NewPlugin(
-		world.Config{Width: 1000, Height: 1000},
-		world.Population{MaxCount: 10, MinSize: 1, MaxSize: 100},
-	)
+	return world.NewPlugin(world.Config{
+		Space:    world.SpaceCfg{Width: 1000, Height: 1000},
+		Entities: world.EntitiesCfg{MaxCount: 10, MinSize: 1, MaxSize: 100},
+	})
 }
 
 type saveTestState struct{ N int }

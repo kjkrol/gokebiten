@@ -8,6 +8,7 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/plugins/world/spawners/grid"
 	"github.com/kjkrol/gokebiten/plugins/world/spawners/randomvelocity"
+	"github.com/kjkrol/gokebiten/render"
 )
 
 // TestSaveLoadCycle exercises the same mechanics Game.Save/Game.Load use, below the level of Game (no Ebiten window).
@@ -15,28 +16,34 @@ func TestSaveLoadCycle(t *testing.T) {
 	path := t.TempDir() + "/save.bin"
 
 	const count = 5
-	cfg := world.Config{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true}
-	pop := world.Population{MaxCount: count, MinSize: RectSize, MaxSize: RectSize}
+	cfg := world.Config{
+		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
+		Entities: world.EntitiesCfg{MaxCount: count, MinSize: RectSize, MaxSize: RectSize},
+	}
 
 	ecs := goke.New()
-	wm := world.NewModule(cfg, pop)
+	wm := world.NewModule(cfg)
+	placement := grid.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize)
+	motion := randomvelocity.New(200, 50, 10)
 	wm.Populate(count,
-		world.NewSpawner(grid.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize), randomvelocity.New(200, 50, 10)),
-		world.NewAppearanceExtras(func(index int) world.Appearance {
-			return world.Appearance{SpriteID: uint8(index)}
+		world.SpawnerFunc(func(index, count int) (world.Position, world.Velocity) {
+			return placement.Place(index, count), motion.InitialVelocity(index, count)
 		}),
-		collisions.NewCollidableExtras(),
+		world.NewValueExtras(func(index int) world.Appearance {
+			return world.Appearance{SpriteID: render.SpriteID(index)}
+		}),
+		world.NewValueExtras(func(index int) collisions.Collision { return collisions.Collision{} }),
 	)
 	cm := collisions.New(wm.Space(), ecs)
 
 	var origIDs []uint64
-	var origAppearance map[uint64]uint8
+	var origAppearance map[uint64]render.SpriteID
 	systems := append(wm.SetupSystems(),
 		goke.SystemFn{OnInit: func(si *goke.SysInit) {
 			var posQ goke.Comp[world.Position]
 			var appQ goke.Comp[world.Appearance]
 			q := si.NewQueryBuilder(&posQ, &appQ).Build()
-			origAppearance = make(map[uint64]uint8)
+			origAppearance = make(map[uint64]render.SpriteID)
 			q.All()
 			for q.Next() {
 				cur := q.Cursor()
@@ -62,7 +69,7 @@ func TestSaveLoadCycle(t *testing.T) {
 	ecs.Resume()
 
 	ecs2 := goke.New()
-	wm2 := world.NewModule(cfg, pop)
+	wm2 := world.NewModule(cfg)
 	cm2 := collisions.New(wm2.Space(), ecs2)
 
 	comps := append(goke.ProvidedComps(cm2),

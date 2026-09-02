@@ -9,12 +9,18 @@ import (
 	"github.com/kjkrol/uid"
 )
 
+// Config configures a world.Module: its spatial shape and the bounds its entity population must respect.
 type Config struct {
+	Space    SpaceCfg
+	Entities EntitiesCfg
+}
+
+type SpaceCfg struct {
 	Width, Height uint32
 	Toroidal      bool
 }
 
-type Population struct {
+type EntitiesCfg struct {
 	MaxCount int
 	MinSize  uint32
 	MaxSize  uint32
@@ -25,11 +31,20 @@ type Telemetry struct {
 	Count int
 }
 
-// EntityExtras supplies the components and per-entity values a spawn needs beyond Position/Velocity.
+// EntityExtras supplies the components and per-entity values a spawn needs
+// beyond Position/Velocity — every implementation is built via a
+// NewXExtras(func(index int) V) *XExtras constructor matching NewExtrasFunc.
+// world.NewValueExtras covers this directly for any V; attach WithEffect
+// for a side effect (like updating an occupancy tracker) that must run
+// alongside the write.
 type EntityExtras interface {
 	Components() []goke.Addable
 	Init(cursor *goke.Cursor, i, index int, id uid.UID64)
 }
+
+// NewExtrasFunc is the shape every NewXExtras constructor must match — pin
+// it via var _ NewExtrasFunc[XExtras, V] = NewXExtras next to each implementation.
+type NewExtrasFunc[T, V any] func(func(index int) V) *T
 
 // SpeedModifier contributes a multiplicative factor to an entity's Velocity.Value each tick — see VelocitySystem.
 type SpeedModifier = Modifier[float64]
@@ -37,11 +52,10 @@ type SpeedModifier = Modifier[float64]
 // Module owns the world's topology, entities, and movement — the mandatory
 // foundation any game with moving, drawable entities builds on.
 type Module struct {
-	config     Config
-	population Population
-	space      *gokg.Space
-	step       time.Duration
-	ecs        *goke.ECS
+	config Config
+	space  *gokg.Space
+	step   time.Duration
+	ecs    *goke.ECS
 
 	spawnedCount int
 	seeds        []goke.System
@@ -56,12 +70,13 @@ type Module struct {
 var _ goke.SetupProvider = (*Module)(nil)
 var _ goke.CompProvider = (*Module)(nil)
 
-// NewModule builds the world's topology and spatial index from cfg, provisioned for pop.
-func NewModule(cfg Config, pop Population) *Module {
-	return &Module{config: cfg, population: pop, space: buildSpace(cfg, pop)}
+// NewModule builds the world's topology and spatial index from cfg.
+func NewModule(cfg Config) *Module {
+	return &Module{config: cfg, space: buildSpace(cfg)}
 }
 
-func (w *Module) Population() Population { return w.population }
+// Config returns the Config this Module was built from.
+func (w *Module) Config() Config { return w.config }
 
 // Telemetry returns the entity-count telemetry Populate/PostLoad maintain.
 func (w *Module) Telemetry() *Telemetry { return &w.telemetry }
@@ -119,63 +134,51 @@ func (w *Module) PostLoad() goke.System {
 	}}
 }
 
-// maxSpeed caps displacement per tick to half the smallest population entity's
-// size, so nothing can tunnel through another entity undetected — 0 (no cap)
-// if Population.MinSize/the tick step aren't set.
+// maxSpeed caps displacement per tick to half the smallest entity's size, so
+// nothing can tunnel through another entity undetected — 0 (no cap) if
+// Config.Entities.MinSize/the tick step aren't set.
 func (w *Module) maxSpeed() int32 {
-	if w.step <= 0 || w.population.MinSize == 0 {
+	if w.step <= 0 || w.config.Entities.MinSize == 0 {
 		return 0
 	}
-	return int32(float64(w.population.MinSize) / 2 / w.step.Seconds())
+	return int32(float64(w.config.Entities.MinSize) / 2 / w.step.Seconds())
 }
 
 func (w *Module) reserve(count int) {
-	if w.spawnedCount+count > w.population.MaxCount {
-		panic(fmt.Sprintf("world: spawning %d more would exceed Population.MaxCount %d (already spawned %d)",
-			count, w.population.MaxCount, w.spawnedCount))
+	if w.spawnedCount+count > w.config.Entities.MaxCount {
+		panic(fmt.Sprintf("world: spawning %d more would exceed Config.Entities.MaxCount %d (already spawned %d)",
+			count, w.config.Entities.MaxCount, w.spawnedCount))
 	}
 	w.spawnedCount += count
 }
 
 func (w *Module) validateSize(id uid.UID64, pos Position) {
-	if pos.Size.X < w.population.MinSize || pos.Size.X > w.population.MaxSize ||
-		pos.Size.Y < w.population.MinSize || pos.Size.Y > w.population.MaxSize {
-		panic(fmt.Sprintf("world: entity %d size %dx%d outside declared population bounds [%d, %d]",
-			id, pos.Size.X, pos.Size.Y, w.population.MinSize, w.population.MaxSize))
+	if pos.Size.X < w.config.Entities.MinSize || pos.Size.X > w.config.Entities.MaxSize ||
+		pos.Size.Y < w.config.Entities.MinSize || pos.Size.Y > w.config.Entities.MaxSize {
+		panic(fmt.Sprintf("world: entity %d size %dx%d outside declared bounds [%d, %d]",
+			id, pos.Size.X, pos.Size.Y, w.config.Entities.MinSize, w.config.Entities.MaxSize))
 	}
 }
 
-// Populate queues a spawn of count entities from populators — populators[0] must be a Spawner or a Placement.
-func (w *Module) Populate(count int, populators ...EntityExtras) *Module {
+// Populate queues a spawn of count entities — spawner decides
+// Position/Velocity; each extras contributes one further component, built
+// via world.NewValueExtras(func(index int) V) — see ExampleModule_Populate.
+func (w *Module) Populate(count int, spawner Spawner, extras ...EntityExtras) *Module {
 	w.seeds = append(w.seeds, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		w.populate(si, count, populators...)
+		w.populateDynamic(si, spawner, count, extras...)
 	}})
 	return w
 }
 
-func (w *Module) populate(si *goke.SysInit, count int, populators ...EntityExtras) {
-	if len(populators) == 0 {
-		panic("world: Populate requires a world.Spawner or world.Placement as its first populator")
-	}
-	switch first := populators[0].(type) {
-	case Spawner:
-		w.populateDynamic(si, first, count, populators...)
-	case Placement:
-		w.populateStatic(si, first, count, populators...)
-	default:
-		panic("world: Populate's first populator must implement world.Spawner or world.Placement")
-	}
-}
-
-func (w *Module) populateDynamic(si *goke.SysInit, spawner Spawner, count int, populators ...EntityExtras) {
+func (w *Module) populateDynamic(si *goke.SysInit, spawner Spawner, count int, extras ...EntityExtras) {
 	w.reserve(count)
 	w.telemetry.Count += count
 
 	var posComp goke.Comp[Position]
 	var velComp goke.Comp[Velocity]
 	comps := []goke.Addable{&posComp, &velComp}
-	for _, p := range populators {
-		comps = append(comps, p.Components()...)
+	for _, e := range extras {
+		comps = append(comps, e.Components()...)
 	}
 	factory := si.NewFactory(comps...)
 
@@ -190,37 +193,8 @@ func (w *Module) populateDynamic(si *goke.SysInit, spawner Spawner, count int, p
 			positions[i] = pos
 			velocities[i] = vel
 			w.space.Insert(id, pos.AABB)
-			for _, p := range populators {
-				p.Init(&factory.Cursor, i, index, id)
-			}
-			index++
-		}
-	}
-	w.space.Flush(nil)
-}
-
-func (w *Module) populateStatic(si *goke.SysInit, placement Placement, count int, populators ...EntityExtras) {
-	w.reserve(count)
-	w.telemetry.Count += count
-
-	var posComp goke.Comp[Position]
-	comps := []goke.Addable{&posComp}
-	for _, p := range populators {
-		comps = append(comps, p.Components()...)
-	}
-	factory := si.NewFactory(comps...)
-
-	factory.Create(count)
-	index := 0
-	for factory.Next() {
-		positions := posComp.Slice(&factory.Cursor)
-		for i, id := range factory.IDs {
-			pos := placement.Place(index, count)
-			w.validateSize(id, pos)
-			positions[i] = pos
-			w.space.Insert(id, pos.AABB)
-			for _, p := range populators {
-				p.Init(&factory.Cursor, i, index, id)
+			for _, e := range extras {
+				e.Init(&factory.Cursor, i, index, id)
 			}
 			index++
 		}

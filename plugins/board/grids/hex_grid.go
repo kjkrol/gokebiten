@@ -89,6 +89,25 @@ func (g *HexGrid) CellAt(pos geom.Vec[float64]) (board.CellID, bool) {
 	return c, true
 }
 
+func (g *HexGrid) CellIndex(q, r uint32) (board.CellID, bool) {
+	if g.Toroidal {
+		return packAxial(int32(q%g.Width), int32(r%g.Height)), true
+	}
+	if q >= g.Width || r >= g.Height {
+		return 0, false
+	}
+	return packAxial(int32(q), int32(r)), true
+}
+
+// NeighborCost is always 1 — every hex neighbor is equidistant in this axial model.
+func (g *HexGrid) NeighborCost(a, b board.CellID) float64 { return 1 }
+
+// DiagonalNeighbors always returns ok=false — hex neighbors share a full
+// edge, not a corner point, so cutting through a corner isn't a concept here.
+func (g *HexGrid) DiagonalNeighbors(a, b board.CellID) (c1, c2 board.CellID, ok bool) {
+	return 0, 0, false
+}
+
 func hexCubeDistance(dq, dr int32) float64 {
 	return (math.Abs(float64(dq)) + math.Abs(float64(dr)) + math.Abs(float64(dq+dr))) / 2
 }

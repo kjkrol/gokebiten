@@ -10,31 +10,28 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 )
 
-// Plugin wires a Board and its SteeringSystem into a Game — depends only on
-// world (for Position/Velocity/SpeedModifier), never on collisions.
+// Plugin wires a Board into a Game — depends only on world (for
+// Position/Velocity/SpeedModifier). See plugins/navigation for entity
+// movement/pathfinding built on top of this Board.
 type Plugin struct {
 	board        *Board
-	steering     *SteeringSystem
+	terrain      *TerrainMap
 	terrainSpeed *TerrainSpeedModifier
-	renderer     *Renderer
-	commands     *CommandSystem
-	commandState *CommandState
 	occupancy    Occupancy
-	pathFinder   *PathFinder
-	camera       render.Camera
+	renderer     *Renderer
 }
 
 var _ gokebiten.Plugin = (*Plugin)(nil)
+var _ gokebiten.Saveable = (*Plugin)(nil)
 
-// NewPlugin builds a board over grid/terrain, steering occupancy-tracked entities at speed world-units/sec before scaling.
-func NewPlugin(grid Grid, terrain Terrain, occupancy Occupancy, speed int32) *Plugin {
-	pathFinder := NewPathFinder(grid)
+// NewPlugin builds a board over grid, capping cell occupancy per occupancy.
+func NewPlugin(grid Grid, occupancy Occupancy) *Plugin {
+	terrain := NewTerrainMap()
 	return &Plugin{
 		board:        NewBoard(grid, terrain),
-		steering:     NewSteeringSystem(pathFinder, terrain, occupancy, speed),
+		terrain:      terrain,
 		terrainSpeed: NewTerrainSpeedModifier(grid, terrain),
 		occupancy:    occupancy,
-		pathFinder:   pathFinder,
 	}
 }
 
@@ -45,20 +42,9 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 	if err != nil {
 		return err
 	}
-	p.steering.BindSpace(worldPlugin.World().Space())
-	if p.renderer != nil || p.commands != nil {
-		camera, err := ctx.Require[render.Camera]()
-		if err != nil {
-			return err
-		}
-		p.camera = camera
-	}
 	ctx.Provide(p.board)
-	ctx.UseModule(p.steering)
-	if p.commands != nil {
-		ctx.Provide(p.commandState)
-		ctx.UseModule(p.commands)
-	}
+	ctx.Provide(p.terrain)
+	ctx.Provide(p)
 	worldPlugin.RegisterSpeedModifier(p.terrainSpeed)
 	return nil
 }
@@ -66,9 +52,18 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 // Board returns the underlying Board (Grid + Terrain), built at construction.
 func (p *Plugin) Board() *Board { return p.board }
 
-// WithRenderer builds this plugin's own board renderer (cellSize world-pixels per cell, style picks fill color).
-func (p *Plugin) WithRenderer(cellSize float32, style CellStyle) *Plugin {
-	p.renderer = newRenderer(p.board, cellSize, style)
+// Occupancy returns the occupancy tracker this plugin was built with.
+func (p *Plugin) Occupancy() Occupancy { return p.occupancy }
+
+// Terrain returns the underlying TerrainMap, built at construction — mutate it directly (Set/SetMany/SetAll) to shape the map.
+func (p *Plugin) Terrain() *TerrainMap { return p.terrain }
+
+// SaveTargets returns terrain for Persistence.Save/Load to include automatically.
+func (p *Plugin) SaveTargets() []any { return []any{p.terrain} }
+
+// WithRenderer builds this plugin's own board renderer (cellSize world-pixels per cell, style picks the sprite to draw).
+func (p *Plugin) WithRenderer(cellSize float32, atlas render.AtlasSource, style CellStyle) *Plugin {
+	p.renderer = newRenderer(p.board, cellSize, atlas, style)
 	return p
 }
 
@@ -83,28 +78,8 @@ func (p *Plugin) Renderer() render.Renderer {
 // CellRenderer returns the concrete board renderer for further interaction (SetShowGridLines), or nil.
 func (p *Plugin) CellRenderer() *Renderer { return p.renderer }
 
-// WithCommands enables right-click move orders for Selected, en-route entities.
-func (p *Plugin) WithCommands() *Plugin {
-	p.commandState = &CommandState{}
-	p.commands = NewCommandSystem(p.pathFinder, p.board, p.occupancy, p.commandState)
-	return p
-}
+// RunPlan is a no-op — board has no per-tick work of its own; see plugins/navigation.
+func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {}
 
-// Commands returns the command system, or nil unless WithCommands was called.
-func (p *Plugin) Commands() *CommandSystem { return p.commands }
-
-// EventHandler returns the default right-click move-order control.EventHandler, or nil unless WithCommands was called.
-func (p *Plugin) EventHandler() control.EventHandler {
-	if p.commands == nil {
-		return nil
-	}
-	return NewDefaultCommandEventHandler(p.board, p.camera, p.commandState)
-}
-
-// RunPlan runs the steering system (and the command system, if enabled) for this tick — call before world's own RunPlan.
-func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
-	p.steering.RunPlan(ctx, d)
-	if p.commands != nil {
-		p.commands.RunPlan(ctx, d)
-	}
-}
+// EventHandler always returns nil — board has no input handling of its own; see plugins/navigation.
+func (p *Plugin) EventHandler() control.EventHandler { return nil }

@@ -1,14 +1,12 @@
 package world
 
 import (
-	"image/color"
-
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/render"
 )
 
 type Appearance struct {
-	Color    color.RGBA
-	SpriteID uint8
+	SpriteID render.SpriteID
 }
 
 // AppearanceStrategy decides how to fold override T into an entity's draw layers.
@@ -47,7 +45,7 @@ func modify[T any](f func(Appearance, T) Appearance) AppearanceStrategy[T] {
 }
 
 // Facing returns a Strategy rewriting SpriteID from the entity's current Velocity, via spriteFor.
-func Facing(spriteFor func(Velocity) uint8) AppearanceStrategy[Velocity] {
+func Facing(spriteFor func(Velocity) render.SpriteID) AppearanceStrategy[Velocity] {
 	return modify(func(a Appearance, v Velocity) Appearance {
 		a.SpriteID = spriteFor(v)
 		return a
