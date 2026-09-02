@@ -1,13 +1,13 @@
-package grid_test
+package world_test
 
 import (
 	"testing"
 
-	"github.com/kjkrol/gokebiten/plugins/world/spawners/grid"
+	"github.com/kjkrol/gokebiten/plugins/world"
 )
 
 func TestGridPlacement_Place_SquareCount(t *testing.T) {
-	p := grid.NewGridPlacement(100, 100, 10)
+	p := world.NewGridPlacement(100, 100, 10)
 
 	cases := []struct {
 		index int
@@ -28,16 +28,16 @@ func TestGridPlacement_Place_SquareCount(t *testing.T) {
 }
 
 func TestGridPlacement_Place_NonSquareCount(t *testing.T) {
-	p := grid.NewGridPlacement(100, 100, 10)
+	p := world.NewGridPlacement(100, 100, 10)
 
-	// count=5 -> cols=ceil(sqrt(5))=3
+	// count=5 -> cols=ceil(sqrt(5))=3, rows=ceil(5/3)=2
 	cases := []struct {
 		index int
 		wantX uint32
 		wantY uint32
 	}{
-		{0, 11, 11}, // row 0, col 0
-		{4, 44, 44}, // row 1, col 1
+		{0, 11, 20}, // row 0, col 0
+		{4, 44, 70}, // row 1, col 1
 	}
 	for _, c := range cases {
 		pos := p.Place(c.index, 5)
@@ -48,7 +48,7 @@ func TestGridPlacement_Place_NonSquareCount(t *testing.T) {
 }
 
 func TestGridPlacement_Place_SingleEntity_Centers(t *testing.T) {
-	p := grid.NewGridPlacement(100, 100, 10)
+	p := world.NewGridPlacement(100, 100, 10)
 	pos := p.Place(0, 1)
 	if pos.TopLeft.X != 45 || pos.TopLeft.Y != 45 {
 		t.Errorf("Place(0, 1) = (%d,%d), want (45,45) (single cell spanning the whole grid, entity centered)", pos.TopLeft.X, pos.TopLeft.Y)

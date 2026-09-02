@@ -6,7 +6,6 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/plugins/world/spawners/grid"
 	"github.com/kjkrol/uid"
 )
 
@@ -20,7 +19,7 @@ func TestValueExtras_WithEffect_EntersOccupancyOnSpawn(t *testing.T) {
 		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 8, MaxSize: 8},
 	}
 	wm := world.NewModule(cfg)
-	placement := grid.NewGridPlacement(50, 50, 8)
+	placement := world.NewGridPlacement(50, 50, 8)
 	wm.Populate(1,
 		world.SpawnerFunc(func(index, count int) (world.Position, world.Velocity) {
 			return placement.Place(index, count), world.Velocity{}

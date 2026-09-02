@@ -1,9 +1,7 @@
-package randomvelocity_test
+package main
 
 import (
 	"testing"
-
-	"github.com/kjkrol/gokebiten/plugins/world/spawners/randomvelocity"
 )
 
 func TestRandomVelocity_InitialVelocity_XWithinRangeAndDeadZoned(t *testing.T) {
@@ -12,10 +10,10 @@ func TestRandomVelocity_InitialVelocity_XWithinRangeAndDeadZoned(t *testing.T) {
 	// component via Delta() can be off by 1 from what was drawn, since it
 	// round-trips through Hypot/normalize.
 	const tolerance = int32(1)
-	m := randomvelocity.New(rng, deadZone, minSpeed)
+	m := newRandomVelocity(rng, deadZone, minSpeed)
 
 	for i := range 500 {
-		d := m.InitialVelocity(i, 500).Delta()
+		d := m.initialVelocity(i, 500).Delta()
 
 		if d.X < -rng-tolerance || d.X > rng+tolerance {
 			t.Fatalf("X = %d, want within [-%d,%d] (+/-%d for Dir/Value rounding)", d.X, rng, rng, tolerance)
@@ -39,11 +37,11 @@ func TestRandomVelocity_InitialVelocity_YHasNoDeadZone(t *testing.T) {
 	// get clamped to MinSpeed, but Y must still be free to land inside
 	// (-DeadZone,DeadZone), including exactly 0, unclamped.
 	const rng, deadZone, minSpeed = int32(20), int32(20), int32(5)
-	m := randomvelocity.New(rng, deadZone, minSpeed)
+	m := newRandomVelocity(rng, deadZone, minSpeed)
 
 	sawUnclampedY := false
 	for i := range 2000 {
-		d := m.InitialVelocity(i, 2000).Delta()
+		d := m.initialVelocity(i, 2000).Delta()
 		if d.Y != minSpeed && d.Y != -minSpeed {
 			sawUnclampedY = true
 			break

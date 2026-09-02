@@ -2,7 +2,6 @@ package world_test
 
 import (
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/plugins/world/spawners/grid"
 )
 
 // ExampleModule_Populate shows the shape every Populate call takes: a
@@ -15,7 +14,7 @@ func ExampleModule_Populate() {
 		Space:    world.SpaceCfg{Width: 800, Height: 600},
 		Entities: world.EntitiesCfg{MaxCount: 10, MinSize: 8, MaxSize: 8},
 	})
-	placement := grid.NewGridPlacement(800, 600, 8)
+	placement := world.NewGridPlacement(800, 600, 8)
 
 	wm.Populate(10,
 		world.SpawnerFunc(func(index, count int) (world.Position, world.Velocity) {

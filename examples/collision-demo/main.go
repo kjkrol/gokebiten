@@ -17,8 +17,6 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/elastic"
 	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/stats"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/plugins/world/spawners/grid"
-	"github.com/kjkrol/gokebiten/plugins/world/spawners/randomvelocity"
 	"github.com/kjkrol/gokebiten/render"
 )
 
@@ -107,11 +105,11 @@ func main() {
 		}
 		log.Printf("loaded saved world (save #%d)", state.Saves)
 	} else {
-		placement := grid.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize)
-		motion := randomvelocity.New(200, 50, 10)
+		placement := world.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize)
+		motion := newRandomVelocity(200, 50, 10)
 		worldPlugin.World().Populate(EntityCount,
 			world.SpawnerFunc(func(index, count int) (world.Position, world.Velocity) {
-				return placement.Place(index, count), motion.InitialVelocity(index, count)
+				return placement.Place(index, count), motion.initialVelocity(index, count)
 			}),
 			world.NewValueExtras(func(index int) world.Appearance {
 				return world.Appearance{SpriteID: entitySprites[rand.IntN(8)][rand.IntN(4)]}

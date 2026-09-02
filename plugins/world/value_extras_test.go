@@ -5,7 +5,6 @@ import (
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/plugins/world/spawners/grid"
 	"github.com/kjkrol/uid"
 )
 
@@ -15,7 +14,7 @@ type stat struct{ HP int }
 
 func TestValueExtras_Init_WritesValue(t *testing.T) {
 	wm := world.NewModule(testConfig())
-	placement := grid.NewGridPlacement(50, 50, 8)
+	placement := world.NewGridPlacement(50, 50, 8)
 	wm.Populate(1,
 		world.SpawnerFunc(func(index, count int) (world.Position, world.Velocity) {
 			return placement.Place(index, count), world.Velocity{}
@@ -50,7 +49,7 @@ func TestValueExtras_Init_WritesValue(t *testing.T) {
 
 func TestValueExtras_Init_ZeroSizeType_DoesNotPanic(t *testing.T) {
 	wm := world.NewModule(testConfig())
-	placement := grid.NewGridPlacement(50, 50, 8)
+	placement := world.NewGridPlacement(50, 50, 8)
 	wm.Populate(1,
 		world.SpawnerFunc(func(index, count int) (world.Position, world.Velocity) {
 			return placement.Place(index, count), world.Velocity{}
@@ -77,7 +76,7 @@ func TestValueExtras_Init_ZeroSizeType_DoesNotPanic(t *testing.T) {
 
 func TestValueExtras_WithEffect_RunsAfterWriteWithValueAndID(t *testing.T) {
 	wm := world.NewModule(testConfig())
-	placement := grid.NewGridPlacement(50, 50, 8)
+	placement := world.NewGridPlacement(50, 50, 8)
 
 	var gotHP int
 	var gotID uid.UID64

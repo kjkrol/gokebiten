@@ -6,8 +6,6 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugins/collisions"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/plugins/world/spawners/grid"
-	"github.com/kjkrol/gokebiten/plugins/world/spawners/randomvelocity"
 	"github.com/kjkrol/gokebiten/render"
 )
 
@@ -23,11 +21,11 @@ func TestSaveLoadCycle(t *testing.T) {
 
 	ecs := goke.New()
 	wm := world.NewModule(cfg)
-	placement := grid.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize)
-	motion := randomvelocity.New(200, 50, 10)
+	placement := world.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize)
+	motion := newRandomVelocity(200, 50, 10)
 	wm.Populate(count,
 		world.SpawnerFunc(func(index, count int) (world.Position, world.Velocity) {
-			return placement.Place(index, count), motion.InitialVelocity(index, count)
+			return placement.Place(index, count), motion.initialVelocity(index, count)
 		}),
 		world.NewValueExtras(func(index int) world.Appearance {
 			return world.Appearance{SpriteID: render.SpriteID(index)}
