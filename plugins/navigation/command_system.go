@@ -8,12 +8,10 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/selection"
 )
 
-// CommandSystem issues move orders: a right-click gives every Selected
+// commandSystem issues move orders: a right-click gives every Selected
 // entity a fresh MoveOrder/Path, unless the target is unreachable.
-type CommandSystem struct {
-	terrain    board.Terrain
-	occupancy  board.Occupancy
-	pathFinder *PathFinder
+type commandSystem struct {
+	pathFinder *pathFinder
 	state      *CommandState
 
 	query   *goke.Query
@@ -23,23 +21,20 @@ type CommandSystem struct {
 	sys goke.Runnable
 }
 
-var _ goke.Module = (*CommandSystem)(nil)
-var _ goke.System = (*CommandSystem)(nil)
+var _ goke.Module = (*commandSystem)(nil)
+var _ goke.System = (*commandSystem)(nil)
 
-// NewCommandSystem builds a CommandSystem issuing move orders via pathFinder, respecting terrain/occupancy, driven by state.
-func NewCommandSystem(pathFinder *PathFinder, terrain board.Terrain, occupancy board.Occupancy, state *CommandState) *CommandSystem {
-	return &CommandSystem{
-		terrain: terrain, occupancy: occupancy, state: state,
-		pathFinder: pathFinder,
-	}
+// newCommandSystem builds a commandSystem issuing move orders via pathFinder, driven by state.
+func newCommandSystem(pathFinder *pathFinder, state *CommandState) *commandSystem {
+	return &commandSystem{state: state, pathFinder: pathFinder}
 }
 
-func (s *CommandSystem) Init(si *goke.SysInit) {
+func (s *commandSystem) Init(si *goke.SysInit) {
 	s.query = si.NewQueryBuilder(&s.cell).Include(goke.Include[selection.Selected]()).Build()
 	s.orderID = si.RegComp[MoveOrder]()
 }
 
-func (s *CommandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
+func (s *commandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 	if s.state.PendingTarget == nil {
 		return
 	}
@@ -51,7 +46,7 @@ func (s *CommandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 		cursor := s.query.Cursor()
 		cells := s.cell.Slice(cursor)
 		for i, id := range cursor.IDs {
-			newPath, ok := s.pathFinder.FindPath(s.terrain, s.occupancy, id, cells[i].ID, target)
+			newPath, ok := s.pathFinder.findPath(id, cells[i].ID, target)
 			if !ok {
 				continue
 			}
@@ -60,21 +55,21 @@ func (s *CommandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 	}
 }
 
-// RegSystems registers CommandSystem itself as the per-tick system — see [goke.Module].
-func (s *CommandSystem) RegSystems(ecs *goke.ECS) {
+// RegSystems registers commandSystem itself as the per-tick system — see [goke.Module].
+func (s *commandSystem) RegSystems(ecs *goke.ECS) {
 	if s.sys == nil {
 		s.sys = ecs.RegSys(s)
 	}
 }
 
-// RunPlan runs CommandSystem's Update for this tick — call from your own Game.Loop closure.
-func (s *CommandSystem) RunPlan(ctx goke.RunCtx, d time.Duration) {
+// RunPlan runs commandSystem's Update for this tick — call from your own Game.Loop closure.
+func (s *commandSystem) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	ctx.Run(s.sys, d)
 	ctx.Sync()
 }
 
-// SetupSystems is empty — CommandSystem has no one-time seeding of its own.
-func (s *CommandSystem) SetupSystems() []goke.System { return nil }
+// SetupSystems is empty — commandSystem has no one-time seeding of its own.
+func (s *commandSystem) SetupSystems() []goke.System { return nil }
 
-// LoadComps is empty — MoveOrder/Cell are already owned by NavigationSystem.
-func (s *CommandSystem) LoadComps() []goke.CompToken { return nil }
+// LoadComps is empty — MoveOrder/Cell are already owned by navigationSystem.
+func (s *commandSystem) LoadComps() []goke.CompToken { return nil }

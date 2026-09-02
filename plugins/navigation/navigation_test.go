@@ -1,4 +1,4 @@
-package navigation_test
+package navigation
 
 import (
 	"math"
@@ -7,7 +7,6 @@ import (
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugins/board"
-	"github.com/kjkrol/gokebiten/plugins/navigation"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokg"
 	"github.com/kjkrol/gokg/geom"
@@ -61,7 +60,7 @@ func TestNavigationSystem_Update_DeviationTriggersRepath(t *testing.T) {
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
-	steer := navigation.NewNavigationSystem(navigation.NewPathFinder(grid), terrain, occupancy, 20)
+	steer := newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy, 20)
 	pusher := &pushOnce{grid: grid, size: 8}
 
 	start, _ := grid.CellIndex(0, 0)
@@ -72,7 +71,7 @@ func TestNavigationSystem_Update_DeviationTriggersRepath(t *testing.T) {
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Position]
 	var vel goke.Comp[world.Velocity]
-	var order goke.Comp[navigation.MoveOrder]
+	var order goke.Comp[MoveOrder]
 	var q *goke.Query
 
 	ecs := goke.New()
@@ -83,7 +82,7 @@ func TestNavigationSystem_Update_DeviationTriggersRepath(t *testing.T) {
 		id := f.Cursor.IDs[0]
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: start}
 		pos.Slice(&f.Cursor)[0] = world.Position{AABB: board.CellAABB(grid, start, 8)}
-		order.Slice(&f.Cursor)[0] = navigation.MoveOrder{Target: target}
+		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(start, id)
 
 		q = si.NewQueryBuilder(&cell, &order).Build()
@@ -136,7 +135,7 @@ func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *te
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
-	steer := navigation.NewNavigationSystem(navigation.NewPathFinder(grid), terrain, occupancy, 20)
+	steer := newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy, 20)
 
 	previous, _ := grid.CellIndex(0, 1)
 	expected, _ := grid.CellIndex(1, 0) // diagonal neighbor of previous
@@ -145,7 +144,7 @@ func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *te
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Position]
 	var vel goke.Comp[world.Velocity]
-	var order goke.Comp[navigation.MoveOrder]
+	var order goke.Comp[MoveOrder]
 	var q *goke.Query
 
 	ecs := goke.New()
@@ -158,7 +157,7 @@ func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *te
 		// Position already sits inside the flanker cell — a normal artifact
 		// of sampling a diagonal move at discrete ticks, not a deviation.
 		pos.Slice(&f.Cursor)[0] = world.Position{AABB: plane.NewAABB(geom.NewVec[uint32](11, 11), 8, 8)}
-		var mt navigation.MoveOrder
+		var mt MoveOrder
 		mt.Target = expected
 		mt.Path.Steps[0] = expected
 		mt.Path.Length = 1
@@ -194,7 +193,7 @@ func TestNavigationSystem_Update_ArrivalStopsEntity(t *testing.T) {
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
-	steer := navigation.NewNavigationSystem(navigation.NewPathFinder(grid), terrain, occupancy, 20)
+	steer := newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy, 20)
 
 	start, _ := grid.CellIndex(2, 0)
 	target := start // already at the target — arrives on the very first tick
@@ -202,7 +201,7 @@ func TestNavigationSystem_Update_ArrivalStopsEntity(t *testing.T) {
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Position]
 	var vel goke.Comp[world.Velocity]
-	var order goke.Comp[navigation.MoveOrder]
+	var order goke.Comp[MoveOrder]
 	var q *goke.Query
 
 	ecs := goke.New()
@@ -214,7 +213,7 @@ func TestNavigationSystem_Update_ArrivalStopsEntity(t *testing.T) {
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: start}
 		pos.Slice(&f.Cursor)[0] = world.Position{AABB: board.CellAABB(grid, start, 8)}
 		vel.Slice(&f.Cursor)[0] = world.Velocity{Dir: geom.NewVec[float64](1, 0), Value: 50} // was already moving in
-		order.Slice(&f.Cursor)[0] = navigation.MoveOrder{Target: target}
+		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(start, id)
 
 		q = si.NewQueryBuilder(&cell, &vel).Build()
@@ -254,7 +253,7 @@ func TestNavigationSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
-	steer := navigation.NewNavigationSystem(navigation.NewPathFinder(grid), terrain, occupancy, 20)
+	steer := newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy, 20)
 	space := testSpace(t)
 	steer.BindSpace(space)
 
@@ -265,7 +264,7 @@ func TestNavigationSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Position]
 	var vel goke.Comp[world.Velocity]
-	var order goke.Comp[navigation.MoveOrder]
+	var order goke.Comp[MoveOrder]
 	var q *goke.Query
 
 	ecs := goke.New()
@@ -276,7 +275,7 @@ func TestNavigationSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
 		id := f.Cursor.IDs[0]
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: target}
 		pos.Slice(&f.Cursor)[0] = offCenter
-		order.Slice(&f.Cursor)[0] = navigation.MoveOrder{Target: target}
+		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(target, id)
 		space.Insert(id, offCenter.AABB)
 		space.Flush(nil)
@@ -323,7 +322,7 @@ func TestNavigationSystem_Update_ArrivalGlidesSmoothlyToCellCenter(t *testing.T)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
-	steer := navigation.NewNavigationSystem(navigation.NewPathFinder(grid), terrain, occupancy, 20)
+	steer := newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy, 20)
 	space := testSpace(t)
 	steer.BindSpace(space)
 
@@ -334,7 +333,7 @@ func TestNavigationSystem_Update_ArrivalGlidesSmoothlyToCellCenter(t *testing.T)
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Position]
 	var vel goke.Comp[world.Velocity]
-	var order goke.Comp[navigation.MoveOrder]
+	var order goke.Comp[MoveOrder]
 	var q *goke.Query
 
 	ecs := goke.New()
@@ -345,7 +344,7 @@ func TestNavigationSystem_Update_ArrivalGlidesSmoothlyToCellCenter(t *testing.T)
 		id := f.Cursor.IDs[0]
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: target}
 		pos.Slice(&f.Cursor)[0] = offCenter
-		order.Slice(&f.Cursor)[0] = navigation.MoveOrder{Target: target}
+		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(target, id)
 		space.Insert(id, offCenter.AABB)
 		space.Flush(nil)
@@ -424,15 +423,15 @@ func TestNavigationSystem_Update_ReproducesBoardDemoWallScenario(t *testing.T) {
 	start, _ := grid.CellIndex(2, 4)
 	target, _ := grid.CellIndex(gridWidth-3, 4)
 
-	pathFinder := navigation.NewPathFinder(grid)
-	steer := navigation.NewNavigationSystem(pathFinder, terrain, occupancy, speed)
+	pathFinder := newPathFinder(grid, terrain, occupancy)
+	steer := newNavigationSystem(pathFinder, grid, terrain, occupancy, speed)
 	space := testSpace(t)
 	steer.BindSpace(space)
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Position]
 	var vel goke.Comp[world.Velocity]
-	var order goke.Comp[navigation.MoveOrder]
+	var order goke.Comp[MoveOrder]
 	var q *goke.Query
 
 	ecs := goke.New()
@@ -444,7 +443,7 @@ func TestNavigationSystem_Update_ReproducesBoardDemoWallScenario(t *testing.T) {
 		startPos := world.Position{AABB: board.CellAABB(grid, start, entitySize)}
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: start}
 		pos.Slice(&f.Cursor)[0] = startPos
-		order.Slice(&f.Cursor)[0] = navigation.MoveOrder{Target: target}
+		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(start, id)
 		space.Insert(id, startPos.AABB)
 		space.Flush(nil)
@@ -516,7 +515,7 @@ func equalSteps(a, b []board.CellID) bool {
 	return true
 }
 
-func readCellAndMoveOrder(t *testing.T, q *goke.Query, cell *goke.Comp[board.Cell], order *goke.Comp[navigation.MoveOrder]) (board.Cell, navigation.MoveOrder) {
+func readCellAndMoveOrder(t *testing.T, q *goke.Query, cell *goke.Comp[board.Cell], order *goke.Comp[MoveOrder]) (board.Cell, MoveOrder) {
 	t.Helper()
 	q.All()
 	for q.Next() {
@@ -528,5 +527,5 @@ func readCellAndMoveOrder(t *testing.T, q *goke.Query, cell *goke.Comp[board.Cel
 		}
 	}
 	t.Fatal("expected to find the seeded entity")
-	return board.Cell{}, navigation.MoveOrder{}
+	return board.Cell{}, MoveOrder{}
 }

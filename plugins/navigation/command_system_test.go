@@ -1,4 +1,4 @@
-package navigation_test
+package navigation
 
 import (
 	"testing"
@@ -8,7 +8,6 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins/board"
-	"github.com/kjkrol/gokebiten/plugins/navigation"
 	"github.com/kjkrol/gokebiten/plugins/selection"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
@@ -30,15 +29,15 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 	surface := plane.NewEuclidean2D[uint32](1000, 1000)
 	camera := render.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
 
-	cmdState := &navigation.CommandState{}
-	cmds := navigation.NewCommandSystem(navigation.NewPathFinder(grid), terrain, occupancy, cmdState)
-	cmdHandler := navigation.NewDefaultCommandEventHandler(grid, camera, cmdState)
+	cmdState := &CommandState{}
+	cmds := newCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
+	cmdHandler := NewDefaultCommandEventHandler(grid, camera, cmdState)
 	selState := &selection.State{}
 	selSys := selection.NewSystem(selState)
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Position]
-	var order goke.Comp[navigation.MoveOrder]
+	var order goke.Comp[MoveOrder]
 	var readQuery *goke.Query
 	var selectedID, otherID uid.UID64
 
@@ -56,7 +55,7 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 		for i := range ids {
 			cells[i] = board.Cell{ID: start}
 			positions[i] = world.Position{AABB: board.CellAABB(grid, start, 8)}
-			orders[i] = navigation.MoveOrder{Target: oldTarget, Path: navigation.Path{Length: 1}}
+			orders[i] = MoveOrder{Target: oldTarget, Path: Path{Length: 1}}
 		}
 
 		readQuery = si.NewQueryBuilder(&order).Build()
@@ -82,7 +81,7 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 	cmdHandler.HandleEvents(events)
 	ecs.Tick(time.Second)
 
-	got := map[uid.UID64]navigation.MoveOrder{}
+	got := map[uid.UID64]MoveOrder{}
 	readQuery.All()
 	for readQuery.Next() {
 		cur := readQuery.Cursor()
@@ -121,15 +120,15 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 	surface := plane.NewEuclidean2D[uint32](1000, 1000)
 	camera := render.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
 
-	cmdState := &navigation.CommandState{}
-	cmds := navigation.NewCommandSystem(navigation.NewPathFinder(grid), terrain, occupancy, cmdState)
-	cmdHandler := navigation.NewDefaultCommandEventHandler(grid, camera, cmdState)
+	cmdState := &CommandState{}
+	cmds := newCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
+	cmdHandler := NewDefaultCommandEventHandler(grid, camera, cmdState)
 	selState := &selection.State{}
 	selSys := selection.NewSystem(selState)
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Position]
-	var order goke.OptComp[navigation.MoveOrder]
+	var order goke.OptComp[MoveOrder]
 	var readQuery *goke.Query
 	var idleID uid.UID64
 
@@ -176,7 +175,7 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 	cmdHandler.HandleEvents(events)
 	ecs.Tick(time.Second)
 
-	var gotMoveTo navigation.MoveOrder
+	var gotMoveTo MoveOrder
 	found := false
 	readQuery.All()
 	for readQuery.Next() {
@@ -219,15 +218,15 @@ func TestCommandSystem_Update_UnreachableTargetLeavesInFlightEntityUntouched(t *
 	surface := plane.NewEuclidean2D[uint32](1000, 1000)
 	camera := render.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
 
-	cmdState := &navigation.CommandState{}
-	cmds := navigation.NewCommandSystem(navigation.NewPathFinder(grid), terrain, occupancy, cmdState)
-	cmdHandler := navigation.NewDefaultCommandEventHandler(grid, camera, cmdState)
+	cmdState := &CommandState{}
+	cmds := newCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
+	cmdHandler := NewDefaultCommandEventHandler(grid, camera, cmdState)
 	selState := &selection.State{}
 	selSys := selection.NewSystem(selState)
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Position]
-	var order goke.Comp[navigation.MoveOrder]
+	var order goke.Comp[MoveOrder]
 	var readQuery *goke.Query
 	var movingID uid.UID64
 
@@ -243,7 +242,7 @@ func TestCommandSystem_Update_UnreachableTargetLeavesInFlightEntityUntouched(t *
 		orders := order.Slice(&f.Cursor)
 		cells[0] = board.Cell{ID: start}
 		positions[0] = world.Position{AABB: board.CellAABB(grid, start, 8)}
-		orders[0] = navigation.MoveOrder{Target: oldTarget, Path: navigation.Path{Length: 1}}
+		orders[0] = MoveOrder{Target: oldTarget, Path: Path{Length: 1}}
 
 		readQuery = si.NewQueryBuilder(&order).Build()
 		selSys.Init(si)

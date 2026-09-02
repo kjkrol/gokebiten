@@ -11,7 +11,7 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 )
 
-// Plugin wires a NavigationSystem (and, with WithCommands, a CommandSystem)
+// Plugin wires a navigationSystem (and, with WithCommands, a commandSystem)
 // into a Game — depends on plugins/board (for Grid/Terrain) and plugins/world
 // (for Position/Velocity/Space). WithCommands additionally depends on
 // plugins/selection (Selected).
@@ -19,12 +19,12 @@ type Plugin struct {
 	speed int32
 
 	board      *board.Plugin
-	pathFinder *PathFinder
-	navigation *NavigationSystem
+	pathFinder *pathFinder
+	navigation *navigationSystem
 
 	commandsEnabled bool
 	commandState    *CommandState
-	commands        *CommandSystem
+	commands        *commandSystem
 
 	rendererEnabled bool
 	pathRenderer    *PathRenderer
@@ -52,8 +52,8 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 	}
 	p.board = boardPlugin
 	occupancy := boardPlugin.Occupancy()
-	p.pathFinder = NewPathFinder(boardPlugin.Board())
-	p.navigation = NewNavigationSystem(p.pathFinder, boardPlugin.Board(), occupancy, p.speed)
+	p.pathFinder = newPathFinder(boardPlugin.Board(), boardPlugin.Board(), occupancy)
+	p.navigation = newNavigationSystem(p.pathFinder, boardPlugin.Board(), boardPlugin.Board(), occupancy, p.speed)
 	p.navigation.BindSpace(worldPlugin.World().Space())
 
 	if p.commandsEnabled || p.rendererEnabled {
@@ -68,7 +68,7 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 	}
 	if p.commandsEnabled {
 		p.commandState = &CommandState{}
-		p.commands = NewCommandSystem(p.pathFinder, boardPlugin.Board(), occupancy, p.commandState)
+		p.commands = newCommandSystem(p.pathFinder, p.commandState)
 		ctx.Provide(p.commandState)
 		ctx.UseModule(p.commands)
 	}
@@ -82,9 +82,6 @@ func (p *Plugin) WithCommands() *Plugin {
 	p.commandsEnabled = true
 	return p
 }
-
-// Commands returns the command system, or nil unless WithCommands was called.
-func (p *Plugin) Commands() *CommandSystem { return p.commands }
 
 // EventHandler returns the default right-click move-order control.EventHandler, or nil unless WithCommands was called.
 func (p *Plugin) EventHandler() control.EventHandler {

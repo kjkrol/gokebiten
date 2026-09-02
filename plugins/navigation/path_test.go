@@ -1,10 +1,9 @@
-package navigation_test
+package navigation
 
 import (
 	"testing"
 
 	"github.com/kjkrol/gokebiten/plugins/board"
-	"github.com/kjkrol/gokebiten/plugins/navigation"
 	"github.com/kjkrol/uid"
 )
 
@@ -20,9 +19,9 @@ func TestPathFinder_FindPath_UnreachableTarget_ReportsNotFound(t *testing.T) {
 		terrain.Set(n, board.CellKind{Cost: 1, Passable: false})
 	}
 
-	_, ok := navigation.NewPathFinder(grid).FindPath(terrain, occupancy, uid.UID64(1), from, to)
+	_, ok := newPathFinder(grid, terrain, occupancy).findPath(uid.UID64(1), from, to)
 	if ok {
-		t.Error("expected FindPath to report not-found for a target walled in on every side")
+		t.Error("expected findPath to report not-found for a target walled in on every side")
 	}
 }
 
@@ -33,11 +32,11 @@ func TestPathFinder_FindPath_ReusesSolverAcrossCalls(t *testing.T) {
 	occupancy := &board.SingleOccupancy{}
 	entity := uid.UID64(1)
 
-	pathFinder := navigation.NewPathFinder(grid)
+	pf := newPathFinder(grid, terrain, occupancy)
 
 	firstFrom, _ := grid.CellIndex(0, 0)
 	firstTo, _ := grid.CellIndex(4, 0)
-	firstPath, ok := pathFinder.FindPath(terrain, occupancy, entity, firstFrom, firstTo)
+	firstPath, ok := pf.findPath(entity, firstFrom, firstTo)
 	if !ok {
 		t.Fatal("expected the first query to find a path")
 	}
@@ -47,9 +46,9 @@ func TestPathFinder_FindPath_ReusesSolverAcrossCalls(t *testing.T) {
 
 	secondFrom, _ := grid.CellIndex(0, 4)
 	secondTo, _ := grid.CellIndex(4, 4)
-	secondPath, ok := pathFinder.FindPath(terrain, occupancy, entity, secondFrom, secondTo)
+	secondPath, ok := pf.findPath(entity, secondFrom, secondTo)
 	if !ok {
-		t.Fatal("expected the second query, on the same reused PathFinder, to find a path")
+		t.Fatal("expected the second query, on the same reused pathFinder, to find a path")
 	}
 	if secondPath.Length == 0 || secondPath.Steps[secondPath.Length-1] != secondTo {
 		t.Errorf("second path = %+v, want it to end at %v", secondPath, secondTo)
@@ -69,7 +68,7 @@ func TestPathFinder_FindPath_NeverCutsThroughABlockedCorner(t *testing.T) {
 
 	from, _ := grid.CellIndex(1, 2)
 	to, _ := grid.CellIndex(3, 2)
-	path, ok := navigation.NewPathFinder(grid).FindPath(terrain, occupancy, uid.UID64(1), from, to)
+	path, ok := newPathFinder(grid, terrain, occupancy).findPath(uid.UID64(1), from, to)
 	if !ok {
 		t.Fatal("expected a path around the wall to exist")
 	}

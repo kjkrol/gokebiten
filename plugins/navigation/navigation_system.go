@@ -14,7 +14,7 @@ import (
 )
 
 // MoveOrder commands an entity to path toward Target until it arrives —
-// NavigationSystem removes it once Target is reached.
+// navigationSystem removes it once Target is reached.
 type MoveOrder struct {
 	Target board.CellID
 	Path   Path
@@ -24,15 +24,15 @@ type MoveOrder struct {
 // query it to react to a unit stepping onto a cell.
 type CellEntered struct{ ID board.CellID }
 
-// NavigationSystem paths MoveOrder-commanded entities toward their target,
+// navigationSystem paths MoveOrder-commanded entities toward their target,
 // setting Velocity's direction and base speed toward the next waypoint.
-type NavigationSystem struct {
+type navigationSystem struct {
 	grid       board.Grid
 	terrain    board.Terrain
 	occupancy  board.Occupancy
 	speed      int32
 	space      *gokg.Space
-	pathFinder *PathFinder
+	pathFinder *pathFinder
 
 	query *goke.Query
 	cell  goke.Comp[board.Cell]
@@ -51,25 +51,25 @@ type NavigationSystem struct {
 	sys goke.Runnable
 }
 
-var _ goke.Module = (*NavigationSystem)(nil)
-var _ goke.System = (*NavigationSystem)(nil)
-var _ gokebiten.PostLoader = (*NavigationSystem)(nil)
+var _ goke.Module = (*navigationSystem)(nil)
+var _ goke.System = (*navigationSystem)(nil)
+var _ gokebiten.PostLoader = (*navigationSystem)(nil)
 
 // arrivalEpsilon is how close (world-units) counts as "reached" a waypoint — small enough that the final snap is imperceptible.
 const arrivalEpsilon = 2.0
 
-// NewNavigationSystem builds a NavigationSystem whose base movement speed, before any world.SpeedModifier scales it, is speed world-units/sec.
-func NewNavigationSystem(pathFinder *PathFinder, terrain board.Terrain, occupancy board.Occupancy, speed int32) *NavigationSystem {
-	return &NavigationSystem{
-		grid: pathFinder.Grid(), terrain: terrain, occupancy: occupancy, speed: speed,
+// newNavigationSystem builds a navigationSystem whose base movement speed, before any world.SpeedModifier scales it, is speed world-units/sec.
+func newNavigationSystem(pathFinder *pathFinder, grid board.Grid, terrain board.Terrain, occupancy board.Occupancy, speed int32) *navigationSystem {
+	return &navigationSystem{
+		grid: grid, terrain: terrain, occupancy: occupancy, speed: speed,
 		pathFinder: pathFinder,
 	}
 }
 
 // BindSpace attaches the shared spatial index — arrivals snap to the cell center once bound; no-op (best-effort stop) if never called.
-func (s *NavigationSystem) BindSpace(space *gokg.Space) { s.space = space }
+func (s *navigationSystem) BindSpace(space *gokg.Space) { s.space = space }
 
-func (s *NavigationSystem) Init(si *goke.SysInit) {
+func (s *navigationSystem) Init(si *goke.SysInit) {
 	s.query = si.NewQueryBuilder(&s.cell, &s.pos, &s.vel).
 		Optional(&s.order).
 		Build()
@@ -80,7 +80,7 @@ func (s *NavigationSystem) Init(si *goke.SysInit) {
 	s.clearEditor = s.enteredQuery.NewEditorBuilder().Remove(goke.Remove[CellEntered]()).Build()
 }
 
-func (s *NavigationSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
+func (s *navigationSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 	s.clearEnteredTags(cb)
 
 	snapped := false
@@ -131,7 +131,7 @@ func (s *NavigationSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 			}
 
 			if (p.Length == 0 || p.Index >= p.Length) && actual != target {
-				newPath, found := s.pathFinder.FindPath(s.terrain, s.occupancy, id, actual, target)
+				newPath, found := s.pathFinder.findPath(id, actual, target)
 				if !found {
 					continue
 				}
@@ -195,7 +195,7 @@ func (s *NavigationSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 	}
 }
 
-func (s *NavigationSystem) clearEnteredTags(cb *goke.CmdBuf) {
+func (s *navigationSystem) clearEnteredTags(cb *goke.CmdBuf) {
 	s.enteredQuery.All()
 	for s.enteredQuery.Next() {
 		cursor := s.enteredQuery.Cursor()
@@ -207,24 +207,24 @@ func (s *NavigationSystem) clearEnteredTags(cb *goke.CmdBuf) {
 	}
 }
 
-// RegSystems registers NavigationSystem itself as the per-tick system — see [goke.Module].
-func (s *NavigationSystem) RegSystems(ecs *goke.ECS) {
+// RegSystems registers navigationSystem itself as the per-tick system — see [goke.Module].
+func (s *navigationSystem) RegSystems(ecs *goke.ECS) {
 	if s.sys == nil {
 		s.sys = ecs.RegSys(s)
 	}
 }
 
-// RunPlan runs NavigationSystem's Update for this tick — call from your own Game.Loop closure.
-func (s *NavigationSystem) RunPlan(ctx goke.RunCtx, d time.Duration) {
+// RunPlan runs navigationSystem's Update for this tick — call from your own Game.Loop closure.
+func (s *navigationSystem) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	ctx.Run(s.sys, d)
 	ctx.Sync()
 }
 
 // SetupSystems is empty — spawning board entities is the game's responsibility.
-func (s *NavigationSystem) SetupSystems() []goke.System { return nil }
+func (s *navigationSystem) SetupSystems() []goke.System { return nil }
 
-// LoadComps lists the component types NavigationSystem owns — see [goke.CompProvider].
-func (s *NavigationSystem) LoadComps() []goke.CompToken {
+// LoadComps lists the component types navigationSystem owns — see [goke.CompProvider].
+func (s *navigationSystem) LoadComps() []goke.CompToken {
 	return []goke.CompToken{
 		goke.LoadComp[board.Cell](),
 		goke.LoadComp[MoveOrder](),
@@ -233,7 +233,7 @@ func (s *NavigationSystem) LoadComps() []goke.CompToken {
 }
 
 // PostLoad rebuilds board.Occupancy from every loaded entity's Cell component.
-func (s *NavigationSystem) PostLoad() goke.System {
+func (s *navigationSystem) PostLoad() goke.System {
 	return goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		var cell goke.Comp[board.Cell]
 		query := si.NewQueryBuilder(&cell).Build()
