@@ -4,16 +4,15 @@ import (
 	"testing"
 
 	"github.com/kjkrol/gokebiten/plugins/board"
-	"github.com/kjkrol/gokebiten/plugins/board/grids"
 	"github.com/kjkrol/gokebiten/plugins/navigation"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokg/geom"
 )
 
 func TestPathPoints_NoPathYet_StraightToTarget(t *testing.T) {
-	grid := grids.NewSquareGrid(5, 1, 10)
-	start := cellAtXY(grid, 0, 0)
-	target := cellAtXY(grid, 4, 0)
+	grid := board.NewSquareGrid(5, 1, 10)
+	start, _ := grid.CellIndex(0, 0)
+	target, _ := grid.CellIndex(4, 0)
 	pos := positionAt(grid, start)
 
 	points := navigation.PathPoints(grid, pos, navigation.MoveOrder{Target: target})
@@ -23,11 +22,11 @@ func TestPathPoints_NoPathYet_StraightToTarget(t *testing.T) {
 }
 
 func TestPathPoints_PartiallyConsumedPath_SkipsPassedSteps(t *testing.T) {
-	grid := grids.NewSquareGrid(5, 1, 10)
-	start := cellAtXY(grid, 0, 0)
-	c1 := cellAtXY(grid, 1, 0)
-	c2 := cellAtXY(grid, 2, 0)
-	target := cellAtXY(grid, 3, 0)
+	grid := board.NewSquareGrid(5, 1, 10)
+	start, _ := grid.CellIndex(0, 0)
+	c1, _ := grid.CellIndex(1, 0)
+	c2, _ := grid.CellIndex(2, 0)
+	target, _ := grid.CellIndex(3, 0)
 	pos := positionAt(grid, start)
 
 	var p navigation.Path
@@ -44,9 +43,9 @@ func TestPathPoints_PartiallyConsumedPath_SkipsPassedSteps(t *testing.T) {
 }
 
 func TestPathPoints_LastPointAlwaysTarget(t *testing.T) {
-	grid := grids.NewSquareGrid(5, 1, 10)
-	start := cellAtXY(grid, 0, 0)
-	target := cellAtXY(grid, 2, 0)
+	grid := board.NewSquareGrid(5, 1, 10)
+	start, _ := grid.CellIndex(0, 0)
+	target, _ := grid.CellIndex(2, 0)
 	pos := positionAt(grid, start)
 
 	var p navigation.Path
@@ -63,7 +62,7 @@ func TestPathPoints_LastPointAlwaysTarget(t *testing.T) {
 	}
 }
 
-func positionAt(grid *grids.SquareGrid, c board.CellID) world.Position {
+func positionAt(grid *board.SquareGrid, c board.CellID) world.Position {
 	return world.Position{AABB: board.CellAABB(grid, c, 8)}
 }
 

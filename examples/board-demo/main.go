@@ -11,7 +11,6 @@ import (
 	"github.com/kjkrol/gokebiten"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins/board"
-	"github.com/kjkrol/gokebiten/plugins/board/grids"
 	"github.com/kjkrol/gokebiten/plugins/camera"
 	"github.com/kjkrol/gokebiten/plugins/navigation"
 	"github.com/kjkrol/gokebiten/plugins/selection"
@@ -59,7 +58,7 @@ func main() {
 		TargetTPS: TPS,
 	})
 
-	grid := grids.NewSquareGrid(GridWidth, GridHeight, CellSize)
+	grid := board.NewSquareGrid(GridWidth, GridHeight, CellSize)
 	occupancy := &board.SingleOccupancy{}
 
 	atlas := render.NewAtlas(16, 8)

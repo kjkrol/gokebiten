@@ -5,14 +5,13 @@ import (
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugins/board"
-	"github.com/kjkrol/gokebiten/plugins/board/grids"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/plugins/world/spawners/grid"
 	"github.com/kjkrol/uid"
 )
 
 func TestValueExtras_WithEffect_EntersOccupancyOnSpawn(t *testing.T) {
-	sqGrid := grids.NewSquareGrid(5, 5, 10)
+	sqGrid := board.NewSquareGrid(5, 5, 10)
 	occupancy := &board.SingleOccupancy{}
 	target := cellAtXY(sqGrid, 2, 2)
 

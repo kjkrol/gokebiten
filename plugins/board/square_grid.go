@@ -1,13 +1,12 @@
-package grids
+package board
 
 import (
 	"math"
 
-	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokg/geom"
 )
 
-// SquareGrid is a board.Grid over a Width x Height array of square cells,
+// SquareGrid is a Grid over a Width x Height array of square cells,
 // CellSize world-pixels on a side, with 8-directional (N/S/E/W plus
 // diagonals) neighbors — a diagonal step costs √2× an orthogonal one
 // (NeighborCost), so paths favor natural diagonal movement over
@@ -18,21 +17,21 @@ type SquareGrid struct {
 	Toroidal      bool
 }
 
-var _ board.Grid = (*SquareGrid)(nil)
+var _ Grid = (*SquareGrid)(nil)
 
 func NewSquareGrid(width, height, cellSize uint32) *SquareGrid {
 	return &SquareGrid{Width: width, Height: height, CellSize: cellSize}
 }
 
-func (g *SquareGrid) idAt(x, y uint32) board.CellID {
-	return board.CellID(uint64(y)*uint64(g.Width) + uint64(x))
+func (g *SquareGrid) idAt(x, y uint32) CellID {
+	return CellID(uint64(y)*uint64(g.Width) + uint64(x))
 }
 
-func (g *SquareGrid) cellXY(c board.CellID) (x, y uint32) {
+func (g *SquareGrid) cellXY(c CellID) (x, y uint32) {
 	return uint32(uint64(c) % uint64(g.Width)), uint32(uint64(c) / uint64(g.Width))
 }
 
-func (g *SquareGrid) Contains(c board.CellID) bool {
+func (g *SquareGrid) Contains(c CellID) bool {
 	if g.Toroidal {
 		return true
 	}
@@ -45,9 +44,9 @@ var squareDirs = [8][2]int64{
 	{-1, -1}, {1, -1}, {-1, 1}, {1, 1}, // diagonal
 }
 
-func (g *SquareGrid) Neighbors(c board.CellID) []board.CellID {
+func (g *SquareGrid) Neighbors(c CellID) []CellID {
 	x, y := g.cellXY(c)
-	out := make([]board.CellID, 0, 8)
+	out := make([]CellID, 0, 8)
 	for _, d := range squareDirs {
 		nx, ny := int64(x)+d[0], int64(y)+d[1]
 		if g.Toroidal {
@@ -60,13 +59,13 @@ func (g *SquareGrid) Neighbors(c board.CellID) []board.CellID {
 	return out
 }
 
-func (g *SquareGrid) CellCenter(c board.CellID) geom.Vec[float64] {
+func (g *SquareGrid) CellCenter(c CellID) geom.Vec[float64] {
 	x, y := g.cellXY(c)
 	half := float64(g.CellSize) / 2
 	return geom.NewVec(float64(x)*float64(g.CellSize)+half, float64(y)*float64(g.CellSize)+half)
 }
 
-func (g *SquareGrid) CellAt(pos geom.Vec[float64]) (board.CellID, bool) {
+func (g *SquareGrid) CellAt(pos geom.Vec[float64]) (CellID, bool) {
 	if g.CellSize == 0 {
 		return 0, false
 	}
@@ -84,7 +83,7 @@ func (g *SquareGrid) CellAt(pos geom.Vec[float64]) (board.CellID, bool) {
 	return g.idAt(uint32(x), uint32(y)), true
 }
 
-func (g *SquareGrid) CellIndex(col, row uint32) (board.CellID, bool) {
+func (g *SquareGrid) CellIndex(col, row uint32) (CellID, bool) {
 	if g.Toroidal {
 		return g.idAt(col%g.Width, row%g.Height), true
 	}
@@ -95,7 +94,7 @@ func (g *SquareGrid) CellIndex(col, row uint32) (board.CellID, bool) {
 }
 
 // dxdy returns the wrap-aware column/row gap between a and b.
-func (g *SquareGrid) dxdy(a, b board.CellID) (dx, dy float64) {
+func (g *SquareGrid) dxdy(a, b CellID) (dx, dy float64) {
 	ax, ay := g.cellXY(a)
 	bx, by := g.cellXY(b)
 	width, height := uint32(0), uint32(0)
@@ -106,14 +105,14 @@ func (g *SquareGrid) dxdy(a, b board.CellID) (dx, dy float64) {
 }
 
 // NeighborCost is 1 for an orthogonal step, √2 for a diagonal one.
-func (g *SquareGrid) NeighborCost(a, b board.CellID) float64 {
+func (g *SquareGrid) NeighborCost(a, b CellID) float64 {
 	dx, dy := g.dxdy(a, b)
 	return math.Sqrt(dx*dx + dy*dy)
 }
 
 // Distance is octile distance — admissible for this grid's 8-directional
 // Neighbors with diagonal NeighborCost √2 (Manhattan would overestimate).
-func (g *SquareGrid) Distance(a, b board.CellID) float64 {
+func (g *SquareGrid) Distance(a, b CellID) float64 {
 	dx, dy := g.dxdy(a, b)
 	if dx < dy {
 		dx, dy = dy, dx
@@ -124,7 +123,7 @@ func (g *SquareGrid) Distance(a, b board.CellID) float64 {
 // DiagonalNeighbors returns the two orthogonal cells flanking the corner
 // between a and its diagonal neighbor b — ok is false if b isn't a diagonal
 // neighbor of a.
-func (g *SquareGrid) DiagonalNeighbors(a, b board.CellID) (c1, c2 board.CellID, ok bool) {
+func (g *SquareGrid) DiagonalNeighbors(a, b CellID) (c1, c2 CellID, ok bool) {
 	ax, ay := g.cellXY(a)
 	bx, by := g.cellXY(b)
 	dx := g.axisDelta(ax, bx, g.Width)

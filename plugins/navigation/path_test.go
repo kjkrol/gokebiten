@@ -4,19 +4,18 @@ import (
 	"testing"
 
 	"github.com/kjkrol/gokebiten/plugins/board"
-	"github.com/kjkrol/gokebiten/plugins/board/grids"
 	"github.com/kjkrol/gokebiten/plugins/navigation"
 	"github.com/kjkrol/uid"
 )
 
 func TestPathFinder_FindPath_UnreachableTarget_ReportsNotFound(t *testing.T) {
-	grid := grids.NewSquareGrid(5, 5, 10)
+	grid := board.NewSquareGrid(5, 5, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
 
-	from := cellAtXY(grid, 0, 0)
-	to := cellAtXY(grid, 2, 2)
+	from, _ := grid.CellIndex(0, 0)
+	to, _ := grid.CellIndex(2, 2)
 	for _, n := range grid.Neighbors(to) {
 		terrain.Set(n, board.CellKind{Cost: 1, Passable: false})
 	}
@@ -28,7 +27,7 @@ func TestPathFinder_FindPath_UnreachableTarget_ReportsNotFound(t *testing.T) {
 }
 
 func TestPathFinder_FindPath_ReusesSolverAcrossCalls(t *testing.T) {
-	grid := grids.NewSquareGrid(5, 5, 10)
+	grid := board.NewSquareGrid(5, 5, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
@@ -36,7 +35,8 @@ func TestPathFinder_FindPath_ReusesSolverAcrossCalls(t *testing.T) {
 
 	pathFinder := navigation.NewPathFinder(grid)
 
-	firstFrom, firstTo := cellAtXY(grid, 0, 0), cellAtXY(grid, 4, 0)
+	firstFrom, _ := grid.CellIndex(0, 0)
+	firstTo, _ := grid.CellIndex(4, 0)
 	firstPath, ok := pathFinder.FindPath(terrain, occupancy, entity, firstFrom, firstTo)
 	if !ok {
 		t.Fatal("expected the first query to find a path")
@@ -45,7 +45,8 @@ func TestPathFinder_FindPath_ReusesSolverAcrossCalls(t *testing.T) {
 		t.Errorf("first path = %+v, want it to end at %v", firstPath, firstTo)
 	}
 
-	secondFrom, secondTo := cellAtXY(grid, 0, 4), cellAtXY(grid, 4, 4)
+	secondFrom, _ := grid.CellIndex(0, 4)
+	secondTo, _ := grid.CellIndex(4, 4)
 	secondPath, ok := pathFinder.FindPath(terrain, occupancy, entity, secondFrom, secondTo)
 	if !ok {
 		t.Fatal("expected the second query, on the same reused PathFinder, to find a path")
@@ -56,7 +57,7 @@ func TestPathFinder_FindPath_ReusesSolverAcrossCalls(t *testing.T) {
 }
 
 func TestPathFinder_FindPath_NeverCutsThroughABlockedCorner(t *testing.T) {
-	grid := grids.NewSquareGrid(5, 5, 10)
+	grid := board.NewSquareGrid(5, 5, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	wall := board.CellKind{Cost: 1, Passable: false}

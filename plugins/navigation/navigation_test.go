@@ -7,7 +7,6 @@ import (
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugins/board"
-	"github.com/kjkrol/gokebiten/plugins/board/grids"
 	"github.com/kjkrol/gokebiten/plugins/navigation"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokg"
@@ -58,16 +57,16 @@ func (p *pushOnce) Update(_ *goke.CmdBuf, _ time.Duration) {
 }
 
 func TestNavigationSystem_Update_DeviationTriggersRepath(t *testing.T) {
-	grid := grids.NewSquareGrid(5, 1, 10)
+	grid := board.NewSquareGrid(5, 1, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
 	steer := navigation.NewNavigationSystem(navigation.NewPathFinder(grid), terrain, occupancy, 20)
 	pusher := &pushOnce{grid: grid, size: 8}
 
-	start := cellAtXY(grid, 0, 0)
-	target := cellAtXY(grid, 4, 0)
-	pushed := cellAtXY(grid, 3, 0)
+	start, _ := grid.CellIndex(0, 0)
+	target, _ := grid.CellIndex(4, 0)
+	pushed, _ := grid.CellIndex(3, 0)
 	pusher.to = pushed
 
 	var cell goke.Comp[board.Cell]
@@ -133,15 +132,15 @@ func TestNavigationSystem_Update_DeviationTriggersRepath(t *testing.T) {
 // the corner for a tick, before it reaches the actually-planned cell — that
 // is not a deviation and must not trigger a full re-path.
 func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *testing.T) {
-	grid := grids.NewSquareGrid(5, 5, 10)
+	grid := board.NewSquareGrid(5, 5, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
 	steer := navigation.NewNavigationSystem(navigation.NewPathFinder(grid), terrain, occupancy, 20)
 
-	previous := cellAtXY(grid, 0, 1)
-	expected := cellAtXY(grid, 1, 0) // diagonal neighbor of previous
-	flanker := cellAtXY(grid, 1, 1)  // flanks the previous->expected corner
+	previous, _ := grid.CellIndex(0, 1)
+	expected, _ := grid.CellIndex(1, 0) // diagonal neighbor of previous
+	flanker, _ := grid.CellIndex(1, 1)  // flanks the previous->expected corner
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Position]
@@ -191,13 +190,13 @@ func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *te
 // since the entity never matches this system's query again once MoveOrder is
 // gone, nothing ever stopped it, and it drifted off the board.
 func TestNavigationSystem_Update_ArrivalStopsEntity(t *testing.T) {
-	grid := grids.NewSquareGrid(5, 1, 10)
+	grid := board.NewSquareGrid(5, 1, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
 	steer := navigation.NewNavigationSystem(navigation.NewPathFinder(grid), terrain, occupancy, 20)
 
-	start := cellAtXY(grid, 2, 0)
+	start, _ := grid.CellIndex(2, 0)
 	target := start // already at the target — arrives on the very first tick
 
 	var cell goke.Comp[board.Cell]
@@ -251,7 +250,7 @@ func TestNavigationSystem_Update_ArrivalStopsEntity(t *testing.T) {
 // a cell boundary at an arbitrary point) ends up exactly centered — needed
 // for a board game, where units are expected to sit precisely on a cell.
 func TestNavigationSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
-	grid := grids.NewSquareGrid(5, 1, 10)
+	grid := board.NewSquareGrid(5, 1, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
@@ -259,7 +258,7 @@ func TestNavigationSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
 	space := testSpace(t)
 	steer.BindSpace(space)
 
-	target := cellAtXY(grid, 2, 0)
+	target, _ := grid.CellIndex(2, 0)
 	// Within arrivalEpsilon of the target cell's true center (25,5) for a 10px cell at column 2.
 	offCenter := world.Position{AABB: plane.NewAABB(geom.NewVec[uint32](20, 1), 8, 8)}
 
@@ -320,7 +319,7 @@ func TestNavigationSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
 // in a single tick, visibly popping the entity into place. Arrival must
 // glide in bounded steps and still land exactly on center.
 func TestNavigationSystem_Update_ArrivalGlidesSmoothlyToCellCenter(t *testing.T) {
-	grid := grids.NewSquareGrid(5, 1, 10)
+	grid := board.NewSquareGrid(5, 1, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
@@ -328,7 +327,7 @@ func TestNavigationSystem_Update_ArrivalGlidesSmoothlyToCellCenter(t *testing.T)
 	space := testSpace(t)
 	steer.BindSpace(space)
 
-	target := cellAtXY(grid, 2, 0)
+	target, _ := grid.CellIndex(2, 0)
 	// Off the true center (25,5), within the target cell, well beyond arrivalEpsilon.
 	offCenter := world.Position{AABB: plane.NewAABB(geom.NewVec[uint32](17, 1), 8, 8)}
 
@@ -411,7 +410,7 @@ func TestNavigationSystem_Update_ReproducesBoardDemoWallScenario(t *testing.T) {
 		entitySize                      = uint32(22)
 		speed                           = int32(cellSize * 2)
 	)
-	grid := grids.NewSquareGrid(gridWidth, gridHeight, cellSize)
+	grid := board.NewSquareGrid(gridWidth, gridHeight, cellSize)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	var wallCells []board.CellID

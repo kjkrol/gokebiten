@@ -8,7 +8,6 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins/board"
-	"github.com/kjkrol/gokebiten/plugins/board/grids"
 	"github.com/kjkrol/gokebiten/plugins/navigation"
 	"github.com/kjkrol/gokebiten/plugins/selection"
 	"github.com/kjkrol/gokebiten/plugins/world"
@@ -19,14 +18,14 @@ import (
 )
 
 func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
-	grid := grids.NewSquareGrid(10, 1, 10)
+	grid := board.NewSquareGrid(10, 1, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
 
-	start := cellAtXY(grid, 0, 0)
-	oldTarget := cellAtXY(grid, 3, 0)
-	newTarget := cellAtXY(grid, 8, 0)
+	start, _ := grid.CellIndex(0, 0)
+	oldTarget, _ := grid.CellIndex(3, 0)
+	newTarget, _ := grid.CellIndex(8, 0)
 
 	surface := plane.NewEuclidean2D[uint32](1000, 1000)
 	camera := render.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
@@ -111,13 +110,13 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 }
 
 func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T) {
-	grid := grids.NewSquareGrid(10, 1, 10)
+	grid := board.NewSquareGrid(10, 1, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
 
-	start := cellAtXY(grid, 0, 0)
-	newTarget := cellAtXY(grid, 8, 0)
+	start, _ := grid.CellIndex(0, 0)
+	newTarget, _ := grid.CellIndex(8, 0)
 
 	surface := plane.NewEuclidean2D[uint32](1000, 1000)
 	camera := render.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
@@ -207,14 +206,14 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 }
 
 func TestCommandSystem_Update_UnreachableTargetLeavesInFlightEntityUntouched(t *testing.T) {
-	grid := grids.NewSquareGrid(10, 1, 10)
+	grid := board.NewSquareGrid(10, 1, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
 
-	start := cellAtXY(grid, 0, 0)
-	oldTarget := cellAtXY(grid, 3, 0)
-	wall := cellAtXY(grid, 8, 0)
+	start, _ := grid.CellIndex(0, 0)
+	oldTarget, _ := grid.CellIndex(3, 0)
+	wall, _ := grid.CellIndex(8, 0)
 	terrain.Set(wall, board.CellKind{Cost: 1, Passable: false})
 
 	surface := plane.NewEuclidean2D[uint32](1000, 1000)

@@ -35,10 +35,7 @@ func findPath(solver *astar.Solver[board.CellID], grid board.Grid, terrain board
 		return Path{}, false
 	}
 	steps := full[1:]
-	n := len(steps)
-	if n > MaxPathLength {
-		n = MaxPathLength
-	}
+	n := min(len(steps), MaxPathLength)
 	var p Path
 	copy(p.Steps[:], steps[:n])
 	p.Length = uint16(n)
