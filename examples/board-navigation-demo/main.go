@@ -37,7 +37,7 @@ type State struct{ Saves int }
 
 func main() {
 	game := gokebiten.NewGame(&gokebiten.GameProps{
-		Title:       "gokebiten board plugin — square grid RTS demo",
+		Title:       "gokebiten board & navigation plugins demo",
 		ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight,
 		TargetTPS: TPS,
 	})
