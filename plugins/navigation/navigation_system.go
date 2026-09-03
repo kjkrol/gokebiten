@@ -111,23 +111,26 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 			}
 
 			if actual != previous {
-				s.occupancy.Leave(previous, id)
-				s.occupancy.Enter(actual, id)
-				cells[i].ID = actual
-				enteredIDs = append(enteredIDs, id)
-				enteredVals = append(enteredVals, CellEntered{ID: actual})
-
 				expected := target
 				if p.Length > 0 && p.Index < p.Length {
 					expected = p.Steps[p.Index]
 				}
 				if actual != expected {
 					c1, c2, diag := s.grid.DiagonalNeighbors(previous, expected)
-					isFlanker := diag && (actual == c1 || actual == c2)
-					if !isFlanker {
+					if diag && (actual == c1 || actual == c2) {
+						actual = previous
+					} else {
 						p.Length = 0
 					}
 				}
+			}
+
+			if actual != previous {
+				s.occupancy.Leave(previous, id)
+				s.occupancy.Enter(actual, id)
+				cells[i].ID = actual
+				enteredIDs = append(enteredIDs, id)
+				enteredVals = append(enteredVals, CellEntered{ID: actual})
 			}
 
 			if (p.Length == 0 || p.Index >= p.Length) && actual != target {

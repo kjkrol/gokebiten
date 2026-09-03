@@ -35,6 +35,7 @@ type PathRenderer struct {
 	query *goke.Query
 	pos   goke.Comp[world.Position]
 	vel   goke.Comp[world.Velocity]
+	cell  goke.Comp[board.Cell]
 	order goke.Comp[MoveOrder]
 }
 
@@ -49,7 +50,7 @@ func (r *PathRenderer) BindSpace(space *gokg.Space) { r.space = space }
 func (r *PathRenderer) BindCamera(camera render.Camera) { r.batch.BindCamera(camera) }
 
 func (r *PathRenderer) Init(si *goke.SysInit) {
-	r.query = si.NewQueryBuilder(&r.pos, &r.vel, &r.order).
+	r.query = si.NewQueryBuilder(&r.pos, &r.vel, &r.cell, &r.order).
 		Include(goke.Include[selection.Selected]()).
 		Build()
 }
@@ -62,14 +63,11 @@ func (r *PathRenderer) Draw(screen *ebiten.Image) {
 			cursor := r.query.Cursor()
 			positions := r.pos.Slice(cursor)
 			velocities := r.vel.Slice(cursor)
+			cells := r.cell.Slice(cursor)
 			orders := r.order.Slice(cursor)
 			for i := range cursor.IDs {
 				center := board.Center(positions[i])
-				actual, ok := r.grid.CellAt(center)
-				if !ok {
-					continue
-				}
-				r.drawPath(center, velocities[i].Dir, pathCells(board.Cell{ID: actual}, orders[i]))
+				r.drawPath(center, velocities[i].Dir, pathCells(cells[i], orders[i]))
 			}
 		}
 	}

@@ -129,7 +129,7 @@ func TestNavigationSystem_Update_DeviationTriggersRepath(t *testing.T) {
 // against a real bug: sampling a diagonal move at discrete ticks routinely
 // lands the entity's continuous position in one of the two cells flanking
 // the corner for a tick, before it reaches the actually-planned cell — that
-// is not a deviation and must not trigger a full re-path.
+// must not invalidate the path, nor get recorded as the entity's cell.
 func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(5, 5, 10)
 	terrain := board.NewTerrainMap()
@@ -139,7 +139,6 @@ func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *te
 
 	previous, _ := grid.CellIndex(0, 1)
 	expected, _ := grid.CellIndex(1, 0) // diagonal neighbor of previous
-	flanker, _ := grid.CellIndex(1, 1)  // flanks the previous->expected corner
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Position]
@@ -176,8 +175,8 @@ func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *te
 	ecs.Tick(time.Second)
 
 	c, mt := readCellAndMoveOrder(t, q, &cell, &order)
-	if c.ID != flanker {
-		t.Fatalf("Cell.ID = %v, want %v (bookkeeping should still track the actual cell)", c.ID, flanker)
+	if c.ID != previous {
+		t.Fatalf("Cell.ID = %v, want %v (bookkeeping should ignore a transient flanker read, not just tolerate it)", c.ID, previous)
 	}
 	if mt.Path.Length != 1 || mt.Path.Steps[0] != expected {
 		t.Errorf("Path = %+v, want unchanged (Length=1, Steps[0]=%v) — a transient flanker cell shouldn't invalidate the path", mt.Path, expected)
