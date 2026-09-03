@@ -18,7 +18,7 @@ import (
 type Plugin struct {
 	speed int32
 
-	board      *board.Plugin
+	board      *board.Board
 	pathFinder *pathFinder
 	navigation *navigationSystem
 
@@ -46,14 +46,18 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 	if err != nil {
 		return err
 	}
+	brd, err := ctx.Require[*board.Board]()
+	if err != nil {
+		return err
+	}
 	worldPlugin, err := ctx.Require[*world.Plugin]()
 	if err != nil {
 		return err
 	}
-	p.board = boardPlugin
+	p.board = brd
 	occupancy := boardPlugin.Occupancy()
-	p.pathFinder = newPathFinder(boardPlugin.Board(), boardPlugin.Board(), occupancy)
-	p.navigation = newNavigationSystem(p.pathFinder, boardPlugin.Board(), boardPlugin.Board(), occupancy, p.speed)
+	p.pathFinder = newPathFinder(brd, brd, occupancy)
+	p.navigation = newNavigationSystem(p.pathFinder, brd, brd, occupancy, p.speed)
 	p.navigation.BindSpace(worldPlugin.World().Space())
 
 	if p.commandsEnabled || p.rendererEnabled {
@@ -64,7 +68,7 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 		p.camera = camera
 	}
 	if p.rendererEnabled {
-		p.pathRenderer = NewPathRenderer(boardPlugin.Board())
+		p.pathRenderer = NewPathRenderer(brd)
 	}
 	if p.commandsEnabled {
 		p.commandState = &CommandState{}
@@ -88,7 +92,7 @@ func (p *Plugin) EventHandler() control.EventHandler {
 	if p.commands == nil {
 		return nil
 	}
-	return NewDefaultCommandEventHandler(p.board.Board(), p.camera, p.commandState)
+	return NewDefaultCommandEventHandler(p.board, p.camera, p.commandState)
 }
 
 // WithRenderer builds this plugin's own PathRenderer, drawing the remaining route for every selected, en-route entity.

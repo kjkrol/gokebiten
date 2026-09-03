@@ -15,7 +15,6 @@ import (
 // movement/pathfinding built on top of this Board.
 type Plugin struct {
 	board        *Board
-	terrain      *TerrainMap
 	terrainSpeed *TerrainSpeedModifier
 	occupancy    Occupancy
 	renderer     *Renderer
@@ -30,7 +29,6 @@ func NewPlugin(grid Grid, occupancy Occupancy) *Plugin {
 	terrain := NewTerrainMap()
 	return &Plugin{
 		board:        NewBoard(grid, terrain),
-		terrain:      terrain,
 		terrainSpeed: NewTerrainSpeedModifier(grid, terrain),
 		occupancy:    occupancy,
 	}
@@ -44,7 +42,6 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 		return err
 	}
 	ctx.Provide(p.board)
-	ctx.Provide(p.terrain)
 	ctx.Provide(p)
 	if p.renderState != nil {
 		ctx.Provide(p.renderState)
@@ -53,17 +50,11 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 	return nil
 }
 
-// Board returns the underlying Board (Grid + Terrain), built at construction.
-func (p *Plugin) Board() *Board { return p.board }
-
 // Occupancy returns the occupancy tracker this plugin was built with.
 func (p *Plugin) Occupancy() Occupancy { return p.occupancy }
 
-// Terrain returns the underlying TerrainMap, built at construction — mutate it directly (Set/SetMany/SetAll) to shape the map.
-func (p *Plugin) Terrain() *TerrainMap { return p.terrain }
-
 // SaveTargets returns terrain for Persistence.Save/Load to include automatically.
-func (p *Plugin) SaveTargets() []any { return []any{p.terrain} }
+func (p *Plugin) SaveTargets() []any { return []any{p.board.TerrainMap} }
 
 // WithRenderer builds this plugin's own board renderer (cellSize world-pixels per cell, style picks the sprite to draw).
 func (p *Plugin) WithRenderer(cellSize float32, atlas render.AtlasSource, style CellStyle) *Plugin {

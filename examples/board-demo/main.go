@@ -48,9 +48,6 @@ func main() {
 		TargetTPS: TPS,
 	})
 
-	grid := board.NewSquareGrid(GridWidth, GridHeight, CellSize)
-	occupancy := &board.SingleOccupancy{}
-
 	atlas := render.NewAtlas(16, 8)
 	grassSprite := atlas.Register(render.Solid(color.RGBA{R: 60, G: 95, B: 60, A: 255}))
 	wallSprite := atlas.Register(render.Solid(color.RGBA{R: 40, G: 40, B: 40, A: 255}))
@@ -58,6 +55,14 @@ func main() {
 	redSprite := atlas.Register(render.Solid(color.RGBA{R: 220, G: 90, B: 90, A: 255}))
 	blueSprite := atlas.Register(render.Solid(color.RGBA{R: 90, G: 140, B: 220, A: 255}))
 	atlas.Close()
+
+	worldPlugin := world.NewPlugin(world.Config{
+		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: false},
+		Entities: world.EntitiesCfg{MaxCount: MaxEntCount, MinSize: EntitySize, MaxSize: EntitySize},
+	}).WithRenderer(atlas)
+
+	grid := board.NewSquareGrid(GridWidth, GridHeight, CellSize)
+	occupancy := &board.SingleOccupancy{}
 
 	boardCellStyle := func(kind board.CellKind) render.SpriteID {
 		switch kind {
@@ -69,12 +74,8 @@ func main() {
 			return grassSprite
 		}
 	}
-
-	worldPlugin := world.NewPlugin(world.Config{
-		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: false},
-		Entities: world.EntitiesCfg{MaxCount: MaxEntCount, MinSize: EntitySize, MaxSize: EntitySize},
-	}).WithRenderer(atlas)
 	boardPlugin := board.NewPlugin(grid, occupancy).WithRenderer(CellSize, atlas, boardCellStyle)
+
 	navigationPlugin := navigation.NewPlugin(UnitSpeed).WithCommands().WithRenderer()
 	cameraPlugin := camera.NewPlugin()
 	selectionPlugin := selection.NewPlugin().WithRenderer()
@@ -102,11 +103,9 @@ func main() {
 	hasSave := slices.Contains(saves, "")
 
 	var state *State
-	var terrain *board.TerrainMap
 	if err := game.Init(func(ctx *gokebiten.GameCtx) error {
 		state = &State{}
 		ctx.Provide(state)
-		terrain = boardPlugin.Terrain()
 
 		if hasSave {
 			if err := game.Persistence.Load(saveBasePath, "", state); err != nil {
@@ -115,8 +114,9 @@ func main() {
 			log.Printf("loaded saved board (save #%d)", state.Saves)
 		} else {
 			// setup board
-			terrain.SetAll(Grass)
-			buildWall(grid, terrain)
+			brd := ctx.Resources.Get[*board.Board]()
+			brd.SetAll(Grass)
+			buildWall(brd)
 
 			// setup entities
 			unitRoster := [...]struct {
@@ -130,21 +130,21 @@ func main() {
 			spawner := world.NewSpawner(
 				func(index, count int) world.Position {
 					spawn := unitRoster[index]
-					start, _ := grid.CellIndex(spawn.startX, spawn.startY)
-					return world.Position{AABB: board.CellAABB(grid, start, EntitySize)}
+					start, _ := brd.CellIndex(spawn.startX, spawn.startY)
+					return world.Position{AABB: board.CellAABB(brd, start, EntitySize)}
 				},
 				func(index int) world.Velocity { return world.Velocity{} },
 			).
 				WithEffect(func(index int) board.Cell {
 					spawn := unitRoster[index]
-					c, _ := grid.CellIndex(spawn.startX, spawn.startY)
+					c, _ := brd.CellIndex(spawn.startX, spawn.startY)
 					return board.Cell{ID: c}
 				}, func(c board.Cell, id uid.UID64) {
 					occupancy.Enter(c.ID, id)
 				}).
 				With(func(index int) navigation.MoveOrder {
 					spawn := unitRoster[index]
-					target, _ := grid.CellIndex(spawn.targetX, spawn.startY)
+					target, _ := brd.CellIndex(spawn.targetX, spawn.startY)
 					return navigation.MoveOrder{Target: target}
 				}).
 				With(func(index int) world.Appearance {
@@ -183,7 +183,7 @@ func main() {
 			case ebiten.KeyB:
 				renderState.ShowGridLines = !renderState.ShowGridLines
 			case ebiten.KeyR:
-				buildShortcut(grid, terrain)
+				buildShortcut(game.Resources().Get[*board.Board]())
 				log.Print("built a road through the wall — in-flight units re-path onto it as soon as they deviate")
 			case ebiten.KeyF5:
 				state.Saves++
@@ -203,16 +203,14 @@ const (
 	shortcutRow = 8
 )
 
-func buildWall(grid board.Grid, terrain *board.TerrainMap) {
-	var cells []board.CellID
+func buildWall(brd *board.Board) {
 	for y := uint32(2); y < GridHeight; y++ {
-		c, _ := grid.CellIndex(wallCol, y)
-		cells = append(cells, c)
+		c, _ := brd.CellIndex(wallCol, y)
+		brd.Set(c, Wall)
 	}
-	terrain.SetMany(cells, Wall)
 }
 
-func buildShortcut(grid board.Grid, terrain *board.TerrainMap) {
-	c, _ := grid.CellIndex(wallCol, shortcutRow)
-	terrain.Set(c, Road)
+func buildShortcut(brd *board.Board) {
+	c, _ := brd.CellIndex(wallCol, shortcutRow)
+	brd.Set(c, Road)
 }

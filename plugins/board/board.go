@@ -6,18 +6,18 @@ import (
 	"github.com/kjkrol/gokg/plane"
 )
 
-// Board is a Grid paired with its Terrain — no dynamic entity state, which
-// lives in whichever Occupancy this plugin was built with.
+// Board is a Grid paired with its TerrainMap — the single integration
+// point for reading grid topology and reading/writing terrain kinds.
 type Board struct {
 	Grid
-	Terrain
+	*TerrainMap
 }
 
 // Cell is an entity's current position on the board.
 type Cell struct{ ID CellID }
 
-func NewBoard(grid Grid, terrain Terrain) *Board {
-	return &Board{Grid: grid, Terrain: terrain}
+func NewBoard(grid Grid, terrain *TerrainMap) *Board {
+	return &Board{Grid: grid, TerrainMap: terrain}
 }
 
 // CellAABB is the size x size world-pixel rectangle centered on c, the same placement plugins/navigation's NavigationSystem steps entities into.
