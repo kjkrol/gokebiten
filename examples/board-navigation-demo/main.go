@@ -43,7 +43,7 @@ func main() {
 	})
 
 	// setup world plugin
-	worldAtlas := render.NewAtlas(16, 2)
+	worldAtlas := render.NewAtlas(EntitySize, 2)
 	redSprite := worldAtlas.Register(render.Solid(color.RGBA{R: 220, G: 90, B: 90, A: 255}))
 	blueSprite := worldAtlas.Register(render.Solid(color.RGBA{R: 90, G: 140, B: 220, A: 255}))
 	worldAtlas.Close()
@@ -54,7 +54,7 @@ func main() {
 	}).WithRenderer(worldAtlas)
 
 	// setup board plugin
-	boardAtlas := render.NewAtlas(16, 3)
+	boardAtlas := render.NewAtlas(CellSize, 3)
 	grassSprite := boardAtlas.Register(render.Solid(color.RGBA{R: 60, G: 95, B: 60, A: 255}))
 	wallSprite := boardAtlas.Register(render.Solid(color.RGBA{R: 40, G: 40, B: 40, A: 255}))
 	roadSprite := boardAtlas.Register(render.Solid(color.RGBA{R: 150, G: 130, B: 80, A: 255}))

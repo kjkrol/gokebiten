@@ -32,7 +32,7 @@ const (
 
 var EntityCount = int(math.Floor(FillPercent / 100.0 * float64(ScreenWidth*ScreenHeight) / float64(RectSize*RectSize)))
 
-// State demonstrates persisting arbitrary game-owned state across a save/load cycle.
+// State  persisting arbitrary game-owned state across a save/load cycle.
 type State struct{ Saves int }
 
 func main() {
@@ -42,7 +42,6 @@ func main() {
 		TargetTPS: TPS,
 	})
 
-	atlas := render.NewAtlas(RectSize, 40)
 	palette := [8]color.RGBA{
 		{R: 80, G: 120, B: 220, A: 255},  // blue
 		{R: 90, G: 200, B: 110, A: 255},  // green
@@ -51,16 +50,17 @@ func main() {
 		{R: 220, G: 210, B: 80, A: 255},  // yellow
 		{R: 230, G: 160, B: 60, A: 255},  // amber
 		{R: 60, G: 160, B: 150, A: 255},  // teal
-		{R: 200, G: 100, B: 180, A: 255}, // magenta
+		{R: 220, G: 40, B: 40, A: 255},   // red — reserved for the hit sprite, not an entity color
 	}
+	atlas := render.NewAtlas(RectSize, 28*4+1)
 	shapes := [4]func(color.RGBA) render.SpriteDrawer{render.Solid, render.Border, render.Diamond, render.Cross}
-	var entitySprites [8][4]render.SpriteID
-	for ci, c := range palette {
+	var entitySprites [7][4]render.SpriteID
+	for ci, c := range palette[:7] {
 		for si, shape := range shapes {
 			entitySprites[ci][si] = atlas.Register(shape(c))
 		}
 	}
-	hitSprite := atlas.Register(render.Solid(color.RGBA{R: 255, A: 255}))
+	hitSprite := atlas.Register(render.Solid(palette[7]))
 	atlas.Close()
 
 	worldPlugin := world.NewPlugin(world.Config{
@@ -112,7 +112,7 @@ func main() {
 			func(index int) world.Velocity { return motion.initialVelocity(index) },
 		).
 			With(func(index int) world.Appearance {
-				return world.Appearance{SpriteID: entitySprites[rand.IntN(8)][rand.IntN(4)]}
+				return world.Appearance{SpriteID: entitySprites[rand.IntN(7)][rand.IntN(4)]}
 			}).
 			With(func(index int) collisions.Collision { return collisions.Collision{} })
 		worldPlugin.World().Populate(EntityCount, spawner)
