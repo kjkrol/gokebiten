@@ -10,7 +10,7 @@ import (
 )
 
 // Space returns world's shared spatial index — every Populate entity is kept in sync with it.
-func (w *Module) Space() *gokg.Space { return w.space }
+func (w *World) Space() *gokg.Space { return w.space }
 
 func buildSpace(cfg Config) *gokg.Space {
 	const minCapacity, maxCapacity = 2.0, 8.0

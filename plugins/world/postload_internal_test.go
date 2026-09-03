@@ -6,15 +6,15 @@ import (
 	"github.com/kjkrol/goke/v3"
 )
 
-func testModule() *Module {
-	return NewModule(Config{
+func testWorld() *World {
+	return NewWorld(Config{
 		Space:    SpaceCfg{Width: 1000, Height: 1000},
 		Entities: EntitiesCfg{MaxCount: 10, MinSize: 1, MaxSize: 100},
 	})
 }
 
-func TestModule_PostLoad_SetsCountToZeroWhenNothingSeeded(t *testing.T) {
-	w := testModule()
+func TestWorld_PostLoad_SetsCountToZeroWhenNothingSeeded(t *testing.T) {
+	w := testWorld()
 
 	goke.New().Setup(w.PostLoad())
 
@@ -23,8 +23,8 @@ func TestModule_PostLoad_SetsCountToZeroWhenNothingSeeded(t *testing.T) {
 	}
 }
 
-func TestModule_PostLoad_SetsCountFromLoadedEntities(t *testing.T) {
-	w := testModule()
+func TestWorld_PostLoad_SetsCountFromLoadedEntities(t *testing.T) {
+	w := testWorld()
 
 	pos := Position{}
 	pos.Size.X, pos.Size.Y = 10, 10

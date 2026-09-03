@@ -9,7 +9,7 @@ import (
 	"github.com/kjkrol/uid"
 )
 
-// Config configures a world.Module: its spatial shape and the bounds its entity population must respect.
+// Config configures a world.World: its spatial shape and the bounds its entity population must respect.
 type Config struct {
 	Space    SpaceCfg
 	Entities EntitiesCfg
@@ -26,32 +26,26 @@ type EntitiesCfg struct {
 	MaxSize  uint32
 }
 
-// Telemetry is how many entities Populate/PostLoad have created — see Module.Telemetry.
+// Telemetry is how many entities Populate/PostLoad have created — see World.Telemetry.
 type Telemetry struct {
 	Count int
 }
 
-// EntityExtras supplies the components and per-entity values a spawn needs
-// beyond Position/Velocity — every implementation is built via a
-// NewXExtras(func(index int) V) *XExtras constructor matching NewExtrasFunc.
-// world.NewValueExtras covers this directly for any V; attach WithEffect
-// for a side effect (like updating an occupancy tracker) that must run
-// alongside the write.
-type EntityExtras interface {
+// entityExtras supplies the components and per-entity values a spawn needs
+// beyond Position/Velocity — newComponentAdder is the only implementation;
+// attach WithEffect for a side effect (like updating an occupancy tracker)
+// that must run alongside the write.
+type entityExtras interface {
 	Components() []goke.Addable
 	Init(cursor *goke.Cursor, i, index int, id uid.UID64)
 }
 
-// NewExtrasFunc is the shape every NewXExtras constructor must match — pin
-// it via var _ NewExtrasFunc[XExtras, V] = NewXExtras next to each implementation.
-type NewExtrasFunc[T, V any] func(func(index int) V) *T
-
 // SpeedModifier contributes a multiplicative factor to an entity's Velocity.Value each tick — see VelocitySystem.
 type SpeedModifier = Modifier[float64]
 
-// Module owns the world's topology, entities, and movement — the mandatory
+// World owns the world's topology, entities, and movement — the mandatory
 // foundation any game with moving, drawable entities builds on.
-type Module struct {
+type World struct {
 	config Config
 	space  *gokg.Space
 	step   time.Duration
@@ -67,28 +61,28 @@ type Module struct {
 	built            bool
 }
 
-var _ goke.SetupProvider = (*Module)(nil)
-var _ goke.CompProvider = (*Module)(nil)
+var _ goke.SetupProvider = (*World)(nil)
+var _ goke.CompProvider = (*World)(nil)
 
-// NewModule builds the world's topology and spatial index from cfg.
-func NewModule(cfg Config) *Module {
-	return &Module{config: cfg, space: buildSpace(cfg)}
+// NewWorld builds the world's topology and spatial index from cfg.
+func NewWorld(cfg Config) *World {
+	return &World{config: cfg, space: buildSpace(cfg)}
 }
 
-// Config returns the Config this Module was built from.
-func (w *Module) Config() Config { return w.config }
+// Config returns the Config this World was built from.
+func (w *World) Config() Config { return w.config }
 
 // Telemetry returns the entity-count telemetry Populate/PostLoad maintain.
-func (w *Module) Telemetry() *Telemetry { return &w.telemetry }
+func (w *World) Telemetry() *Telemetry { return &w.telemetry }
 
 // RegisterSpeedModifier adds m to the set VelocitySystem folds into every entity's Velocity.Value each tick.
-func (w *Module) RegisterSpeedModifier(m SpeedModifier) { w.modifiers = append(w.modifiers, m) }
+func (w *World) RegisterSpeedModifier(m SpeedModifier) { w.modifiers = append(w.modifiers, m) }
 
 // SetupSystems runs every queued Populate call, in call order.
-func (w *Module) SetupSystems() []goke.System { return w.seeds }
+func (w *World) SetupSystems() []goke.System { return w.seeds }
 
 // RunPlan runs world's movement pipeline (speed modifiers, then integration) for this tick.
-func (w *Module) RunPlan(ctx goke.RunCtx, d time.Duration) {
+func (w *World) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	if !w.built {
 		w.build()
 	}
@@ -97,7 +91,7 @@ func (w *Module) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	ctx.Sync()
 }
 
-func (w *Module) build() {
+func (w *World) build() {
 	velocitySystem := NewVelocitySystem(w.modifiers, w.maxSpeed())
 	moveSystem := NewMoveSystem(w.space)
 	w.velocityRunnable = w.ecs.RegSys(velocitySystem)
@@ -106,7 +100,7 @@ func (w *Module) build() {
 }
 
 // LoadComps lists the component types world owns — see [goke.CompProvider].
-func (w *Module) LoadComps() []goke.CompToken {
+func (w *World) LoadComps() []goke.CompToken {
 	return []goke.CompToken{
 		goke.LoadComp[Position](),
 		goke.LoadComp[Appearance](),
@@ -115,7 +109,7 @@ func (w *Module) LoadComps() []goke.CompToken {
 }
 
 // PostLoad recomputes Count and reinserts every loaded entity's Position into space — see gokebiten.PostLoader.
-func (w *Module) PostLoad() goke.System {
+func (w *World) PostLoad() goke.System {
 	return goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		var pos goke.Comp[Position]
 		query := si.NewQueryBuilder(&pos).Build()
@@ -137,14 +131,14 @@ func (w *Module) PostLoad() goke.System {
 // maxSpeed caps displacement per tick to half the smallest entity's size, so
 // nothing can tunnel through another entity undetected — 0 (no cap) if
 // Config.Entities.MinSize/the tick step aren't set.
-func (w *Module) maxSpeed() int32 {
+func (w *World) maxSpeed() int32 {
 	if w.step <= 0 || w.config.Entities.MinSize == 0 {
 		return 0
 	}
 	return int32(float64(w.config.Entities.MinSize) / 2 / w.step.Seconds())
 }
 
-func (w *Module) reserve(count int) {
+func (w *World) reserve(count int) {
 	if w.spawnedCount+count > w.config.Entities.MaxCount {
 		panic(fmt.Sprintf("world: spawning %d more would exceed Config.Entities.MaxCount %d (already spawned %d)",
 			count, w.config.Entities.MaxCount, w.spawnedCount))
@@ -152,7 +146,7 @@ func (w *Module) reserve(count int) {
 	w.spawnedCount += count
 }
 
-func (w *Module) validateSize(id uid.UID64, pos Position) {
+func (w *World) validateSize(id uid.UID64, pos Position) {
 	if pos.Size.X < w.config.Entities.MinSize || pos.Size.X > w.config.Entities.MaxSize ||
 		pos.Size.Y < w.config.Entities.MinSize || pos.Size.Y > w.config.Entities.MaxSize {
 		panic(fmt.Sprintf("world: entity %d size %dx%d outside declared bounds [%d, %d]",
@@ -160,24 +154,22 @@ func (w *Module) validateSize(id uid.UID64, pos Position) {
 	}
 }
 
-// Populate queues a spawn of count entities — spawner decides
-// Position/Velocity; each extras contributes one further component, built
-// via world.NewValueExtras(func(index int) V) — see ExampleModule_Populate.
-func (w *Module) Populate(count int, spawner Spawner, extras ...EntityExtras) *Module {
+// Populate queues a spawn of count entities — see ExampleWorld_Populate.
+func (w *World) Populate(count int, spawner *Spawner) *World {
 	w.seeds = append(w.seeds, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		w.populateDynamic(si, spawner, count, extras...)
+		w.populateDynamic(si, spawner, count)
 	}})
 	return w
 }
 
-func (w *Module) populateDynamic(si *goke.SysInit, spawner Spawner, count int, extras ...EntityExtras) {
+func (w *World) populateDynamic(si *goke.SysInit, spawner *Spawner, count int) {
 	w.reserve(count)
 	w.telemetry.Count += count
 
 	var posComp goke.Comp[Position]
 	var velComp goke.Comp[Velocity]
 	comps := []goke.Addable{&posComp, &velComp}
-	for _, e := range extras {
+	for _, e := range spawner.extras {
 		comps = append(comps, e.Components()...)
 	}
 	factory := si.NewFactory(comps...)
@@ -188,12 +180,13 @@ func (w *Module) populateDynamic(si *goke.SysInit, spawner Spawner, count int, e
 		positions := posComp.Slice(&factory.Cursor)
 		velocities := velComp.Slice(&factory.Cursor)
 		for i, id := range factory.IDs {
-			pos, vel := spawner.Spawn(index, count)
+			pos := spawner.position(index, count)
+			vel := spawner.velocity(index)
 			w.validateSize(id, pos)
 			positions[i] = pos
 			velocities[i] = vel
 			w.space.Insert(id, pos.AABB)
-			for _, e := range extras {
+			for _, e := range spawner.extras {
 				e.Init(&factory.Cursor, i, index, id)
 			}
 			index++

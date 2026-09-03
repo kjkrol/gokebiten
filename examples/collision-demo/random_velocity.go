@@ -18,7 +18,7 @@ func newRandomVelocity(rng, deadZone, minSpeed int32) *randomVelocity {
 	return &randomVelocity{rng: rng, deadZone: deadZone, minSpeed: minSpeed}
 }
 
-func (m *randomVelocity) initialVelocity(index, count int) world.Velocity {
+func (m *randomVelocity) initialVelocity(index int) world.Velocity {
 	dx := rand.Int32N(2*m.rng+1) - m.rng
 	dy := rand.Int32N(2*m.rng+1) - m.rng
 

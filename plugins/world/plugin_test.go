@@ -7,7 +7,7 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/world"
 )
 
-func TestPlugin_Install_DoesNotPublishModuleResource(t *testing.T) {
+func TestPlugin_Install_DoesNotPublishWorldResource(t *testing.T) {
 	game := gokebiten.NewGame(&gokebiten.GameProps{})
 	plugin := world.NewPlugin(world.Config{
 		Space:    world.SpaceCfg{Width: 100, Height: 100},
@@ -18,8 +18,8 @@ func TestPlugin_Install_DoesNotPublishModuleResource(t *testing.T) {
 		t.Fatalf("UsePlugin: %v", err)
 	}
 
-	if _, ok := game.Resources().TryGet[*world.Module](); ok {
-		t.Error("expected *world.Module to NOT be registered as a resource")
+	if _, ok := game.Resources().TryGet[*world.World](); ok {
+		t.Error("expected *world.World to NOT be registered as a resource")
 	}
 }
 

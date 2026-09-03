@@ -20,16 +20,14 @@ func testPos() world.Position {
 	return world.Position{AABB: plane.NewAABB(geom.NewVec[uint32](0, 0), 10, 10)}
 }
 
-type fakeSpawner struct{ pos world.Position }
+func TestWorld_Populate_EndToEnd(t *testing.T) {
+	wm := world.NewWorld(testConfig())
 
-func (f fakeSpawner) Spawn(index, count int) (world.Position, world.Velocity) {
-	return f.pos, world.Velocity{}
-}
-
-func TestModule_Populate_EndToEnd(t *testing.T) {
-	wm := world.NewModule(testConfig())
-
-	wm.Populate(3, fakeSpawner{pos: testPos()})
+	spawner := world.NewSpawner(
+		func(index, count int) world.Position { return testPos() },
+		func(index int) world.Velocity { return world.Velocity{} },
+	)
+	wm.Populate(3, spawner)
 
 	ecs := goke.New()
 	var pos goke.Comp[world.Position]

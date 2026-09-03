@@ -18,18 +18,17 @@ func TestValueExtras_WithEffect_EntersOccupancyOnSpawn(t *testing.T) {
 		Space:    world.SpaceCfg{Width: 50, Height: 50},
 		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 8, MaxSize: 8},
 	}
-	wm := world.NewModule(cfg)
+	wm := world.NewWorld(cfg)
 	placement := world.NewGridPlacement(50, 50, 8)
-	wm.Populate(1,
-		world.SpawnerFunc(func(index, count int) (world.Position, world.Velocity) {
-			return placement.Place(index, count), world.Velocity{}
-		}),
-		world.NewValueExtras(func(index int) board.Cell {
-			return board.Cell{ID: target}
-		}).WithEffect(func(c board.Cell, id uid.UID64) {
-			occupancy.Enter(c.ID, id)
-		}),
-	)
+	spawner := world.NewSpawner(
+		func(index, count int) world.Position { return placement.Place(index, count) },
+		func(index int) world.Velocity { return world.Velocity{} },
+	).WithEffect(func(index int) board.Cell {
+		return board.Cell{ID: target}
+	}, func(c board.Cell, id uid.UID64) {
+		occupancy.Enter(c.ID, id)
+	})
+	wm.Populate(1, spawner)
 
 	ecs := goke.New()
 	var cell goke.Comp[board.Cell]

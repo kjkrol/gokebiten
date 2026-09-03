@@ -9,17 +9,17 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 )
 
-// Plugin builds a Module — the mandatory foundation for any game with
+// Plugin builds a World — the mandatory foundation for any game with
 // moving, drawable entities — and publishes Config as a resource.
 type Plugin struct {
 	config Config
 
-	world    *Module
+	world    *World
 	renderer *Renderer
 }
 
 var _ gokebiten.Plugin = (*Plugin)(nil)
-var _ gokebiten.PostLoader = (*Module)(nil)
+var _ gokebiten.PostLoader = (*World)(nil)
 
 func NewPlugin(cfg Config) *Plugin {
 	return &Plugin{config: cfg}
@@ -33,7 +33,7 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 			return err
 		}
 	}
-	p.world = NewModule(p.config)
+	p.world = NewWorld(p.config)
 	p.world.step = ctx.Step()
 	p.world.ecs = ctx.ECS()
 	ctx.Setup(p.world)
@@ -43,8 +43,8 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 	return nil
 }
 
-// World returns the underlying Module, built during Install — nil before that.
-func (p *Plugin) World() *Module { return p.world }
+// World returns the underlying World, built during Install — nil before that.
+func (p *Plugin) World() *World { return p.world }
 
 // WithRenderer builds this plugin's own entity renderer, drawing sprites from atlas.
 func (p *Plugin) WithRenderer(atlas render.AtlasSource) *Plugin {

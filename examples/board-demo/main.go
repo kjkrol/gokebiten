@@ -114,6 +114,11 @@ func main() {
 			}
 			log.Printf("loaded saved board (save #%d)", state.Saves)
 		} else {
+			// setup board
+			terrain.SetAll(Grass)
+			buildWall(grid, terrain)
+
+			// setup entities
 			unitRoster := [...]struct {
 				startX, startY uint32
 				targetX        uint32
@@ -122,30 +127,31 @@ func main() {
 				{startX: 2, startY: 4, targetX: GridWidth - 3, sprite: redSprite},
 				{startX: 2, startY: 12, targetX: GridWidth - 3, sprite: blueSprite},
 			}
-			terrain.SetAll(Grass)
-			buildWall(grid, terrain)
-			worldPlugin.World().Populate(len(unitRoster),
-				world.SpawnerFunc(func(index, count int) (world.Position, world.Velocity) {
+			spawner := world.NewSpawner(
+				func(index, count int) world.Position {
 					spawn := unitRoster[index]
 					start, _ := grid.CellIndex(spawn.startX, spawn.startY)
-					return world.Position{AABB: board.CellAABB(grid, start, EntitySize)}, world.Velocity{}
-				}),
-				world.NewValueExtras(func(index int) board.Cell {
+					return world.Position{AABB: board.CellAABB(grid, start, EntitySize)}
+				},
+				func(index int) world.Velocity { return world.Velocity{} },
+			).
+				WithEffect(func(index int) board.Cell {
 					spawn := unitRoster[index]
 					c, _ := grid.CellIndex(spawn.startX, spawn.startY)
 					return board.Cell{ID: c}
-				}).WithEffect(func(c board.Cell, id uid.UID64) {
+				}, func(c board.Cell, id uid.UID64) {
 					occupancy.Enter(c.ID, id)
-				}),
-				world.NewValueExtras(func(index int) navigation.MoveOrder {
+				}).
+				With(func(index int) navigation.MoveOrder {
 					spawn := unitRoster[index]
 					target, _ := grid.CellIndex(spawn.targetX, spawn.startY)
 					return navigation.MoveOrder{Target: target}
-				}),
-				world.NewValueExtras(func(index int) world.Appearance {
+				}).
+				With(func(index int) world.Appearance {
 					return world.Appearance{SpriteID: unitRoster[index].sprite}
-				}),
-				world.NewValueExtras(func(index int) selection.Selected { return selection.Selected{} }))
+				}).
+				With(func(index int) selection.Selected { return selection.Selected{} })
+			worldPlugin.World().Populate(len(unitRoster), spawner)
 		}
 		return nil
 	}); err != nil {

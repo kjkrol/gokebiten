@@ -13,7 +13,7 @@ func TestRandomVelocity_InitialVelocity_XWithinRangeAndDeadZoned(t *testing.T) {
 	m := newRandomVelocity(rng, deadZone, minSpeed)
 
 	for i := range 500 {
-		d := m.initialVelocity(i, 500).Delta()
+		d := m.initialVelocity(i).Delta()
 
 		if d.X < -rng-tolerance || d.X > rng+tolerance {
 			t.Fatalf("X = %d, want within [-%d,%d] (+/-%d for Dir/Value rounding)", d.X, rng, rng, tolerance)
@@ -41,7 +41,7 @@ func TestRandomVelocity_InitialVelocity_YHasNoDeadZone(t *testing.T) {
 
 	sawUnclampedY := false
 	for i := range 2000 {
-		d := m.initialVelocity(i, 2000).Delta()
+		d := m.initialVelocity(i).Delta()
 		if d.Y != minSpeed && d.Y != -minSpeed {
 			sawUnclampedY = true
 			break

@@ -107,15 +107,15 @@ func main() {
 	} else {
 		placement := world.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize)
 		motion := newRandomVelocity(200, 50, 10)
-		worldPlugin.World().Populate(EntityCount,
-			world.SpawnerFunc(func(index, count int) (world.Position, world.Velocity) {
-				return placement.Place(index, count), motion.initialVelocity(index, count)
-			}),
-			world.NewValueExtras(func(index int) world.Appearance {
+		spawner := world.NewSpawner(
+			func(index, count int) world.Position { return placement.Place(index, count) },
+			func(index int) world.Velocity { return motion.initialVelocity(index) },
+		).
+			With(func(index int) world.Appearance {
 				return world.Appearance{SpriteID: entitySprites[rand.IntN(8)][rand.IntN(4)]}
-			}),
-			world.NewValueExtras(func(index int) collisions.Collision { return collisions.Collision{} }),
-		)
+			}).
+			With(func(index int) collisions.Collision { return collisions.Collision{} })
+		worldPlugin.World().Populate(EntityCount, spawner)
 	}
 
 	game.Loop(func(ctx goke.RunCtx, d time.Duration) {
