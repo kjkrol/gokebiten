@@ -83,6 +83,8 @@ func (g *SquareGrid) CellAt(pos geom.Vec[float64]) (CellID, bool) {
 	return g.idAt(uint32(x), uint32(y)), true
 }
 
+func (g *SquareGrid) CellSpan() float32 { return float32(g.CellSize) }
+
 func (g *SquareGrid) CellIndex(col, row uint32) (CellID, bool) {
 	if g.Toroidal {
 		return g.idAt(col%g.Width, row%g.Height), true

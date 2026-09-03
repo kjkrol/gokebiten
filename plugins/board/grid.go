@@ -30,4 +30,6 @@ type Grid interface {
 	DiagonalNeighbors(a, b CellID) (c1, c2 CellID, ok bool)
 	// Distance must never overestimate the true cost — it's the pathfinding heuristic.
 	Distance(a, b CellID) float64
+	// CellSpan is the world-space side length of one cell — the renderer's cell-quad size.
+	CellSpan() float32
 }

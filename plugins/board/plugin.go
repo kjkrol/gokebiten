@@ -15,6 +15,7 @@ import (
 // movement/pathfinding built on top of this Board.
 type Plugin struct {
 	board        *Board
+	kinds        CellKindDict
 	terrainSpeed *TerrainSpeedModifier
 	occupancy    Occupancy
 	renderer     *Renderer
@@ -24,11 +25,13 @@ type Plugin struct {
 var _ gokebiten.Plugin = (*Plugin)(nil)
 var _ gokebiten.Saveable = (*Plugin)(nil)
 
-// NewPlugin builds a board over grid, capping cell occupancy per occupancy.
-func NewPlugin(grid Grid, occupancy Occupancy) *Plugin {
+// NewPlugin builds a board over grid, capping cell occupancy per occupancy
+// and publishing kinds to Resources for board-modifying code to pick from.
+func NewPlugin(grid Grid, occupancy Occupancy, kinds CellKindDict) *Plugin {
 	terrain := NewTerrainMap()
 	return &Plugin{
 		board:        NewBoard(grid, terrain),
+		kinds:        kinds,
 		terrainSpeed: NewTerrainSpeedModifier(grid, terrain),
 		occupancy:    occupancy,
 	}
@@ -42,6 +45,7 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 		return err
 	}
 	ctx.Provide(p.board)
+	ctx.Provide(p.kinds)
 	ctx.Provide(p)
 	if p.renderState != nil {
 		ctx.Provide(p.renderState)
@@ -56,10 +60,10 @@ func (p *Plugin) Occupancy() Occupancy { return p.occupancy }
 // SaveTargets returns terrain for Persistence.Save/Load to include automatically.
 func (p *Plugin) SaveTargets() []any { return []any{p.board.TerrainMap} }
 
-// WithRenderer builds this plugin's own board renderer (cellSize world-pixels per cell, style picks the sprite to draw).
-func (p *Plugin) WithRenderer(cellSize float32, atlas render.AtlasSource, style CellStyle) *Plugin {
+// WithRenderer builds this plugin's own board renderer, drawing each cell's CellKind.SpriteID from atlas.
+func (p *Plugin) WithRenderer(atlas render.AtlasSource) *Plugin {
 	p.renderState = &RenderState{ShowGridLines: true}
-	p.renderer = newRenderer(p.board, cellSize, atlas, style, p.renderState)
+	p.renderer = newRenderer(p.board, atlas, p.renderState)
 	return p
 }
 

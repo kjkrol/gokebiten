@@ -1,18 +1,35 @@
 package board
 
+import "github.com/kjkrol/gokebiten/render"
+
 // Terrain reports one cell's terrain kind, independent of the Grid's topology.
 type Terrain interface {
 	Kind(c CellID) CellKind
 }
 
-// CellKind identifies a terrain kind (e.g. grass, wall, road) and its
-// movement properties — the game defines its own named values (comparable
-// via == / switch, since Name makes each one distinct).
+// CellKind identifies a terrain kind (e.g. grass, wall, road), its
+// movement properties, and the sprite a Renderer draws for it — the game
+// defines its own named values (comparable via == / switch, since Name
+// makes each one distinct).
 type CellKind struct {
 	Name string
 	// Cost is relative to 1 (baseline); Passable gates entry entirely.
 	Cost     float64
 	Passable bool
+	SpriteID render.SpriteID
+}
+
+// CellKindDict is a board's registered set of CellKinds, keyed by Name —
+// published to Resources so board-modifying code can pick a kind by name.
+type CellKindDict map[string]CellKind
+
+// NewCellKindDict builds a CellKindDict from kinds, keyed by each one's Name.
+func NewCellKindDict(kinds ...CellKind) CellKindDict {
+	dict := make(CellKindDict, len(kinds))
+	for _, k := range kinds {
+		dict[k.Name] = k
+	}
+	return dict
 }
 
 // TerrainMap is a Terrain backed by a plain, gob-encodable map — mutate it

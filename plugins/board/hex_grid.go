@@ -88,6 +88,8 @@ func (g *HexGrid) CellAt(pos geom.Vec[float64]) (CellID, bool) {
 	return c, true
 }
 
+func (g *HexGrid) CellSpan() float32 { return float32(g.Size) }
+
 func (g *HexGrid) CellIndex(q, r uint32) (CellID, bool) {
 	if g.Toroidal {
 		return packAxial(int32(q%g.Width), int32(r%g.Height)), true

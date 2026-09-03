@@ -33,12 +33,6 @@ const (
 	saveBasePath = "board-rts-demo"
 )
 
-var (
-	Grass = board.CellKind{Name: "grass", Cost: 1, Passable: true}
-	Wall  = board.CellKind{Name: "wall", Cost: 1, Passable: false}
-	Road  = board.CellKind{Name: "road", Cost: 0.4, Passable: true}
-)
-
 type State struct{ Saves int }
 
 func main() {
@@ -48,38 +42,38 @@ func main() {
 		TargetTPS: TPS,
 	})
 
-	atlas := render.NewAtlas(16, 8)
-	grassSprite := atlas.Register(render.Solid(color.RGBA{R: 60, G: 95, B: 60, A: 255}))
-	wallSprite := atlas.Register(render.Solid(color.RGBA{R: 40, G: 40, B: 40, A: 255}))
-	roadSprite := atlas.Register(render.Solid(color.RGBA{R: 150, G: 130, B: 80, A: 255}))
-	redSprite := atlas.Register(render.Solid(color.RGBA{R: 220, G: 90, B: 90, A: 255}))
-	blueSprite := atlas.Register(render.Solid(color.RGBA{R: 90, G: 140, B: 220, A: 255}))
-	atlas.Close()
+	// setup world plugin
+	worldAtlas := render.NewAtlas(16, 2)
+	redSprite := worldAtlas.Register(render.Solid(color.RGBA{R: 220, G: 90, B: 90, A: 255}))
+	blueSprite := worldAtlas.Register(render.Solid(color.RGBA{R: 90, G: 140, B: 220, A: 255}))
+	worldAtlas.Close()
 
 	worldPlugin := world.NewPlugin(world.Config{
 		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: false},
 		Entities: world.EntitiesCfg{MaxCount: MaxEntCount, MinSize: EntitySize, MaxSize: EntitySize},
-	}).WithRenderer(atlas)
+	}).WithRenderer(worldAtlas)
 
+	// setup board plugin
 	grid := board.NewSquareGrid(GridWidth, GridHeight, CellSize)
 	occupancy := &board.SingleOccupancy{}
+	boardAtlas := render.NewAtlas(16, 3)
+	grassSprite := boardAtlas.Register(render.Solid(color.RGBA{R: 60, G: 95, B: 60, A: 255}))
+	wallSprite := boardAtlas.Register(render.Solid(color.RGBA{R: 40, G: 40, B: 40, A: 255}))
+	roadSprite := boardAtlas.Register(render.Solid(color.RGBA{R: 150, G: 130, B: 80, A: 255}))
+	boardAtlas.Close()
+	cellKindDict := board.NewCellKindDict(
+		board.CellKind{Name: "grass", Cost: 1, Passable: true, SpriteID: grassSprite},
+		board.CellKind{Name: "wall", Cost: 1, Passable: false, SpriteID: wallSprite},
+		board.CellKind{Name: "road", Cost: 0.4, Passable: true, SpriteID: roadSprite},
+	)
+	boardPlugin := board.NewPlugin(grid, occupancy, cellKindDict).WithRenderer(boardAtlas)
 
-	boardCellStyle := func(kind board.CellKind) render.SpriteID {
-		switch kind {
-		case Wall:
-			return wallSprite
-		case Road:
-			return roadSprite
-		default:
-			return grassSprite
-		}
-	}
-	boardPlugin := board.NewPlugin(grid, occupancy).WithRenderer(CellSize, atlas, boardCellStyle)
-
+	// setup other plugins
 	navigationPlugin := navigation.NewPlugin(UnitSpeed).WithCommands().WithRenderer()
 	cameraPlugin := camera.NewPlugin()
 	selectionPlugin := selection.NewPlugin().WithRenderer()
 
+	// use plugins
 	if err := game.UsePlugin(worldPlugin); err != nil {
 		log.Fatal(err)
 	}
@@ -115,8 +109,9 @@ func main() {
 		} else {
 			// setup board
 			brd := ctx.Resources.Get[*board.Board]()
-			brd.SetAll(Grass)
-			buildWall(brd)
+			kinds := ctx.Resources.Get[board.CellKindDict]()
+			brd.SetAll(kinds["grass"])
+			buildWall(brd, kinds)
 
 			// setup entities
 			unitRoster := [...]struct {
@@ -183,7 +178,7 @@ func main() {
 			case ebiten.KeyB:
 				renderState.ShowGridLines = !renderState.ShowGridLines
 			case ebiten.KeyR:
-				buildShortcut(game.Resources().Get[*board.Board]())
+				buildShortcut(game.Resources().Get[*board.Board](), game.Resources().Get[board.CellKindDict]())
 				log.Print("built a road through the wall — in-flight units re-path onto it as soon as they deviate")
 			case ebiten.KeyF5:
 				state.Saves++
@@ -203,14 +198,14 @@ const (
 	shortcutRow = 8
 )
 
-func buildWall(brd *board.Board) {
+func buildWall(brd *board.Board, kinds board.CellKindDict) {
 	for y := uint32(2); y < GridHeight; y++ {
 		c, _ := brd.CellIndex(wallCol, y)
-		brd.Set(c, Wall)
+		brd.Set(c, kinds["wall"])
 	}
 }
 
-func buildShortcut(brd *board.Board) {
+func buildShortcut(brd *board.Board, kinds board.CellKindDict) {
 	c, _ := brd.CellIndex(wallCol, shortcutRow)
-	brd.Set(c, Road)
+	brd.Set(c, kinds["road"])
 }

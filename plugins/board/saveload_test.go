@@ -32,7 +32,7 @@ func TestPlugin_SaveLoad_TerrainRoundTrip(t *testing.T) {
 	if err := game.UsePlugin(newSaveLoadTestWorldPlugin()); err != nil {
 		t.Fatalf("UsePlugin(world): %v", err)
 	}
-	boardPlugin := board.NewPlugin(grid, &board.SingleOccupancy{})
+	boardPlugin := board.NewPlugin(grid, &board.SingleOccupancy{}, nil)
 	if err := game.UsePlugin(boardPlugin); err != nil {
 		t.Fatalf("UsePlugin(board): %v", err)
 	}
@@ -46,7 +46,7 @@ func TestPlugin_SaveLoad_TerrainRoundTrip(t *testing.T) {
 	if err := game2.UsePlugin(newSaveLoadTestWorldPlugin()); err != nil {
 		t.Fatalf("UsePlugin(world) 2: %v", err)
 	}
-	boardPlugin2 := board.NewPlugin(grid, &board.SingleOccupancy{})
+	boardPlugin2 := board.NewPlugin(grid, &board.SingleOccupancy{}, nil)
 	if err := game2.UsePlugin(boardPlugin2); err != nil {
 		t.Fatalf("UsePlugin(board) 2: %v", err)
 	}
