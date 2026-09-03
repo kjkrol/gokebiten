@@ -21,7 +21,7 @@ func newSaveLoadTestWorldPlugin() *world.Plugin {
 // Persistence.Save/Load explicitly.
 func TestPlugin_SaveLoad_TerrainRoundTrip(t *testing.T) {
 	basePath := t.TempDir() + "/save"
-	grid := board.NewSquareGrid(5, 5, 10)
+	grid := board.DefaultGrids{}.Square(5, 5, 10)
 	wall := board.CellKind{Name: "wall", Cost: 1, Passable: false}
 	cell, ok := grid.CellAt(geom.NewVec(21.0, 21.0))
 	if !ok {

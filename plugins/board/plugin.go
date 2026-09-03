@@ -44,6 +44,13 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 	if err != nil {
 		return err
 	}
+	worldConfig, err := ctx.Require[world.Config]()
+	if err != nil {
+		return err
+	}
+	if ts, ok := p.board.Grid.(toroidalSetter); ok {
+		ts.SetToroidal(worldConfig.Space.Toroidal)
+	}
 	ctx.Provide(p.board)
 	ctx.Provide(p.kinds)
 	ctx.Provide(p)

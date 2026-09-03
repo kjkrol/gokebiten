@@ -33,3 +33,7 @@ type Grid interface {
 	// CellSpan is the world-space side length of one cell — the renderer's cell-quad size.
 	CellSpan() float32
 }
+
+type toroidalSetter interface {
+	SetToroidal(bool)
+}

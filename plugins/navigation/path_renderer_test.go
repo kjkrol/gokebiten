@@ -5,29 +5,24 @@ import (
 
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/navigation"
-	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokg/geom"
 )
 
-func TestPathPoints_NoPathYet_StraightToTarget(t *testing.T) {
-	grid := board.NewSquareGrid(5, 1, 10)
+func TestPathCells_NoPathYet_StraightToTarget(t *testing.T) {
+	grid := board.DefaultGrids{}.Square(5, 1, 10)
 	start, _ := grid.CellIndex(0, 0)
 	target, _ := grid.CellIndex(4, 0)
-	pos := positionAt(grid, start)
 
-	points := navigation.PathPoints(grid, pos, navigation.MoveOrder{Target: target})
+	cells := navigation.PathCells(board.Cell{ID: start}, navigation.MoveOrder{Target: target})
 
-	want := []geom.Vec[float64]{board.Center(pos), grid.CellCenter(target)}
-	assertPoints(t, points, want)
+	assertCells(t, cells, []board.CellID{start, target})
 }
 
-func TestPathPoints_PartiallyConsumedPath_SkipsPassedSteps(t *testing.T) {
-	grid := board.NewSquareGrid(5, 1, 10)
+func TestPathCells_PartiallyConsumedPath_SkipsPassedSteps(t *testing.T) {
+	grid := board.DefaultGrids{}.Square(5, 1, 10)
 	start, _ := grid.CellIndex(0, 0)
 	c1, _ := grid.CellIndex(1, 0)
 	c2, _ := grid.CellIndex(2, 0)
 	target, _ := grid.CellIndex(3, 0)
-	pos := positionAt(grid, start)
 
 	var p navigation.Path
 	p.Steps[0] = c1
@@ -36,44 +31,61 @@ func TestPathPoints_PartiallyConsumedPath_SkipsPassedSteps(t *testing.T) {
 	p.Length = 3
 	p.Index = 1 // c1 already consumed
 
-	points := navigation.PathPoints(grid, pos, navigation.MoveOrder{Target: target, Path: p})
+	cells := navigation.PathCells(board.Cell{ID: start}, navigation.MoveOrder{Target: target, Path: p})
 
-	want := []geom.Vec[float64]{board.Center(pos), grid.CellCenter(c2), grid.CellCenter(target)}
-	assertPoints(t, points, want)
+	assertCells(t, cells, []board.CellID{start, c2, target})
 }
 
-func TestPathPoints_LastPointAlwaysTarget(t *testing.T) {
-	grid := board.NewSquareGrid(5, 1, 10)
+func TestPathCells_LastCellAlwaysTarget(t *testing.T) {
+	grid := board.DefaultGrids{}.Square(5, 1, 10)
 	start, _ := grid.CellIndex(0, 0)
 	target, _ := grid.CellIndex(2, 0)
-	pos := positionAt(grid, start)
 
 	var p navigation.Path
 	p.Steps[0] = target
 	p.Length = 1
 	p.Index = 0
 
-	points := navigation.PathPoints(grid, pos, navigation.MoveOrder{Target: target, Path: p})
+	cells := navigation.PathCells(board.Cell{ID: start}, navigation.MoveOrder{Target: target, Path: p})
 
-	last := points[len(points)-1]
-	wantLast := grid.CellCenter(target)
-	if last != wantLast {
-		t.Errorf("last point = %v, want %v (CellCenter(target))", last, wantLast)
+	if last := cells[len(cells)-1]; last != target {
+		t.Errorf("last cell = %v, want %v (Target)", last, target)
 	}
 }
 
-func positionAt(grid *board.SquareGrid, c board.CellID) world.Position {
-	return world.Position{AABB: board.CellAABB(grid, c, 8)}
+func TestPathCells_AtIntermediateWaypoint_DoesNotDuplicateIt(t *testing.T) {
+	grid := board.DefaultGrids{}.Square(5, 1, 10)
+	mid, _ := grid.CellIndex(1, 0)
+	target, _ := grid.CellIndex(2, 0)
+
+	var p navigation.Path
+	p.Steps[0] = mid
+	p.Steps[1] = target
+	p.Length = 2
+	p.Index = 0
+
+	cells := navigation.PathCells(board.Cell{ID: mid}, navigation.MoveOrder{Target: target, Path: p})
+
+	assertCells(t, cells, []board.CellID{mid, target})
 }
 
-func assertPoints(t *testing.T, got, want []geom.Vec[float64]) {
+func TestPathCells_AtTarget_DoesNotDuplicateIt(t *testing.T) {
+	grid := board.DefaultGrids{}.Square(5, 1, 10)
+	target, _ := grid.CellIndex(2, 0)
+
+	cells := navigation.PathCells(board.Cell{ID: target}, navigation.MoveOrder{Target: target})
+
+	assertCells(t, cells, []board.CellID{target})
+}
+
+func assertCells(t *testing.T, got, want []board.CellID) {
 	t.Helper()
 	if len(got) != len(want) {
-		t.Fatalf("pathPoints returned %d points, want %d: got=%v want=%v", len(got), len(want), got, want)
+		t.Fatalf("pathCells returned %d cells, want %d: got=%v want=%v", len(got), len(want), got, want)
 	}
 	for i := range got {
 		if got[i] != want[i] {
-			t.Errorf("pathPoints[%d] = %v, want %v", i, got[i], want[i])
+			t.Errorf("pathCells[%d] = %v, want %v", i, got[i], want[i])
 		}
 	}
 }

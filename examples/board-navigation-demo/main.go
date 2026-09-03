@@ -30,7 +30,7 @@ const (
 	UnitSpeed    = CellSize * 2
 	MaxEntCount  = 10
 
-	saveBasePath = "board-rts-demo"
+	saveBasePath = "board-navigation-demo"
 )
 
 type State struct{ Saves int }
@@ -54,8 +54,6 @@ func main() {
 	}).WithRenderer(worldAtlas)
 
 	// setup board plugin
-	grid := board.NewSquareGrid(GridWidth, GridHeight, CellSize)
-	occupancy := &board.SingleOccupancy{}
 	boardAtlas := render.NewAtlas(16, 3)
 	grassSprite := boardAtlas.Register(render.Solid(color.RGBA{R: 60, G: 95, B: 60, A: 255}))
 	wallSprite := boardAtlas.Register(render.Solid(color.RGBA{R: 40, G: 40, B: 40, A: 255}))
@@ -66,10 +64,13 @@ func main() {
 		board.CellKind{Name: "wall", Cost: 1, Passable: false, SpriteID: wallSprite},
 		board.CellKind{Name: "road", Cost: 0.4, Passable: true, SpriteID: roadSprite},
 	)
+	grid := board.DefaultGrids{}.Square(GridWidth, GridHeight, CellSize)
+	occupancy := &board.SingleOccupancy{}
 	boardPlugin := board.NewPlugin(grid, occupancy, cellKindDict).WithRenderer(boardAtlas)
 
 	// setup other plugins
-	navigationPlugin := navigation.NewPlugin(UnitSpeed).WithCommands().WithRenderer()
+	pathAtlas, pathSprites := navigation.RegisterDefaultPathSprites(CellSize, 2, color.RGBA{R: 255, G: 140, B: 0, A: 255})
+	navigationPlugin := navigation.NewPlugin(UnitSpeed).WithCommands().WithRenderer(pathAtlas, pathSprites)
 	cameraPlugin := camera.NewPlugin()
 	selectionPlugin := selection.NewPlugin().WithRenderer()
 
@@ -154,8 +155,8 @@ func main() {
 	}
 
 	game.Loop(func(ctx goke.RunCtx, d time.Duration) {
-		navigationPlugin.RunPlan(ctx, d)
 		worldPlugin.RunPlan(ctx, d)
+		navigationPlugin.RunPlan(ctx, d)
 		selectionPlugin.RunPlan(ctx, d)
 		ctx.Sync()
 	})

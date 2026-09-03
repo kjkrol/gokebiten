@@ -56,7 +56,7 @@ func (p *pushOnce) Update(_ *goke.CmdBuf, _ time.Duration) {
 }
 
 func TestNavigationSystem_Update_DeviationTriggersRepath(t *testing.T) {
-	grid := board.NewSquareGrid(5, 1, 10)
+	grid := board.DefaultGrids{}.Square(5, 1, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
@@ -131,7 +131,7 @@ func TestNavigationSystem_Update_DeviationTriggersRepath(t *testing.T) {
 // the corner for a tick, before it reaches the actually-planned cell — that
 // is not a deviation and must not trigger a full re-path.
 func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *testing.T) {
-	grid := board.NewSquareGrid(5, 5, 10)
+	grid := board.DefaultGrids{}.Square(5, 5, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
@@ -189,7 +189,7 @@ func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *te
 // since the entity never matches this system's query again once MoveOrder is
 // gone, nothing ever stopped it, and it drifted off the board.
 func TestNavigationSystem_Update_ArrivalStopsEntity(t *testing.T) {
-	grid := board.NewSquareGrid(5, 1, 10)
+	grid := board.DefaultGrids{}.Square(5, 1, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
@@ -249,7 +249,7 @@ func TestNavigationSystem_Update_ArrivalStopsEntity(t *testing.T) {
 // a cell boundary at an arbitrary point) ends up exactly centered — needed
 // for a board game, where units are expected to sit precisely on a cell.
 func TestNavigationSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
-	grid := board.NewSquareGrid(5, 1, 10)
+	grid := board.DefaultGrids{}.Square(5, 1, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
@@ -318,7 +318,7 @@ func TestNavigationSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
 // in a single tick, visibly popping the entity into place. Arrival must
 // glide in bounded steps and still land exactly on center.
 func TestNavigationSystem_Update_ArrivalGlidesSmoothlyToCellCenter(t *testing.T) {
-	grid := board.NewSquareGrid(5, 1, 10)
+	grid := board.DefaultGrids{}.Square(5, 1, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
@@ -409,7 +409,7 @@ func TestNavigationSystem_Update_ReproducesBoardDemoWallScenario(t *testing.T) {
 		entitySize                      = uint32(22)
 		speed                           = int32(cellSize * 2)
 	)
-	grid := board.NewSquareGrid(gridWidth, gridHeight, cellSize)
+	grid := board.DefaultGrids{}.Square(gridWidth, gridHeight, cellSize)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	var wallCells []board.CellID
@@ -501,6 +501,65 @@ func TestNavigationSystem_Update_ReproducesBoardDemoWallScenario(t *testing.T) {
 	if replans != 1 {
 		t.Errorf("total path changes = %d, want 1 (only the initial FindPath — no spurious mid-route invalidation)", replans)
 	}
+}
+
+func TestShortestAxisDelta(t *testing.T) {
+	cases := []struct {
+		name       string
+		have, want float64
+		size       uint32
+		toroidal   bool
+		wantDelta  float64
+	}{
+		{"non-toroidal ignores size", 10, 50, 100, false, 40},
+		{"toroidal direct is already shortest", 10, 50, 100, true, 40},
+		{"toroidal wraps forward when shorter", 90, 5, 100, true, 15},
+		{"toroidal wraps backward when shorter", 5, 90, 100, true, -15},
+		{"zero size disables wrap", 90, 5, 0, true, -85},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := shortestAxisDelta(c.have, c.want, c.size, c.toroidal); got != c.wantDelta {
+				t.Errorf("shortestAxisDelta(%v, %v, %v, %v) = %v, want %v", c.have, c.want, c.size, c.toroidal, got, c.wantDelta)
+			}
+		})
+	}
+}
+
+func TestDirectionBetween(t *testing.T) {
+	center := geom.NewVec(50.0, 50.0)
+	cases := []struct {
+		name string
+		want geom.Vec[float64]
+		dir  Direction
+	}{
+		{"east", geom.NewVec(60.0, 50.0), DirE},
+		{"west", geom.NewVec(40.0, 50.0), DirW},
+		{"north", geom.NewVec(50.0, 40.0), DirN},
+		{"south", geom.NewVec(50.0, 60.0), DirS},
+		{"north-east", geom.NewVec(60.0, 40.0), DirNE},
+		{"north-west", geom.NewVec(40.0, 40.0), DirNW},
+		{"south-east", geom.NewVec(60.0, 60.0), DirSE},
+		{"south-west", geom.NewVec(40.0, 60.0), DirSW},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := directionBetween(center, c.want, 1000, 1000, false); got != c.dir {
+				t.Errorf("directionBetween(%v, %v) = %v, want %v", center, c.want, got, c.dir)
+			}
+		})
+	}
+
+	t.Run("wraps through the seam instead of straight across the map", func(t *testing.T) {
+		have := geom.NewVec(95.0, 50.0)
+		want := geom.NewVec(5.0, 50.0)
+		if got := directionBetween(have, want, 100, 100, true); got != DirE {
+			t.Errorf("directionBetween(%v, %v, toroidal) = %v, want DirE (short hop east through the wrap)", have, want, got)
+		}
+		if got := directionBetween(have, want, 100, 100, false); got != DirW {
+			t.Errorf("directionBetween(%v, %v, non-toroidal) = %v, want DirW (sanity: without wrap it's the long way west)", have, want, got)
+		}
+	})
 }
 
 func equalSteps(a, b []board.CellID) bool {

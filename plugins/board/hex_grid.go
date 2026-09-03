@@ -6,18 +6,18 @@ import (
 	"github.com/kjkrol/gokg/geom"
 )
 
-// HexGrid is a Grid over pointy-top hexagonal cells addressed by axial
+// hexGrid is a Grid over pointy-top hexagonal cells addressed by axial
 // coordinates, bounded to a Width x Height parallelogram.
-type HexGrid struct {
+type hexGrid struct {
 	Width, Height uint32
 	Size          float64
 	Toroidal      bool
 }
 
-var _ Grid = (*HexGrid)(nil)
+var _ Grid = (*hexGrid)(nil)
 
-func NewHexGrid(width, height uint32, size float64) *HexGrid {
-	return &HexGrid{Width: width, Height: height, Size: size}
+func newHexGrid(width, height uint32, size float64) *hexGrid {
+	return &hexGrid{Width: width, Height: height, Size: size}
 }
 
 func packAxial(q, r int32) CellID {
@@ -29,12 +29,12 @@ func unpackAxial(c CellID) (q, r int32) {
 }
 
 // wrapAxial folds q,r into the canonical [0,Width) x [0,Height) parallelogram.
-func (g *HexGrid) wrapAxial(q, r int32) (int32, int32) {
+func (g *hexGrid) wrapAxial(q, r int32) (int32, int32) {
 	return int32(wrapModI64(int64(q), int64(g.Width))), int32(wrapModI64(int64(r), int64(g.Height)))
 }
 
 // Contains is always true when Toroidal — every (q,r) maps to some cell once wrapped.
-func (g *HexGrid) Contains(c CellID) bool {
+func (g *hexGrid) Contains(c CellID) bool {
 	if g.Toroidal {
 		return true
 	}
@@ -44,7 +44,7 @@ func (g *HexGrid) Contains(c CellID) bool {
 
 var hexDirs = [6][2]int32{{1, 0}, {1, -1}, {0, -1}, {-1, 0}, {-1, 1}, {0, 1}}
 
-func (g *HexGrid) Neighbors(c CellID) []CellID {
+func (g *hexGrid) Neighbors(c CellID) []CellID {
 	q, r := unpackAxial(c)
 	out := make([]CellID, 0, 6)
 	for _, d := range hexDirs {
@@ -62,14 +62,14 @@ func (g *HexGrid) Neighbors(c CellID) []CellID {
 }
 
 // CellCenter shifts the standard axial-to-pixel conversion so cell (0,0) sits fully in positive space.
-func (g *HexGrid) CellCenter(c CellID) geom.Vec[float64] {
+func (g *hexGrid) CellCenter(c CellID) geom.Vec[float64] {
 	q, r := unpackAxial(c)
 	x := g.Size*(math.Sqrt(3)*float64(q)+math.Sqrt(3)/2*float64(r)) + g.Size
 	y := g.Size*(1.5*float64(r)) + g.Size
 	return geom.NewVec(x, y)
 }
 
-func (g *HexGrid) CellAt(pos geom.Vec[float64]) (CellID, bool) {
+func (g *hexGrid) CellAt(pos geom.Vec[float64]) (CellID, bool) {
 	if g.Size == 0 {
 		return 0, false
 	}
@@ -88,9 +88,11 @@ func (g *HexGrid) CellAt(pos geom.Vec[float64]) (CellID, bool) {
 	return c, true
 }
 
-func (g *HexGrid) CellSpan() float32 { return float32(g.Size) }
+func (g *hexGrid) CellSpan() float32 { return float32(g.Size) }
 
-func (g *HexGrid) CellIndex(q, r uint32) (CellID, bool) {
+func (g *hexGrid) SetToroidal(t bool) { g.Toroidal = t }
+
+func (g *hexGrid) CellIndex(q, r uint32) (CellID, bool) {
 	if g.Toroidal {
 		return packAxial(int32(q%g.Width), int32(r%g.Height)), true
 	}
@@ -101,11 +103,11 @@ func (g *HexGrid) CellIndex(q, r uint32) (CellID, bool) {
 }
 
 // NeighborCost is always 1 — every hex neighbor is equidistant in this axial model.
-func (g *HexGrid) NeighborCost(a, b CellID) float64 { return 1 }
+func (g *hexGrid) NeighborCost(a, b CellID) float64 { return 1 }
 
 // DiagonalNeighbors always returns ok=false — hex neighbors share a full
 // edge, not a corner point, so cutting through a corner isn't a concept here.
-func (g *HexGrid) DiagonalNeighbors(a, b CellID) (c1, c2 CellID, ok bool) {
+func (g *hexGrid) DiagonalNeighbors(a, b CellID) (c1, c2 CellID, ok bool) {
 	return 0, 0, false
 }
 
@@ -114,7 +116,7 @@ func hexCubeDistance(dq, dr int32) float64 {
 }
 
 // Distance is hex (cube) distance; when Toroidal it checks every wrap period and returns the shortest.
-func (g *HexGrid) Distance(a, b CellID) float64 {
+func (g *hexGrid) Distance(a, b CellID) float64 {
 	aq, ar := unpackAxial(a)
 	bq, br := unpackAxial(b)
 	dq, dr := aq-bq, ar-br

@@ -17,7 +17,7 @@ import (
 )
 
 func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
-	grid := board.NewSquareGrid(10, 1, 10)
+	grid := board.DefaultGrids{}.Square(10, 1, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
@@ -109,7 +109,7 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 }
 
 func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T) {
-	grid := board.NewSquareGrid(10, 1, 10)
+	grid := board.DefaultGrids{}.Square(10, 1, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
@@ -205,7 +205,7 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 }
 
 func TestCommandSystem_Update_UnreachableTargetLeavesInFlightEntityUntouched(t *testing.T) {
-	grid := board.NewSquareGrid(10, 1, 10)
+	grid := board.DefaultGrids{}.Square(10, 1, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}

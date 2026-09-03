@@ -27,6 +27,8 @@ type Plugin struct {
 	commands        *commandSystem
 
 	rendererEnabled bool
+	pathAtlas       render.AtlasSource
+	pathSprites     PathSprites
 	pathRenderer    *PathRenderer
 
 	camera render.Camera
@@ -68,7 +70,8 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 		p.camera = camera
 	}
 	if p.rendererEnabled {
-		p.pathRenderer = NewPathRenderer(brd)
+		p.pathRenderer = NewPathRenderer(brd, p.pathAtlas, p.pathSprites)
+		p.pathRenderer.BindSpace(worldPlugin.World().Space())
 	}
 	if p.commandsEnabled {
 		p.commandState = &CommandState{}
@@ -96,8 +99,10 @@ func (p *Plugin) EventHandler() control.EventHandler {
 }
 
 // WithRenderer builds this plugin's own PathRenderer, drawing the remaining route for every selected, en-route entity.
-func (p *Plugin) WithRenderer() *Plugin {
+func (p *Plugin) WithRenderer(atlas render.AtlasSource, sprites PathSprites) *Plugin {
 	p.rendererEnabled = true
+	p.pathAtlas = atlas
+	p.pathSprites = sprites
 	return p
 }
 

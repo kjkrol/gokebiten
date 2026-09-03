@@ -1,15 +1,14 @@
-package board_test
+package board
 
 import (
 	"math"
 	"testing"
 
-	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokg/geom"
 )
 
 func TestSquareGrid_NonToroidal_EdgeExcludesNeighbors(t *testing.T) {
-	g := board.NewSquareGrid(4, 4, 10)
+	g := newSquareGrid(4, 4, 10)
 	corner := g.Neighbors(cellAtXY(g, 0, 0))
 	if len(corner) != 3 {
 		t.Errorf("corner cell has %d neighbors, want 3 (2 orthogonal + 1 diagonal, no wrap)", len(corner))
@@ -20,7 +19,7 @@ func TestSquareGrid_NonToroidal_EdgeExcludesNeighbors(t *testing.T) {
 }
 
 func TestSquareGrid_Toroidal_EdgeWrapsNeighborsAndDistance(t *testing.T) {
-	g := &board.SquareGrid{Width: 4, Height: 4, CellSize: 10, Toroidal: true}
+	g := &squareGrid{Width: 4, Height: 4, CellSize: 10, Toroidal: true}
 
 	first, last := cellAtXY(g, 0, 0), cellAtXY(g, 3, 0)
 	neighbors := g.Neighbors(first)
@@ -41,13 +40,13 @@ func TestSquareGrid_Toroidal_EdgeWrapsNeighborsAndDistance(t *testing.T) {
 		t.Errorf("Distance(col 0, col Width-1) = %v, want 1 (wrap-around, not %d)", d, g.Width-1)
 	}
 
-	if !g.Contains(board.CellID(999999)) {
+	if !g.Contains(CellID(999999)) {
 		t.Error("expected Contains to always be true on a toroidal grid")
 	}
 }
 
 func TestSquareGrid_Toroidal_CellAtWrapsNegativePositions(t *testing.T) {
-	g := &board.SquareGrid{Width: 4, Height: 4, CellSize: 10, Toroidal: true}
+	g := &squareGrid{Width: 4, Height: 4, CellSize: 10, Toroidal: true}
 	c, ok := g.CellAt(geom.NewVec(-5.0, -5.0))
 	if !ok {
 		t.Fatal("expected a negative position to wrap to a valid cell")
@@ -57,13 +56,13 @@ func TestSquareGrid_Toroidal_CellAtWrapsNegativePositions(t *testing.T) {
 	}
 }
 
-func cellAtXY(g *board.SquareGrid, x, y uint32) board.CellID {
+func cellAtXY(g *squareGrid, x, y uint32) CellID {
 	c, _ := g.CellIndex(x, y)
 	return c
 }
 
 func TestSquareGrid_CellIndex_NonToroidal(t *testing.T) {
-	g := board.NewSquareGrid(4, 4, 10)
+	g := newSquareGrid(4, 4, 10)
 	c, ok := g.CellIndex(2, 1)
 	if !ok || c != cellAtXY(g, 2, 1) {
 		t.Errorf("CellIndex(2,1) = (%v,%v), want (%v,true)", c, ok, cellAtXY(g, 2, 1))
@@ -74,7 +73,7 @@ func TestSquareGrid_CellIndex_NonToroidal(t *testing.T) {
 }
 
 func TestSquareGrid_CellIndex_ToroidalWraps(t *testing.T) {
-	g := &board.SquareGrid{Width: 4, Height: 4, CellSize: 10, Toroidal: true}
+	g := &squareGrid{Width: 4, Height: 4, CellSize: 10, Toroidal: true}
 	c, ok := g.CellIndex(4, 0)
 	origin, _ := g.CellIndex(0, 0)
 	if !ok || c != origin {
@@ -83,7 +82,7 @@ func TestSquareGrid_CellIndex_ToroidalWraps(t *testing.T) {
 }
 
 func TestSquareGrid_NeighborCost_OrthogonalVsDiagonal(t *testing.T) {
-	g := board.NewSquareGrid(4, 4, 10)
+	g := newSquareGrid(4, 4, 10)
 	orthogonal := g.NeighborCost(cellAtXY(g, 1, 1), cellAtXY(g, 1, 2))
 	if orthogonal != 1 {
 		t.Errorf("NeighborCost(orthogonal) = %v, want 1", orthogonal)
@@ -95,7 +94,7 @@ func TestSquareGrid_NeighborCost_OrthogonalVsDiagonal(t *testing.T) {
 }
 
 func TestSquareGrid_Distance_OctileNeverOverestimatesDiagonalCost(t *testing.T) {
-	g := board.NewSquareGrid(4, 4, 10)
+	g := newSquareGrid(4, 4, 10)
 	d := g.Distance(cellAtXY(g, 0, 0), cellAtXY(g, 3, 3))
 	if want := 3 * math.Sqrt2; d > want+1e-9 {
 		t.Errorf("Distance(diagonal pair) = %v, want <= %v (true diagonal-move cost, must never overestimate)", d, want)
@@ -103,7 +102,7 @@ func TestSquareGrid_Distance_OctileNeverOverestimatesDiagonalCost(t *testing.T) 
 }
 
 func TestSquareGrid_DiagonalNeighbors_ReturnsFlankingCells(t *testing.T) {
-	g := board.NewSquareGrid(4, 4, 10)
+	g := newSquareGrid(4, 4, 10)
 	c1, c2, ok := g.DiagonalNeighbors(cellAtXY(g, 1, 1), cellAtXY(g, 2, 2))
 	if !ok {
 		t.Fatal("expected (1,1)->(2,2) to be recognized as a diagonal step")

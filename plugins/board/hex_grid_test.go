@@ -3,7 +3,7 @@ package board
 import "testing"
 
 func TestHexGrid_NonToroidal_EdgeExcludesNeighbors(t *testing.T) {
-	g := NewHexGrid(4, 4, 10)
+	g := newHexGrid(4, 4, 10)
 	corner := g.Neighbors(packAxial(0, 0))
 	if len(corner) == 6 {
 		t.Error("corner cell has 6 neighbors, want fewer (no wrap)")
@@ -11,7 +11,7 @@ func TestHexGrid_NonToroidal_EdgeExcludesNeighbors(t *testing.T) {
 }
 
 func TestHexGrid_Toroidal_AlwaysSixNeighbors(t *testing.T) {
-	g := &HexGrid{Width: 4, Height: 4, Size: 10, Toroidal: true}
+	g := &hexGrid{Width: 4, Height: 4, Size: 10, Toroidal: true}
 	for q := int32(0); q < int32(g.Width); q++ {
 		for r := int32(0); r < int32(g.Height); r++ {
 			n := g.Neighbors(packAxial(q, r))
@@ -23,7 +23,7 @@ func TestHexGrid_Toroidal_AlwaysSixNeighbors(t *testing.T) {
 }
 
 func TestHexGrid_Toroidal_DistanceWrapsAtEdge(t *testing.T) {
-	g := &HexGrid{Width: 4, Height: 4, Size: 10, Toroidal: true}
+	g := &hexGrid{Width: 4, Height: 4, Size: 10, Toroidal: true}
 	first := packAxial(0, 0)
 	last := packAxial(int32(g.Width-1), 0)
 
@@ -33,14 +33,14 @@ func TestHexGrid_Toroidal_DistanceWrapsAtEdge(t *testing.T) {
 }
 
 func TestHexGrid_Toroidal_ContainsAlwaysTrue(t *testing.T) {
-	g := &HexGrid{Width: 4, Height: 4, Size: 10, Toroidal: true}
+	g := &hexGrid{Width: 4, Height: 4, Size: 10, Toroidal: true}
 	if !g.Contains(packAxial(999, -999)) {
 		t.Error("expected Contains to always be true on a toroidal grid")
 	}
 }
 
 func TestHexGrid_Toroidal_NeighborsWrapToCanonicalRange(t *testing.T) {
-	g := &HexGrid{Width: 4, Height: 4, Size: 10, Toroidal: true}
+	g := &hexGrid{Width: 4, Height: 4, Size: 10, Toroidal: true}
 	for _, n := range g.Neighbors(packAxial(0, 0)) {
 		q, r := unpackAxial(n)
 		if q < 0 || r < 0 || uint32(q) >= g.Width || uint32(r) >= g.Height {
@@ -50,7 +50,7 @@ func TestHexGrid_Toroidal_NeighborsWrapToCanonicalRange(t *testing.T) {
 }
 
 func TestHexGrid_CellIndex_NonToroidal(t *testing.T) {
-	g := NewHexGrid(4, 4, 10)
+	g := newHexGrid(4, 4, 10)
 	c, ok := g.CellIndex(2, 1)
 	if !ok || c != packAxial(2, 1) {
 		t.Errorf("CellIndex(2,1) = (%v,%v), want (%v,true)", c, ok, packAxial(2, 1))
@@ -61,7 +61,7 @@ func TestHexGrid_CellIndex_NonToroidal(t *testing.T) {
 }
 
 func TestHexGrid_CellIndex_ToroidalWraps(t *testing.T) {
-	g := &HexGrid{Width: 4, Height: 4, Size: 10, Toroidal: true}
+	g := &hexGrid{Width: 4, Height: 4, Size: 10, Toroidal: true}
 	c, ok := g.CellIndex(4, 0)
 	origin, _ := g.CellIndex(0, 0)
 	if !ok || c != origin {

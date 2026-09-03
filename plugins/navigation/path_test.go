@@ -8,7 +8,7 @@ import (
 )
 
 func TestPathFinder_FindPath_UnreachableTarget_ReportsNotFound(t *testing.T) {
-	grid := board.NewSquareGrid(5, 5, 10)
+	grid := board.DefaultGrids{}.Square(5, 5, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
@@ -26,7 +26,7 @@ func TestPathFinder_FindPath_UnreachableTarget_ReportsNotFound(t *testing.T) {
 }
 
 func TestPathFinder_FindPath_ReusesSolverAcrossCalls(t *testing.T) {
-	grid := board.NewSquareGrid(5, 5, 10)
+	grid := board.DefaultGrids{}.Square(5, 5, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
@@ -56,7 +56,7 @@ func TestPathFinder_FindPath_ReusesSolverAcrossCalls(t *testing.T) {
 }
 
 func TestPathFinder_FindPath_NeverCutsThroughABlockedCorner(t *testing.T) {
-	grid := board.NewSquareGrid(5, 5, 10)
+	grid := board.DefaultGrids{}.Square(5, 5, 10)
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	wall := board.CellKind{Cost: 1, Passable: false}

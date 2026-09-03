@@ -152,6 +152,10 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 			want := s.grid.CellCenter(waypoint)
 			have := board.Center(positions[i])
 			dx, dy := want.X-have.X, want.Y-have.Y
+			if s.space != nil {
+				dx = shortestAxisDelta(have.X, want.X, s.space.Width, s.space.Toroidal)
+				dy = shortestAxisDelta(have.Y, want.Y, s.space.Height, s.space.Toroidal)
+			}
 			dist := math.Hypot(dx, dy)
 			if dist > arrivalEpsilon {
 				velocities[i].Dir = geom.NewVec(dx/dist, dy/dist)
@@ -193,6 +197,20 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 	if snapped {
 		s.space.Flush(nil)
 	}
+}
+
+func shortestAxisDelta(have, want float64, size uint32, toroidal bool) float64 {
+	d := want - have
+	if !toroidal || size == 0 {
+		return d
+	}
+	s := float64(size)
+	if d > s/2 {
+		d -= s
+	} else if d < -s/2 {
+		d += s
+	}
+	return d
 }
 
 func (s *navigationSystem) clearEnteredTags(cb *goke.CmdBuf) {

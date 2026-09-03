@@ -10,9 +10,9 @@ import (
 )
 
 func TestValueExtras_WithEffect_EntersOccupancyOnSpawn(t *testing.T) {
-	sqGrid := board.NewSquareGrid(5, 5, 10)
+	sqGrid := board.DefaultGrids{}.Square(5, 5, 10)
 	occupancy := &board.SingleOccupancy{}
-	target := cellAtXY(sqGrid, 2, 2)
+	target, _ := sqGrid.CellIndex(2, 2)
 
 	cfg := world.Config{
 		Space:    world.SpaceCfg{Width: 50, Height: 50},
