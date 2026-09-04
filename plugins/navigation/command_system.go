@@ -17,11 +17,8 @@ type commandSystem struct {
 	query   *goke.Query
 	cell    goke.Comp[board.Cell]
 	orderID goke.CompID
-
-	sys goke.Runnable
 }
 
-var _ goke.Module = (*commandSystem)(nil)
 var _ goke.System = (*commandSystem)(nil)
 
 // newCommandSystem builds a commandSystem issuing move orders via pathFinder, driven by state.
@@ -54,22 +51,3 @@ func (s *commandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 		}
 	}
 }
-
-// RegSystems registers commandSystem itself as the per-tick system — see [goke.Module].
-func (s *commandSystem) RegSystems(ecs *goke.ECS) {
-	if s.sys == nil {
-		s.sys = ecs.RegSys(s)
-	}
-}
-
-// RunPlan runs commandSystem's Update for this tick — call from your own Game.Loop closure.
-func (s *commandSystem) RunPlan(ctx goke.RunCtx, d time.Duration) {
-	ctx.Run(s.sys, d)
-	ctx.Sync()
-}
-
-// SetupSystems is empty — commandSystem has no one-time seeding of its own.
-func (s *commandSystem) SetupSystems() []goke.System { return nil }
-
-// LoadComps is empty — MoveOrder/Cell are already owned by navigationSystem.
-func (s *commandSystem) LoadComps() []goke.CompToken { return nil }

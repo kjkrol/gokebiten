@@ -14,7 +14,7 @@ func TestPlugin_Install_StaysPendingWithoutWorld(t *testing.T) {
 	if err := game.UsePlugin(plugin); err != nil {
 		t.Fatalf("UsePlugin: %v", err)
 	}
-	if plugin.collisions != nil {
+	if plugin.module != nil {
 		t.Error("expected collisions to stay nil — no world.Plugin was ever installed")
 	}
 }
@@ -25,7 +25,7 @@ func TestPlugin_Install_ResolvesWhenRegisteredBeforeWorld(t *testing.T) {
 	if err := game.UsePlugin(collisionsPlugin); err != nil {
 		t.Fatalf("UsePlugin(collisionsPlugin): %v", err)
 	}
-	if collisionsPlugin.collisions != nil {
+	if collisionsPlugin.module != nil {
 		t.Fatal("expected collisions to be nil before world.Plugin installs")
 	}
 
@@ -37,7 +37,7 @@ func TestPlugin_Install_ResolvesWhenRegisteredBeforeWorld(t *testing.T) {
 		t.Fatalf("UsePlugin(worldPlugin): %v", err)
 	}
 
-	if collisionsPlugin.collisions == nil {
+	if collisionsPlugin.module == nil {
 		t.Fatal("expected collisions to be non-nil once world.Plugin installs, even though collisions was registered first")
 	}
 }
@@ -56,7 +56,7 @@ func TestPlugin_Install_BuildsCollisionsAfterWorld(t *testing.T) {
 	if err := game.UsePlugin(collisionsPlugin); err != nil {
 		t.Fatalf("UsePlugin(collisionsPlugin): %v", err)
 	}
-	if collisionsPlugin.collisions == nil {
+	if collisionsPlugin.module == nil {
 		t.Fatal("expected collisions to be non-nil after Install")
 	}
 }

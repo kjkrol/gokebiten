@@ -1,4 +1,4 @@
-package gokebiten
+package plugins
 
 import (
 	"fmt"
@@ -40,11 +40,8 @@ func (r *Resources) TryGet[T any]() (T, bool) {
 	return v.(T), true
 }
 
-// Resettable resources get Reset called each stats interval — see Game.Update.
-type Resettable interface{ Reset() }
-
-// forEach calls fn with every registered resource value.
-func (r *Resources) forEach(fn func(any)) {
+// ForEach calls fn with every registered resource value.
+func (r *Resources) ForEach(fn func(any)) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	for _, v := range r.items {
@@ -52,8 +49,8 @@ func (r *Resources) forEach(fn func(any)) {
 	}
 }
 
-// insertResource registers v under its exact static type T, replacing whatever was there before.
-func (r *Resources) insertResource[T any](v T) {
+// Insert registers v under its exact static type T, replacing whatever was there before.
+func (r *Resources) Insert[T any](v T) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.items[reflect.TypeFor[T]()] = v

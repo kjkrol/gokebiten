@@ -20,7 +20,7 @@ func TestSaveLoadCycle(t *testing.T) {
 	}
 
 	ecs := goke.New()
-	wm := world.NewWorld(cfg)
+	plugin := world.NewPlugin(cfg)
 	placement := world.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize)
 	motion := newRandomVelocity(200, 50, 10)
 	spawner := world.NewSpawner(
@@ -31,12 +31,12 @@ func TestSaveLoadCycle(t *testing.T) {
 			return world.Appearance{SpriteID: render.SpriteID(index)}
 		}).
 		With(func(index int) collisions.Collision { return collisions.Collision{} })
-	wm.Populate(count, spawner)
-	cm := collisions.New(wm.Space(), ecs)
+	plugin.Populate(count, spawner)
+	cm := collisions.New(plugin.Space(), ecs)
 
 	var origIDs []uint64
 	var origAppearance map[uint64]render.SpriteID
-	systems := append(wm.SetupSystems(),
+	systems := append(plugin.Module().SetupSystems(),
 		goke.SystemFn{OnInit: func(si *goke.SysInit) {
 			var posQ goke.Comp[world.Position]
 			var appQ goke.Comp[world.Appearance]
@@ -67,8 +67,8 @@ func TestSaveLoadCycle(t *testing.T) {
 	ecs.Resume()
 
 	ecs2 := goke.New()
-	wm2 := world.NewWorld(cfg)
-	cm2 := collisions.New(wm2.Space(), ecs2)
+	plugin2 := world.NewPlugin(cfg)
+	cm2 := collisions.New(plugin2.Space(), ecs2)
 
 	comps := append(goke.ProvidedComps(cm2),
 		goke.LoadComp[world.Position](),
@@ -99,7 +99,7 @@ func TestSaveLoadCycle(t *testing.T) {
 				loadedCount++
 			}
 		}
-	}}, wm2.PostLoad())
+	}}, plugin2.Module().PostLoad())
 
 	if loadedCount != count {
 		t.Fatalf("loaded %d entities, want %d", loadedCount, count)

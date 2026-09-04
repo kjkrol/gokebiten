@@ -29,7 +29,7 @@ type harness struct {
 	t         *testing.T
 	space     *gokg.Space
 	state     *State
-	sys       *System
+	sys       *module
 	handler   *DefaultEventHandler
 	ecs       *goke.ECS
 	pos       goke.Comp[world.Position]

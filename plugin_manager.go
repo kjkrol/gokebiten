@@ -7,21 +7,22 @@ import (
 	"strings"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/plugins"
 )
 
 // pluginManager installs plugins (retrying until their dependencies are available) and tracks what they register.
 type pluginManager struct {
 	game       *Game
-	plugins    map[string]Plugin
-	pending    []Plugin
+	plugins    map[string]plugins.Plugin
+	pending    []plugins.Plugin
 	waitingOn  map[string]reflect.Type
 	registered []any
 }
 
 // install queues p, resolves as much of the pending queue as possible, and rejects a duplicate Name.
-func (m *pluginManager) install(p Plugin) error {
+func (m *pluginManager) install(p plugins.Plugin) error {
 	if m.plugins == nil {
-		m.plugins = make(map[string]Plugin)
+		m.plugins = make(map[string]plugins.Plugin)
 	}
 	if _, dup := m.plugins[p.Name()]; dup {
 		return fmt.Errorf("gokebiten: plugin %q already installed", p.Name())
@@ -63,23 +64,27 @@ func (m *pluginManager) saveTargets() []any {
 func (m *pluginManager) resolvePending() error {
 	for {
 		progressed := false
-		var stillPending []Plugin
+		var stillPending []plugins.Plugin
 		for _, p := range m.pending {
-			ctx := &GameCtx{Resources: m.game.resources, game: m.game}
+			ctx := plugins.NewGameCtx(
+				m.game.resources, m.game.ecs, m.game.step,
+				func(v any) { m.track(v) },
+				func(producer func() []goke.System) { m.game.pendingSetup = append(m.game.pendingSetup, producer) },
+			)
 			err := p.Install(ctx)
-			var nr *notReadyError
+			var nr *plugins.NotReadyError
 			switch {
 			case err == nil:
 				progressed = true
 				m.track(p)
 			case errors.As(err, &nr):
-				if ctx.wrote {
+				if ctx.Wrote() {
 					panic(fmt.Sprintf("gokebiten: plugin %q wrote to Resources/ECS before returning an unmet dependency — Install must check its dependencies before any side effects", p.Name()))
 				}
 				if m.waitingOn == nil {
 					m.waitingOn = make(map[string]reflect.Type)
 				}
-				m.waitingOn[p.Name()] = nr.typ
+				m.waitingOn[p.Name()] = nr.Type
 				stillPending = append(stillPending, p)
 			default:
 				return fmt.Errorf("gokebiten: install plugin %q: %w", p.Name(), err)

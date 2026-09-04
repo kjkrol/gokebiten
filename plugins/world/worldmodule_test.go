@@ -1,36 +1,22 @@
-package world_test
+package world
 
 import (
 	"testing"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
 )
 
-func testConfig() world.Config {
-	return world.Config{
-		Space:    world.SpaceCfg{Width: 1000, Height: 1000},
-		Entities: world.EntitiesCfg{MaxCount: 10, MinSize: 1, MaxSize: 100},
-	}
-}
-
-func testPos() world.Position {
-	return world.Position{AABB: plane.NewAABB(geom.NewVec[uint32](0, 0), 10, 10)}
-}
-
 func TestWorld_Populate_EndToEnd(t *testing.T) {
-	wm := world.NewWorld(testConfig())
+	wm := testWorld()
 
-	spawner := world.NewSpawner(
-		func(index, count int) world.Position { return testPos() },
-		func(index int) world.Velocity { return world.Velocity{} },
+	spawner := NewSpawner(
+		func(index, count int) Position { return spawnerTestPos() },
+		func(index int) Velocity { return Velocity{} },
 	)
 	wm.Populate(3, spawner)
 
 	ecs := goke.New()
-	var pos goke.Comp[world.Position]
+	var pos goke.Comp[Position]
 	var q *goke.Query
 	systems := append(wm.SetupSystems(), goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		q = si.NewQueryBuilder(&pos).Build()
@@ -46,12 +32,21 @@ func TestWorld_Populate_EndToEnd(t *testing.T) {
 	for q.Next() {
 		for _, p := range pos.Slice(q.Cursor()) {
 			count++
-			if p.TopLeft != testPos().TopLeft {
-				t.Errorf("spawned entity position = %+v, want %+v", p.TopLeft, testPos().TopLeft)
+			if p.TopLeft != spawnerTestPos().TopLeft {
+				t.Errorf("spawned entity position = %+v, want %+v", p.TopLeft, spawnerTestPos().TopLeft)
 			}
 		}
 	}
 	if count != 3 {
 		t.Errorf("found %d entities with Position, want 3", count)
 	}
+}
+
+func TestWorld_RegSystems_IsIdempotent(t *testing.T) {
+	wm := testWorld()
+	ecs := goke.New()
+
+	// Must not panic or double-register systems when called more than once.
+	wm.RegSystems(ecs)
+	wm.RegSystems(ecs)
 }

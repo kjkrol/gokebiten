@@ -4,12 +4,12 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/world"
 )
 
-// ExampleWorld_Populate shows the shape every Populate call takes:
+// ExamplePlugin_Populate shows the shape every Populate call takes:
 // NewSpawner requires Position and Velocity, and With attaches each
 // further component. Attach WithEffect instead for a side effect (like
 // updating an occupancy tracker) that must run alongside the write.
-func ExampleWorld_Populate() {
-	wm := world.NewWorld(world.Config{
+func ExamplePlugin_Populate() {
+	plugin := world.NewPlugin(world.Config{
 		Space:    world.SpaceCfg{Width: 800, Height: 600},
 		Entities: world.EntitiesCfg{MaxCount: 10, MinSize: 8, MaxSize: 8},
 	})
@@ -22,5 +22,5 @@ func ExampleWorld_Populate() {
 		return world.Appearance{SpriteID: 0}
 	})
 
-	wm.Populate(10, spawner)
+	plugin.Populate(10, spawner)
 }

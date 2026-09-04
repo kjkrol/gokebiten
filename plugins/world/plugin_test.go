@@ -7,22 +7,6 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/world"
 )
 
-func TestPlugin_Install_DoesNotPublishWorldResource(t *testing.T) {
-	game := gokebiten.NewGame(&gokebiten.GameProps{})
-	plugin := world.NewPlugin(world.Config{
-		Space:    world.SpaceCfg{Width: 100, Height: 100},
-		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
-	})
-
-	if err := game.UsePlugin(plugin); err != nil {
-		t.Fatalf("UsePlugin: %v", err)
-	}
-
-	if _, ok := game.Resources().TryGet[*world.World](); ok {
-		t.Error("expected *world.World to NOT be registered as a resource")
-	}
-}
-
 func TestPlugin_Install_PublishesConfigResource(t *testing.T) {
 	game := gokebiten.NewGame(&gokebiten.GameProps{})
 	cfg := world.Config{
@@ -59,8 +43,8 @@ func TestPlugin_Install_PublishesTelemetryResource(t *testing.T) {
 	if !ok {
 		t.Fatal("expected *world.Telemetry to be registered as a resource")
 	}
-	if telemetry != plugin.World().Telemetry() {
-		t.Error("registered *world.Telemetry resource is not plugin.World().Telemetry()")
+	if telemetry != plugin.Telemetry() {
+		t.Error("registered *world.Telemetry resource is not plugin.Telemetry()")
 	}
 }
 
@@ -85,7 +69,10 @@ func TestPlugin_Install_PublishesItself(t *testing.T) {
 }
 
 func TestPlugin_Name(t *testing.T) {
-	p := world.NewPlugin(world.Config{})
+	p := world.NewPlugin(world.Config{
+		Space:    world.SpaceCfg{Width: 100, Height: 100},
+		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
+	})
 	if p.Name() != "gokebiten.world" {
 		t.Errorf("Name() = %q, want %q", p.Name(), "gokebiten.world")
 	}

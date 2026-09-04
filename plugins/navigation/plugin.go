@@ -4,14 +4,14 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten"
 	"github.com/kjkrol/gokebiten/control"
+	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
 )
 
-// Plugin wires a navigationSystem (and, with WithCommands, a commandSystem)
+// Plugin wires navigation (and, with WithCommands, right-click move orders)
 // into a Game — depends on plugins/board (for Grid/Terrain) and plugins/world
 // (for Position/Velocity/Space). WithCommands additionally depends on
 // plugins/selection (Selected).
@@ -21,6 +21,7 @@ type Plugin struct {
 	board      *board.Board
 	pathFinder *pathFinder
 	navigation *navigationSystem
+	module     *module
 
 	commandsEnabled bool
 	commandState    *CommandState
@@ -34,7 +35,7 @@ type Plugin struct {
 	camera render.Camera
 }
 
-var _ gokebiten.Plugin = (*Plugin)(nil)
+var _ plugins.Plugin = (*Plugin)(nil)
 
 // NewPlugin builds a navigation plugin, moving entities at speed world-units/sec before scaling.
 func NewPlugin(speed int32) *Plugin {
@@ -43,7 +44,7 @@ func NewPlugin(speed int32) *Plugin {
 
 func (p *Plugin) Name() string { return "gokebiten.navigation" }
 
-func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
+func (p *Plugin) Install(ctx *plugins.GameCtx) error {
 	boardPlugin, err := ctx.Require[*board.Plugin]()
 	if err != nil {
 		return err
@@ -60,7 +61,7 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 	occupancy := boardPlugin.Occupancy()
 	p.pathFinder = newPathFinder(brd, brd, occupancy)
 	p.navigation = newNavigationSystem(p.pathFinder, brd, brd, occupancy, p.speed)
-	p.navigation.BindSpace(worldPlugin.World().Space())
+	p.navigation.BindSpace(worldPlugin.Space())
 
 	if p.commandsEnabled || p.rendererEnabled {
 		camera, err := ctx.Require[render.Camera]()
@@ -71,16 +72,16 @@ func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
 	}
 	if p.rendererEnabled {
 		p.pathRenderer = NewPathRenderer(brd, p.pathAtlas, p.pathSprites)
-		p.pathRenderer.BindSpace(worldPlugin.World().Space())
+		p.pathRenderer.BindSpace(worldPlugin.Space())
 	}
 	if p.commandsEnabled {
 		p.commandState = &CommandState{}
 		p.commands = newCommandSystem(p.pathFinder, p.commandState)
 		ctx.Provide(p.commandState)
-		ctx.UseModule(p.commands)
 	}
 
-	ctx.UseModule(p.navigation)
+	p.module = &module{nav: p.navigation, cmd: p.commands}
+	ctx.UseModule(p.module)
 	return nil
 }
 
@@ -116,8 +117,5 @@ func (p *Plugin) Renderer() render.Renderer {
 
 // RunPlan runs the navigation system (and the command system, if enabled) for this tick — call before world's own RunPlan.
 func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
-	p.navigation.RunPlan(ctx, d)
-	if p.commands != nil {
-		p.commands.RunPlan(ctx, d)
-	}
+	p.module.RunPlan(ctx, d)
 }

@@ -6,8 +6,8 @@ import (
 	"github.com/kjkrol/goke/v3"
 )
 
-func testWorld() *World {
-	return NewWorld(Config{
+func testWorld() *module {
+	return newModule(Config{
 		Space:    SpaceCfg{Width: 1000, Height: 1000},
 		Entities: EntitiesCfg{MaxCount: 10, MinSize: 1, MaxSize: 100},
 	})

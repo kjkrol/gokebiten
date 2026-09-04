@@ -21,7 +21,7 @@ func TestCollisions_RegSystems_IsIdempotent(t *testing.T) {
 	p := collisions.New(testSpace(t), ecs)
 
 	// Must not panic or double-register systems when called more than once —
-	// RunPlan/RegSystems both guard with the same p.built check.
+	// RegSystems guards with p.built.
 	p.RegSystems(ecs)
 	p.RegSystems(ecs)
 }

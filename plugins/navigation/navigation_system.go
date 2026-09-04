@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokg"
@@ -47,13 +46,9 @@ type navigationSystem struct {
 	enteredQuery     *goke.Query
 	cellEnteredClear goke.Comp[CellEntered]
 	clearEditor      *goke.Editor
-
-	sys goke.Runnable
 }
 
-var _ goke.Module = (*navigationSystem)(nil)
 var _ goke.System = (*navigationSystem)(nil)
-var _ gokebiten.PostLoader = (*navigationSystem)(nil)
 
 // arrivalEpsilon is how close (world-units) counts as "reached" a waypoint — small enough that the final snap is imperceptible.
 const arrivalEpsilon = 2.0
@@ -226,45 +221,4 @@ func (s *navigationSystem) clearEnteredTags(cb *goke.CmdBuf) {
 		}
 		buf.Commit(s.clearEditor)
 	}
-}
-
-// RegSystems registers navigationSystem itself as the per-tick system — see [goke.Module].
-func (s *navigationSystem) RegSystems(ecs *goke.ECS) {
-	if s.sys == nil {
-		s.sys = ecs.RegSys(s)
-	}
-}
-
-// RunPlan runs navigationSystem's Update for this tick — call from your own Game.Loop closure.
-func (s *navigationSystem) RunPlan(ctx goke.RunCtx, d time.Duration) {
-	ctx.Run(s.sys, d)
-	ctx.Sync()
-}
-
-// SetupSystems is empty — spawning board entities is the game's responsibility.
-func (s *navigationSystem) SetupSystems() []goke.System { return nil }
-
-// LoadComps lists the component types navigationSystem owns — see [goke.CompProvider].
-func (s *navigationSystem) LoadComps() []goke.CompToken {
-	return []goke.CompToken{
-		goke.LoadComp[board.Cell](),
-		goke.LoadComp[MoveOrder](),
-		goke.LoadComp[CellEntered](),
-	}
-}
-
-// PostLoad rebuilds board.Occupancy from every loaded entity's Cell component.
-func (s *navigationSystem) PostLoad() goke.System {
-	return goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		var cell goke.Comp[board.Cell]
-		query := si.NewQueryBuilder(&cell).Build()
-		query.All()
-		for query.Next() {
-			cursor := query.Cursor()
-			cells := cell.Slice(cursor)
-			for i, id := range cursor.IDs {
-				s.occupancy.Enter(cells[i].ID, id)
-			}
-		}
-	}}
 }

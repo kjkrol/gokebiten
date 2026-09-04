@@ -1,4 +1,4 @@
-package gokebiten
+package plugins
 
 import (
 	"time"

@@ -1,10 +1,11 @@
-package world_test
+package world
 
 import (
 	"testing"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gokg/geom"
+	"github.com/kjkrol/gokg/plane"
 	"github.com/kjkrol/uid"
 )
 
@@ -12,11 +13,15 @@ type spawnerTag struct{}
 
 type spawnerStat struct{ HP int }
 
+func spawnerTestPos() Position {
+	return Position{AABB: plane.NewAABB(geom.NewVec[uint32](0, 0), 10, 10)}
+}
+
 func TestSpawner_With_AttachesComponent(t *testing.T) {
-	wm := world.NewWorld(testConfig())
-	spawner := world.NewSpawner(
-		func(index, count int) world.Position { return testPos() },
-		func(index int) world.Velocity { return world.Velocity{} },
+	wm := testWorld()
+	spawner := NewSpawner(
+		func(index, count int) Position { return spawnerTestPos() },
+		func(index int) Velocity { return Velocity{} },
 	).With(func(index int) spawnerStat { return spawnerStat{HP: 7} })
 	wm.Populate(1, spawner)
 
@@ -46,10 +51,10 @@ func TestSpawner_With_AttachesComponent(t *testing.T) {
 }
 
 func TestSpawner_With_ZeroSizeType_DoesNotPanic(t *testing.T) {
-	wm := world.NewWorld(testConfig())
-	spawner := world.NewSpawner(
-		func(index, count int) world.Position { return testPos() },
-		func(index int) world.Velocity { return world.Velocity{} },
+	wm := testWorld()
+	spawner := NewSpawner(
+		func(index, count int) Position { return spawnerTestPos() },
+		func(index int) Velocity { return Velocity{} },
 	).With(func(index int) spawnerTag { return spawnerTag{} })
 	wm.Populate(1, spawner)
 
@@ -71,14 +76,14 @@ func TestSpawner_With_ZeroSizeType_DoesNotPanic(t *testing.T) {
 }
 
 func TestSpawner_WithEffect_RunsAfterWriteWithValueAndID(t *testing.T) {
-	wm := world.NewWorld(testConfig())
+	wm := testWorld()
 
 	var gotHP int
 	var gotID uid.UID64
 	var calls int
-	spawner := world.NewSpawner(
-		func(index, count int) world.Position { return testPos() },
-		func(index int) world.Velocity { return world.Velocity{} },
+	spawner := NewSpawner(
+		func(index, count int) Position { return spawnerTestPos() },
+		func(index int) Velocity { return Velocity{} },
 	).WithEffect(func(index int) spawnerStat { return spawnerStat{HP: 9} },
 		func(v spawnerStat, id uid.UID64) {
 			calls++

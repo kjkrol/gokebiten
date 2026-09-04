@@ -68,9 +68,11 @@ func main() {
 	occupancy := &board.SingleOccupancy{}
 	boardPlugin := board.NewPlugin(grid, occupancy, cellKindDict).WithRenderer(boardAtlas)
 
-	// setup other plugins
+	// setup navigation plugin
 	pathAtlas, pathSprites := navigation.RegisterDefaultPathSprites(CellSize, 2, color.RGBA{R: 255, G: 140, B: 0, A: 255})
 	navigationPlugin := navigation.NewPlugin(UnitSpeed).WithCommands().WithRenderer(pathAtlas, pathSprites)
+
+	// setup other plugins
 	cameraPlugin := camera.NewPlugin()
 	selectionPlugin := selection.NewPlugin().WithRenderer()
 
@@ -147,7 +149,7 @@ func main() {
 					return world.Appearance{SpriteID: unitRoster[index].sprite}
 				}).
 				With(func(index int) selection.Selected { return selection.Selected{} })
-			worldPlugin.World().Populate(len(unitRoster), spawner)
+			worldPlugin.Populate(len(unitRoster), spawner)
 		}
 		return nil
 	}); err != nil {
@@ -161,7 +163,7 @@ func main() {
 		ctx.Sync()
 	})
 
-	game.Layers(boardPlugin.Renderer, worldPlugin.Renderer, navigationPlugin.Renderer, selectionPlugin.Renderer)
+	game.Layers(boardPlugin.Renderer, navigationPlugin.Renderer, worldPlugin.Renderer, selectionPlugin.Renderer)
 
 	selectionCmdHandler := selectionPlugin.EventHandler()
 	navigationCmdHandler := navigationPlugin.EventHandler()

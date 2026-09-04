@@ -6,6 +6,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten"
 	"github.com/kjkrol/gokebiten/control"
+	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
 	"github.com/kjkrol/gokg/geom"
@@ -24,7 +25,7 @@ type Plugin struct {
 	camera *render.BasicCamera
 }
 
-var _ gokebiten.Plugin = (*Plugin)(nil)
+var _ plugins.Plugin = (*Plugin)(nil)
 
 // NewPlugin builds a camera — pass viewport to override the auto-derived full-screen one at (0,0).
 func NewPlugin(viewport ...render.AABB) *Plugin {
@@ -37,7 +38,7 @@ func NewPlugin(viewport ...render.AABB) *Plugin {
 
 func (p *Plugin) Name() string { return "gokebiten.camera" }
 
-func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
+func (p *Plugin) Install(ctx *plugins.GameCtx) error {
 	props := ctx.Resources.Get[*gokebiten.GameProps]()
 
 	var surface plane.Space2D[uint32]

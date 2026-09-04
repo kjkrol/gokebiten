@@ -1,4 +1,4 @@
-package gokebiten
+package plugins
 
 import "testing"
 
@@ -7,7 +7,7 @@ type testResourceB struct{ S string }
 
 func TestResources_InsertGet_RoundTrip(t *testing.T) {
 	r := NewResources()
-	r.insertResource(&testResourceA{N: 7})
+	r.Insert(&testResourceA{N: 7})
 
 	got := r.Get[*testResourceA]()
 	if got.N != 7 {
@@ -35,19 +35,19 @@ func TestResources_GetResource_MissingPanics(t *testing.T) {
 
 func TestResources_InsertResource_OverwritesPreviousValue(t *testing.T) {
 	r := NewResources()
-	r.insertResource(&testResourceA{N: 1})
-	r.insertResource(&testResourceA{N: 2})
+	r.Insert(&testResourceA{N: 1})
+	r.Insert(&testResourceA{N: 2})
 
 	got := r.Get[*testResourceA]()
 	if got.N != 2 {
-		t.Errorf("GetResource[*testResourceA]().N = %d, want 2 (last InsertResource should win)", got.N)
+		t.Errorf("GetResource[*testResourceA]().N = %d, want 2 (last Insert should win)", got.N)
 	}
 }
 
 func TestResources_DifferentTypesDoNotCollide(t *testing.T) {
 	r := NewResources()
-	r.insertResource(&testResourceA{N: 1})
-	r.insertResource(&testResourceB{S: "hi"})
+	r.Insert(&testResourceA{N: 1})
+	r.Insert(&testResourceB{S: "hi"})
 
 	if got := r.Get[*testResourceA](); got.N != 1 {
 		t.Errorf("testResourceA.N = %d, want 1", got.N)
@@ -64,19 +64,19 @@ func (r *resettableResource) Reset() { r.resetCalls++ }
 func TestResources_ForEach_VisitsRegisteredResources(t *testing.T) {
 	r := NewResources()
 	res := &resettableResource{}
-	r.insertResource(res)
-	r.insertResource(&testResourceA{N: 1})
+	r.Insert(res)
+	r.Insert(&testResourceA{N: 1})
 
 	visited := 0
-	r.forEach(func(v any) {
+	r.ForEach(func(v any) {
 		visited++
-		if rr, ok := v.(Resettable); ok {
+		if rr, ok := v.(interface{ Reset() }); ok {
 			rr.Reset()
 		}
 	})
 
 	if visited != 2 {
-		t.Errorf("forEach visited %d resources, want 2", visited)
+		t.Errorf("ForEach visited %d resources, want 2", visited)
 	}
 	if res.resetCalls != 1 {
 		t.Errorf("resetCalls = %d, want 1", res.resetCalls)

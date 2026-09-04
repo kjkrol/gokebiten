@@ -7,7 +7,9 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/control"
+	"github.com/kjkrol/gokebiten/internal/gamecore"
 	"github.com/kjkrol/gokebiten/internal/timing"
+	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/render"
 )
 
@@ -24,13 +26,15 @@ type GameProps struct {
 // TPS is the built-in measured-ticks-per-second counter, inserted by NewGame.
 type TPS struct{ Ticks int }
 
-type Game struct {
-	Persistence *Persistence
+// resettable resources get Reset called each stats interval — see Game.Update.
+type resettable interface{ Reset() }
 
+type Game struct {
+	Persistence   *Persistence
 	ticks         int
 	step          time.Duration
 	timeTracker   *timing.Tracker
-	resources     *Resources
+	resources     *plugins.Resources
 	props         *GameProps
 	inputs        *control.InputEvents
 	tps           *TPS
@@ -45,12 +49,12 @@ var _ ebiten.Game = (*Game)(nil)
 
 // NewGame builds a Game, pre-populating its resource registry with *GameProps, *control.InputEvents, and *TPS.
 func NewGame(props *GameProps) *Game {
-	resources := NewResources()
+	resources := plugins.NewResources()
 	inputs := &control.InputEvents{}
 	tps := &TPS{}
-	resources.insertResource(props)
-	resources.insertResource(inputs)
-	resources.insertResource(tps)
+	resources.Insert(props)
+	resources.Insert(inputs)
+	resources.Insert(tps)
 
 	targetTPS := defaultTargetTPS
 	if props != nil && props.TargetTPS != 0 {
@@ -73,7 +77,7 @@ func NewGame(props *GameProps) *Game {
 }
 
 // Resources returns the game's shared resource registry.
-func (g *Game) Resources() *Resources { return g.resources }
+func (g *Game) Resources() *plugins.Resources { return g.resources }
 
 // EventHandler sets the handler Update calls once per tick with this tick's input events.
 func (g *Game) EventHandler(handler control.EventHandler) {
@@ -128,8 +132,8 @@ func (g *Game) Update() error {
 	if g.timeTracker.ProcessStatsInterval() {
 		g.tps.Ticks = g.ticks
 		g.ticks = 0
-		g.resources.forEach(func(v any) {
-			if r, ok := v.(Resettable); ok {
+		g.resources.ForEach(func(v any) {
+			if r, ok := v.(resettable); ok {
 				r.Reset()
 			}
 		})
@@ -162,46 +166,11 @@ func (g *Game) Run() {
 }
 
 // UsePlugin installs p once its dependencies are available, retrying automatically as other plugins install, and rejects a duplicate Name.
-func (g *Game) UsePlugin(p Plugin) error { return g.pluginManager.install(p) }
+func (g *Game) UsePlugin(p plugins.Plugin) error { return g.pluginManager.install(p) }
 
 // Init runs fn to build the game's own logic — only one is allowed per Game.
 func (g *Game) Init(fn func(ctx *GameCtx) error) error {
-	return g.UsePlugin(&gameInitPlugin{fn: fn})
-}
-
-// gameInitPlugin adapts a plain closure to Plugin — see Game.Init.
-type gameInitPlugin struct{ fn func(ctx *GameCtx) error }
-
-func (p *gameInitPlugin) Name() string { return "gokebiten.game" }
-
-func (p *gameInitPlugin) Install(ctx *GameCtx) error { return p.fn(ctx) }
-
-// RunPlan is a no-op — gameInitPlugin has no per-tick work of its own.
-func (p *gameInitPlugin) RunPlan(goke.RunCtx, time.Duration) {}
-
-// Renderer is a no-op — gameInitPlugin has no render.Renderer of its own.
-func (p *gameInitPlugin) Renderer() render.Renderer { return nil }
-
-// EventHandler is a no-op — gameInitPlugin has no control.EventHandler of its own.
-func (p *gameInitPlugin) EventHandler() control.EventHandler { return nil }
-
-func (g *Game) regSys(factory func() goke.System) goke.Runnable {
-	return g.ecs.RegSys(factory())
-}
-
-// useModule defers m.RegSystems to the one-time Setup call and tracks m for Persistence.Load.
-func (g *Game) useModule(m goke.Module) {
-	g.pluginManager.track(m)
-	sys := goke.SystemFn{OnInit: func(si *goke.SysInit) { m.RegSystems(g.ecs) }}
-	g.pendingSetup = append(g.pendingSetup, func() []goke.System { return []goke.System{sys} })
-}
-
-// setup tracks each provider for Persistence.Load and defers its SetupSystems to the one-time ecs.Setup call.
-func (g *Game) setup(providers ...goke.SetupProvider) {
-	for _, p := range providers {
-		g.pluginManager.track(p)
-		g.pendingSetup = append(g.pendingSetup, p.SetupSystems)
-	}
+	return g.UsePlugin(gamecore.New(fn))
 }
 
 func (g *Game) registerRenderer(factory func() render.Renderer) render.Renderer {

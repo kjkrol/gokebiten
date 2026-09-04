@@ -18,7 +18,7 @@ func TestValueExtras_WithEffect_EntersOccupancyOnSpawn(t *testing.T) {
 		Space:    world.SpaceCfg{Width: 50, Height: 50},
 		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 8, MaxSize: 8},
 	}
-	wm := world.NewWorld(cfg)
+	plugin := world.NewPlugin(cfg)
 	placement := world.NewGridPlacement(50, 50, 8)
 	spawner := world.NewSpawner(
 		func(index, count int) world.Position { return placement.Place(index, count) },
@@ -28,12 +28,12 @@ func TestValueExtras_WithEffect_EntersOccupancyOnSpawn(t *testing.T) {
 	}, func(c board.Cell, id uid.UID64) {
 		occupancy.Enter(c.ID, id)
 	})
-	wm.Populate(1, spawner)
+	plugin.Populate(1, spawner)
 
 	ecs := goke.New()
 	var cell goke.Comp[board.Cell]
 	var q *goke.Query
-	systems := append(wm.SetupSystems(), goke.SystemFn{OnInit: func(si *goke.SysInit) {
+	systems := append(plugin.Module().SetupSystems(), goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		q = si.NewQueryBuilder(&cell).Build()
 	}})
 	ecs.Setup(systems...)

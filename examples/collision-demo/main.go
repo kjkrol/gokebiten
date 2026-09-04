@@ -115,7 +115,7 @@ func main() {
 				return world.Appearance{SpriteID: entitySprites[rand.IntN(7)][rand.IntN(4)]}
 			}).
 			With(func(index int) collisions.Collision { return collisions.Collision{} })
-		worldPlugin.World().Populate(EntityCount, spawner)
+		worldPlugin.Populate(EntityCount, spawner)
 	}
 
 	game.Loop(func(ctx goke.RunCtx, d time.Duration) {

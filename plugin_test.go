@@ -7,8 +7,12 @@ import (
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/control"
+	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/render"
 )
+
+type testResourceA struct{ N int }
+type testResourceB struct{ S string }
 
 type stubPlugin struct {
 	name      string
@@ -92,13 +96,18 @@ func (s *stubSetupProvider) SetupSystems() []goke.System {
 	return s.systems
 }
 
-func TestGame_Setup_EvaluatesSetupSystemsLazily(t *testing.T) {
+func TestGameCtx_Setup_EvaluatesSetupSystemsLazily(t *testing.T) {
 	game := NewGame(&GameProps{})
+	ctx := plugins.NewGameCtx(
+		game.resources, game.ecs, game.step,
+		func(v any) { game.pluginManager.track(v) },
+		func(producer func() []goke.System) { game.pendingSetup = append(game.pendingSetup, producer) },
+	)
 	stub := &stubSetupProvider{}
-	game.setup(stub)
+	ctx.Setup(stub)
 
 	if stub.callCount != 0 {
-		t.Fatalf("SetupSystems called %d times by setup(), want 0 (must stay lazy)", stub.callCount)
+		t.Fatalf("SetupSystems called %d times by Setup(), want 0 (must stay lazy)", stub.callCount)
 	}
 
 	game.flushPendingSetup()

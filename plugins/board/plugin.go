@@ -6,6 +6,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten"
 	"github.com/kjkrol/gokebiten/control"
+	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
 )
@@ -22,7 +23,7 @@ type Plugin struct {
 	renderState  *RenderState
 }
 
-var _ gokebiten.Plugin = (*Plugin)(nil)
+var _ plugins.Plugin = (*Plugin)(nil)
 var _ gokebiten.Saveable = (*Plugin)(nil)
 
 // NewPlugin builds a board over grid, capping cell occupancy per occupancy
@@ -39,7 +40,7 @@ func NewPlugin(grid Grid, occupancy Occupancy, kinds CellKindDict) *Plugin {
 
 func (p *Plugin) Name() string { return "gokebiten.board" }
 
-func (p *Plugin) Install(ctx *gokebiten.GameCtx) error {
+func (p *Plugin) Install(ctx *plugins.GameCtx) error {
 	worldPlugin, err := ctx.Require[*world.Plugin]()
 	if err != nil {
 		return err
