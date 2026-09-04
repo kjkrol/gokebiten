@@ -17,14 +17,10 @@ import (
 type Plugin struct {
 	speed int32
 
-	board      *board.Board
-	pathFinder *pathFinder
-	navigation *navigationSystem
-	module     *module
+	board  *board.Board
+	module *module
 
-	commandsEnabled bool
-	commandState    *CommandState
-	commands        *commandSystem
+	commandState *CommandState
 
 	rendererEnabled bool
 	pathAtlas       render.AtlasSource
@@ -62,28 +58,25 @@ func (p *Plugin) Install(ctx *plugins.GameCtx) error {
 	}
 	p.board = brd
 	occupancy := boardPlugin.Occupancy()
-	p.pathFinder = newPathFinder(brd, brd, occupancy)
-	p.navigation = newNavigationSystem(p.pathFinder, brd, brd, occupancy, p.speed)
-	p.navigation.BindSpace(worldPlugin.Space())
+	finder := newPathFinder(brd, brd, occupancy)
+	navSys := newNavigationSystem(finder, brd, brd, occupancy, p.speed)
+	navSys.BindSpace(worldPlugin.Space())
 
-	if p.commandsEnabled || p.rendererEnabled {
-		camera, err := ctx.Require[render.Camera]()
-		if err != nil {
-			return err
-		}
-		p.camera = camera
+	camera, err := ctx.Require[render.Camera]()
+	if err != nil {
+		return err
 	}
+	p.camera = camera
+
 	if p.rendererEnabled {
 		p.pathRenderer = NewPathRenderer(brd, p.pathAtlas, p.pathSprites)
 		p.pathRenderer.BindSpace(worldPlugin.Space())
 	}
-	if p.commandsEnabled {
-		p.commandState = &CommandState{}
-		p.commands = newCommandSystem(p.pathFinder, p.commandState)
-		ctx.Provide(p.commandState)
-	}
+	p.commandState = &CommandState{}
+	moveCommandSystem := newMoveCommandSystem(finder, p.commandState)
+	ctx.Provide(p.commandState)
 
-	p.module = &module{nav: p.navigation, cmd: p.commands}
+	p.module = &module{navigationSystem: navSys, moveCommandSystem: moveCommandSystem}
 	ctx.UseModule(p.module)
 	return nil
 }
@@ -109,21 +102,12 @@ func (p *Plugin) Renderer() render.Renderer {
 
 // EventHandler returns the default right-click move-order control.EventHandler, or nil unless WithCommands was called.
 func (p *Plugin) EventHandler() control.EventHandler {
-	if p.commands == nil {
-		return nil
-	}
 	return NewDefaultCommandEventHandler(p.board, p.camera, p.commandState)
 }
 
 // =================================================================
 // navigation-specific
 // =================================================================
-
-// WithCommands enables right-click move orders for Selected, en-route entities.
-func (p *Plugin) WithCommands() *Plugin {
-	p.commandsEnabled = true
-	return p
-}
 
 // SetPathSprites sets the sprite set WithRenderer's PathRenderer draws — call before UsePlugin.
 func (p *Plugin) SetPathSprites(sprites PathSprites) *Plugin {

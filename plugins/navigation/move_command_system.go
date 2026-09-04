@@ -8,9 +8,9 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/selection"
 )
 
-// commandSystem issues move orders: a right-click gives every Selected
+// moveCommandSystem issues move orders: a right-click gives every Selected
 // entity a fresh MoveOrder/Path, unless the target is unreachable.
-type commandSystem struct {
+type moveCommandSystem struct {
 	pathFinder *pathFinder
 	state      *CommandState
 
@@ -19,19 +19,19 @@ type commandSystem struct {
 	orderID goke.CompID
 }
 
-var _ goke.System = (*commandSystem)(nil)
+var _ goke.System = (*moveCommandSystem)(nil)
 
-// newCommandSystem builds a commandSystem issuing move orders via pathFinder, driven by state.
-func newCommandSystem(pathFinder *pathFinder, state *CommandState) *commandSystem {
-	return &commandSystem{state: state, pathFinder: pathFinder}
+// newMoveCommandSystem builds a moveCommandSystem issuing move orders via pathFinder, driven by state.
+func newMoveCommandSystem(pathFinder *pathFinder, state *CommandState) *moveCommandSystem {
+	return &moveCommandSystem{state: state, pathFinder: pathFinder}
 }
 
-func (s *commandSystem) Init(si *goke.SysInit) {
+func (s *moveCommandSystem) Init(si *goke.SysInit) {
 	s.query = si.NewQueryBuilder(&s.cell).Include(goke.Include[selection.Selected]()).Build()
 	s.orderID = si.RegComp[MoveOrder]()
 }
 
-func (s *commandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
+func (s *moveCommandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 	if s.state.PendingTarget == nil {
 		return
 	}

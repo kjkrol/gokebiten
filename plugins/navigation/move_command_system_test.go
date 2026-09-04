@@ -30,7 +30,7 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 	camera := render.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
 
 	cmdState := &CommandState{}
-	cmds := newCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
+	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
 	cmdHandler := NewDefaultCommandEventHandler(grid, camera, cmdState)
 	selState := &selection.State{}
 	selSys := selection.NewSelectionSystem(selState, nil, camera)
@@ -121,7 +121,7 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 	camera := render.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
 
 	cmdState := &CommandState{}
-	cmds := newCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
+	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
 	cmdHandler := NewDefaultCommandEventHandler(grid, camera, cmdState)
 	selState := &selection.State{}
 	selSys := selection.NewSelectionSystem(selState, nil, camera)
@@ -219,7 +219,7 @@ func TestCommandSystem_Update_UnreachableTargetLeavesInFlightEntityUntouched(t *
 	camera := render.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
 
 	cmdState := &CommandState{}
-	cmds := newCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
+	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
 	cmdHandler := NewDefaultCommandEventHandler(grid, camera, cmdState)
 	selState := &selection.State{}
 	selSys := selection.NewSelectionSystem(selState, nil, camera)

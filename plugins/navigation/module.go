@@ -8,14 +8,14 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/board"
 )
 
-// module registers and runs navigationSystem (always) and commandSystem
+// module registers and runs navigationSystem (always) and moveCommandSystem
 // (only when WithCommands enabled it) as one goke.Module.
 type module struct {
-	nav *navigationSystem
-	cmd *commandSystem
+	navigationSystem  *navigationSystem
+	moveCommandSystem *moveCommandSystem
 
-	navRunnable goke.Runnable
-	cmdRunnable goke.Runnable
+	navSysRunnable     goke.Runnable
+	moveCmdSysRunnable goke.Runnable
 }
 
 var _ goke.Module = (*module)(nil)
@@ -27,23 +27,18 @@ var _ gokebiten.PostLoader = (*module)(nil)
 
 // RegSystems registers nav (and cmd, if enabled) as the per-tick systems — see [goke.Module].
 func (m *module) RegSystems(ecs *goke.ECS) {
-	if m.navRunnable != nil {
-		return
-	}
-	m.navRunnable = ecs.RegSys(m.nav)
-	if m.cmd != nil {
-		m.cmdRunnable = ecs.RegSys(m.cmd)
-	}
+	m.navSysRunnable = ecs.RegSys(m.navigationSystem)
+	m.moveCmdSysRunnable = ecs.RegSys(m.moveCommandSystem)
+
 }
 
 // RunPlan runs nav's Update (and cmd's, if enabled) for this tick — call from your own Game.Loop closure.
 func (m *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
-	ctx.Run(m.navRunnable, d)
+	ctx.Run(m.navSysRunnable, d)
 	ctx.Sync()
-	if m.cmdRunnable != nil {
-		ctx.Run(m.cmdRunnable, d)
-		ctx.Sync()
-	}
+	ctx.Run(m.moveCmdSysRunnable, d)
+	ctx.Sync()
+
 }
 
 // SetupSystems is empty — spawning board entities is the game's responsibility.
@@ -72,7 +67,7 @@ func (m *module) PostLoad() goke.System {
 			cursor := query.Cursor()
 			cells := cell.Slice(cursor)
 			for i, id := range cursor.IDs {
-				m.nav.occupancy.Enter(cells[i].ID, id)
+				m.navigationSystem.occupancy.Enter(cells[i].ID, id)
 			}
 		}
 	}}

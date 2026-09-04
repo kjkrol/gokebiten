@@ -73,7 +73,7 @@ func main() {
 
 	// setup navigation plugin
 	pathAtlas, pathSprites := navigation.RegisterDefaultPathSprites(CellSize, 2, color.RGBA{R: 255, G: 140, B: 0, A: 255})
-	navigationPlugin := navigation.NewPlugin(UnitSpeed).WithCommands()
+	navigationPlugin := navigation.NewPlugin(UnitSpeed)
 	navigationPlugin.SetPathSprites(pathSprites) // TODO: try do this better
 	navigationPlugin.WithRenderer(pathAtlas)
 
