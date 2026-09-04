@@ -36,6 +36,8 @@ const (
 
 type State struct{ Saves int }
 
+func (*State) PluginResource() {}
+
 func main() {
 	game := gokebiten.NewGame(&gokebiten.GameProps{
 		Title:       "gokebiten board & navigation plugins demo",
@@ -68,18 +70,18 @@ func main() {
 	)
 	grid := board.DefaultGrids{}.Square(GridWidth, GridHeight, CellSize)
 	occupancy := &board.SingleOccupancy{}
-	boardPlugin := board.NewPlugin(grid, occupancy, cellKindDict)
+	boardPlugin := board.NewPlugin(grid, occupancy, cellKindDict, worldPlugin)
 	boardPlugin.WithRenderer(boardAtlas)
 
 	// setup navigation plugin
 	pathAtlas, pathSprites := navigation.RegisterDefaultPathSprites(CellSize, 2, color.RGBA{R: 255, G: 140, B: 0, A: 255})
-	navigationPlugin := navigation.NewPlugin(UnitSpeed)
+	navigationPlugin := navigation.NewPlugin(UnitSpeed, boardPlugin, worldPlugin)
 	navigationPlugin.SetPathSprites(pathSprites) // TODO: try do this better
 	navigationPlugin.WithRenderer(pathAtlas)
 
 	// setup other plugins
 	cameraPlugin := camera.NewPlugin()
-	selectionPlugin := selection.NewPlugin()
+	selectionPlugin := selection.NewPlugin(worldPlugin)
 	selectionPlugin.WithRenderer(nil)
 
 	// use plugins

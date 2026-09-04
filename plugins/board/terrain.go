@@ -23,6 +23,8 @@ type CellKind struct {
 // published to Resources so board-modifying code can pick a kind by name.
 type CellKindDict map[string]CellKind
 
+func (CellKindDict) PluginResource() {}
+
 // NewCellKindDict builds a CellKindDict from kinds, keyed by each one's Name.
 func NewCellKindDict(kinds ...CellKind) CellKindDict {
 	dict := make(CellKindDict, len(kinds))

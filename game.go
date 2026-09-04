@@ -23,8 +23,12 @@ type GameProps struct {
 	ScreenWidth, ScreenHeight int
 }
 
+func (*GameProps) PluginResource() {}
+
 // TPS is the built-in measured-ticks-per-second counter, inserted by NewGame.
 type TPS struct{ Ticks int }
+
+func (*TPS) PluginResource() {}
 
 // resettable resources get Reset called each stats interval — see Game.Update.
 type resettable interface{ Reset() }

@@ -3,7 +3,6 @@ package gokebiten
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/kjkrol/goke/v3"
@@ -15,9 +14,10 @@ type pluginManager struct {
 	game         *Game
 	plugins      map[string]plugins.Plugin
 	pending      []plugins.Plugin
-	waitingOn    map[string]reflect.Type
+	waitingOn    map[string]string
 	registered   []any
 	pendingSetup []func() []goke.System
+	installed    map[string]bool
 }
 
 // install queues p, resolves as much of the pending queue as possible, and rejects a duplicate Name.
@@ -72,21 +72,26 @@ func (m *pluginManager) resolvePending() error {
 		progressed := false
 		var stillPending []plugins.Plugin
 		for _, p := range m.pending {
-			ctx := plugins.NewGameCtx(m.game.resources, m.game.ecs, m.track, m.addPendingSetup)
+			ctx := plugins.NewGameCtx(m.game.resources, m.game.ecs, m.track, m.addPendingSetup,
+				func(name string) bool { return m.installed[name] })
 			err := p.Install(ctx)
 			var nr *plugins.NotReadyError
 			switch {
 			case err == nil:
 				progressed = true
+				if m.installed == nil {
+					m.installed = make(map[string]bool)
+				}
+				m.installed[p.Name()] = true
 				m.track(p)
 			case errors.As(err, &nr):
 				if ctx.Wrote() {
 					panic(fmt.Sprintf("gokebiten: plugin %q wrote to Resources/ECS before returning an unmet dependency — Install must check its dependencies before any side effects", p.Name()))
 				}
 				if m.waitingOn == nil {
-					m.waitingOn = make(map[string]reflect.Type)
+					m.waitingOn = make(map[string]string)
 				}
-				m.waitingOn[p.Name()] = nr.Type
+				m.waitingOn[p.Name()] = nr.Reason
 				stillPending = append(stillPending, p)
 			default:
 				return fmt.Errorf("gokebiten: install plugin %q: %w", p.Name(), err)

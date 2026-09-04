@@ -9,3 +9,5 @@ import "github.com/kjkrol/gokebiten/plugins/board"
 type CommandState struct {
 	PendingTarget *board.CellID
 }
+
+func (*CommandState) PluginResource() {}

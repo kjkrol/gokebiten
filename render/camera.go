@@ -1,6 +1,7 @@
 package render
 
 import (
+	"github.com/kjkrol/gokebiten/plugins/resource"
 	"github.com/kjkrol/gokg/geom"
 	"github.com/kjkrol/gokg/plane"
 )
@@ -10,6 +11,7 @@ type AABB = geom.AABB[uint32]
 
 // Camera is what renderers need: screen conversion, culling, viewport bounds. Control (move/zoom) is not part of it.
 type Camera interface {
+	resource.PluginResource
 	ToScreen(x, y float32) (float32, float32)
 	// FromScreen inverts ToScreen: screen coordinates back to world coordinates.
 	FromScreen(sx, sy float32) (float32, float32)
@@ -58,6 +60,8 @@ func (c *BasicCamera) recompute() {
 	c.effective = eff
 	c.scale = c.zoom
 }
+
+func (c *BasicCamera) PluginResource() {}
 
 func (c *BasicCamera) ToScreen(x, y float32) (float32, float32) {
 	return (x - float32(c.effective.TopLeft.X)) * c.scale, (y - float32(c.effective.TopLeft.Y)) * c.scale

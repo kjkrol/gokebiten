@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+
+	"github.com/kjkrol/gokebiten/plugins/resource"
 )
 
 // Resources is a typed registry, one value per concrete type T, keyed by reflect.Type.
@@ -19,7 +21,7 @@ func NewResources() *Resources {
 }
 
 // Get returns the T resource, panicking if none is registered.
-func (r *Resources) Get[T any]() T {
+func (r *Resources) Get[T resource.PluginResource]() T {
 	v, ok := r.TryGet[T]()
 	if !ok {
 		var zero T
@@ -29,7 +31,7 @@ func (r *Resources) Get[T any]() T {
 }
 
 // TryGet returns the T resource and whether it was registered.
-func (r *Resources) TryGet[T any]() (T, bool) {
+func (r *Resources) TryGet[T resource.PluginResource]() (T, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	v, ok := r.items[reflect.TypeFor[T]()]
@@ -50,7 +52,7 @@ func (r *Resources) ForEach(fn func(any)) {
 }
 
 // Insert registers v under its exact static type T, replacing whatever was there before.
-func (r *Resources) Insert[T any](v T) {
+func (r *Resources) Insert[T resource.PluginResource](v T) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.items[reflect.TypeFor[T]()] = v

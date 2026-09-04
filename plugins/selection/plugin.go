@@ -10,19 +10,20 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 )
 
-// Plugin wires selection into a Game — depends on:
-//   - world (shared spatial index)
-//   - registered camera plugin (screen<->world conversion)
+// Plugin wires selection into a Game — depends on a registered camera plugin (screen<->world conversion).
 type Plugin struct {
-	state    *State
-	sys      *SelectionSystem
-	module   *module
-	renderer *Renderer
+	state       *State
+	worldPlugin *world.Plugin
+	module      *module
+	renderer    *Renderer
 }
 
 var _ plugins.Plugin = (*Plugin)(nil)
 
-func NewPlugin() *Plugin { return &Plugin{state: &State{}} }
+// NewPlugin builds the selection plugin over worldPlugin's shared spatial index.
+func NewPlugin(worldPlugin *world.Plugin) *Plugin {
+	return &Plugin{state: &State{}, worldPlugin: worldPlugin}
+}
 
 // =================================================================
 // plugins.Plugin contract
@@ -31,16 +32,18 @@ func NewPlugin() *Plugin { return &Plugin{state: &State{}} }
 func (p *Plugin) Name() string { return "gokebiten.selection" }
 
 func (p *Plugin) Install(ctx *plugins.GameCtx) error {
-	worldPlugin, err := ctx.Require[*world.Plugin]()
-	if err != nil {
+	// Ordering guard, not a data dependency: waits until world's own Install
+	// (and its ctx.UseModule) has actually run, so SelectionSystem's query
+	// builds after world's entities exist in the same ecs.Setup.
+	if err := ctx.RequirePlugin(p.worldPlugin); err != nil {
 		return err
 	}
 	camera, err := ctx.Require[render.Camera]()
 	if err != nil {
 		return err
 	}
-	p.sys = NewSelectionSystem(p.state, worldPlugin.Space(), camera)
-	p.module = &module{sys: p.sys}
+	sys := NewSelectionSystem(p.state, p.worldPlugin.Space(), camera)
+	p.module = &module{sys: sys}
 	ctx.Provide(p.state)
 	ctx.UseModule(p.module)
 	return nil

@@ -36,6 +36,8 @@ var EntityCount = int(math.Floor(FillPercent / 100.0 * float64(ScreenWidth*Scree
 // State  persisting arbitrary game-owned state across a save/load cycle.
 type State struct{ Saves int }
 
+func (*State) PluginResource() {}
+
 func main() {
 	game := gokebiten.NewGame(&gokebiten.GameProps{
 		Title:       "GOKe + GOKg + Ebiten Integration",
@@ -71,7 +73,7 @@ func main() {
 	worldPlugin.WithRenderer(atlas)
 
 	var collisionStats stats.Stats
-	collisionsPlugin := collisions.NewPlugin(100*time.Millisecond).
+	collisionsPlugin := collisions.NewPlugin(100*time.Millisecond, worldPlugin).
 		SetCollisionHandlers(elastic.NewHandler(), stats.NewHandler(&collisionStats))
 
 	cameraPlugin := camera.NewPlugin()

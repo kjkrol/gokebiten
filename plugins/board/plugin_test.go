@@ -21,7 +21,7 @@ func TestPlugin_Install_SetsGridToroidalFromWorldConfig(t *testing.T) {
 	if err := game.UsePlugin(worldPlugin); err != nil {
 		t.Fatalf("UsePlugin(world): %v", err)
 	}
-	boardPlugin := NewPlugin(grid, &SingleOccupancy{}, nil)
+	boardPlugin := NewPlugin(grid, &SingleOccupancy{}, nil, worldPlugin)
 	if err := game.UsePlugin(boardPlugin); err != nil {
 		t.Fatalf("UsePlugin(board): %v", err)
 	}

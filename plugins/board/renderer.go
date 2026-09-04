@@ -19,6 +19,8 @@ type RenderState struct {
 	ShowGridLines bool
 }
 
+func (*RenderState) PluginResource() {}
+
 // Renderer draws Board's cells — register it before the entities layer in
 // Game.Layers so terrain sits underneath.
 type Renderer struct {

@@ -34,7 +34,8 @@ func TestValueExtras_WithEffect_EntersOccupancyOnSpawn(t *testing.T) {
 	ecs := goke.New()
 	var pending []func() []goke.System
 	ctx := plugins.NewGameCtx(plugins.NewResources(), ecs,
-		func(any) {}, func(p func() []goke.System) { pending = append(pending, p) })
+		func(any) {}, func(p func() []goke.System) { pending = append(pending, p) },
+		func(string) bool { return true })
 	if err := plugin.Install(ctx); err != nil {
 		t.Fatalf("Install: %v", err)
 	}

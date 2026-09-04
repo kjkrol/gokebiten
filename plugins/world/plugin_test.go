@@ -48,26 +48,6 @@ func TestPlugin_Install_PublishesTelemetryResource(t *testing.T) {
 	}
 }
 
-func TestPlugin_Install_PublishesItself(t *testing.T) {
-	game := gokebiten.NewGame(&gokebiten.GameProps{})
-	plugin := world.NewPlugin(world.Config{
-		Space:    world.SpaceCfg{Width: 100, Height: 100},
-		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
-	})
-
-	if err := game.UsePlugin(plugin); err != nil {
-		t.Fatalf("UsePlugin: %v", err)
-	}
-
-	got, ok := game.Resources().TryGet[*world.Plugin]()
-	if !ok {
-		t.Fatal("expected *world.Plugin to be registered as a resource — other plugins need it to call RegisterSpeedModifier")
-	}
-	if got != plugin {
-		t.Error("registered *world.Plugin resource is not the installed plugin")
-	}
-}
-
 func TestPlugin_Name(t *testing.T) {
 	p := world.NewPlugin(world.Config{
 		Space:    world.SpaceCfg{Width: 100, Height: 100},

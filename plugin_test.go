@@ -14,6 +14,9 @@ import (
 type testResourceA struct{ N int }
 type testResourceB struct{ S string }
 
+func (*testResourceA) PluginResource() {}
+func (*testResourceB) PluginResource() {}
+
 type stubPlugin struct {
 	name      string
 	installed int
@@ -99,7 +102,8 @@ func (s *stubSetupProvider) SetupSystems() []goke.System {
 
 func TestGameCtx_Setup_EvaluatesSetupSystemsLazily(t *testing.T) {
 	game := NewGame(&GameProps{})
-	ctx := plugins.NewGameCtx(game.resources, game.ecs, game.pluginManager.track, game.pluginManager.addPendingSetup)
+	ctx := plugins.NewGameCtx(game.resources, game.ecs, game.pluginManager.track, game.pluginManager.addPendingSetup,
+		func(string) bool { return true })
 	stub := &stubSetupProvider{}
 	ctx.Setup(stub)
 

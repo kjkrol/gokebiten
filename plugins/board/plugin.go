@@ -21,6 +21,8 @@ type Plugin struct {
 	occupancy    Occupancy
 	renderer     *Renderer
 	renderState  *RenderState
+
+	worldPlugin *world.Plugin
 }
 
 var _ plugins.Plugin = (*Plugin)(nil)
@@ -28,13 +30,15 @@ var _ gokebiten.Saveable = (*Plugin)(nil)
 
 // NewPlugin builds a board over grid, capping cell occupancy per occupancy
 // and publishing kinds to Resources for board-modifying code to pick from.
-func NewPlugin(grid Grid, occupancy Occupancy, kinds CellKindDict) *Plugin {
+// worldPlugin is where the board's TerrainSpeedModifier registers itself.
+func NewPlugin(grid Grid, occupancy Occupancy, kinds CellKindDict, worldPlugin *world.Plugin) *Plugin {
 	terrain := NewTerrainMap()
 	return &Plugin{
 		board:        NewBoard(grid, terrain),
 		kinds:        kinds,
 		terrainSpeed: NewTerrainSpeedModifier(grid, terrain),
 		occupancy:    occupancy,
+		worldPlugin:  worldPlugin,
 	}
 }
 
@@ -45,8 +49,7 @@ func NewPlugin(grid Grid, occupancy Occupancy, kinds CellKindDict) *Plugin {
 func (p *Plugin) Name() string { return "gokebiten.board" }
 
 func (p *Plugin) Install(ctx *plugins.GameCtx) error {
-	worldPlugin, err := ctx.Require[*world.Plugin]()
-	if err != nil {
+	if err := ctx.RequirePlugin(p.worldPlugin); err != nil {
 		return err
 	}
 	worldConfig, err := ctx.Require[world.Config]()
@@ -58,11 +61,10 @@ func (p *Plugin) Install(ctx *plugins.GameCtx) error {
 	}
 	ctx.Provide(p.board)
 	ctx.Provide(p.kinds)
-	ctx.Provide(p)
 	if p.renderState != nil {
 		ctx.Provide(p.renderState)
 	}
-	worldPlugin.RegisterSpeedModifier(p.terrainSpeed)
+	p.worldPlugin.RegisterSpeedModifier(p.terrainSpeed)
 	return nil
 }
 

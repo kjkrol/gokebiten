@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/plugins/resource"
 )
 
 // GameCtx is the capability surface Game exposes to Plugin.Install.
@@ -13,26 +14,37 @@ type GameCtx struct {
 	ecs        *goke.ECS
 	track      func(v any)
 	addPending func(producer func() []goke.System)
+	installed  func(name string) bool
 
 	wrote bool
 }
 
 // NewGameCtx builds a GameCtx — called by gokebiten per Install attempt.
-func NewGameCtx(resources *Resources, ecs *goke.ECS, track func(v any), addPending func(func() []goke.System)) *GameCtx {
-	return &GameCtx{Resources: resources, ecs: ecs, track: track, addPending: addPending}
+func NewGameCtx(resources *Resources, ecs *goke.ECS, track func(v any), addPending func(func() []goke.System), installed func(name string) bool) *GameCtx {
+	return &GameCtx{Resources: resources, ecs: ecs, track: track, addPending: addPending, installed: installed}
 }
 
 // Require returns the published value of T, or an error if it isn't published yet — Install may be retried until it is.
-func (c *GameCtx) Require[T any]() (T, error) {
+func (c *GameCtx) Require[T resource.PluginResource]() (T, error) {
 	if v, ok := c.Resources.TryGet[T](); ok {
 		return v, nil
 	}
 	var zero T
-	return zero, &NotReadyError{Type: reflect.TypeFor[T]()}
+	return zero, &NotReadyError{Reason: "requires " + reflect.TypeFor[T]().String() + ", not yet published"}
+}
+
+// RequirePlugin blocks Install until p has itself finished installing —
+// Install may be retried until it has. Unlike Require, this never touches
+// Resources; it's for plugin-to-plugin install ordering, not for reading data.
+func (c *GameCtx) RequirePlugin(p Plugin) error {
+	if c.installed(p.Name()) {
+		return nil
+	}
+	return &NotReadyError{Reason: `requires plugin "` + p.Name() + `" to finish installing`}
 }
 
 // Provide publishes v so other plugins and the rest of the game can read it.
-func (c *GameCtx) Provide[T any](v T) {
+func (c *GameCtx) Provide[T resource.PluginResource](v T) {
 	c.wrote = true
 	c.Resources.Insert(v)
 }
@@ -69,9 +81,7 @@ func (c *GameCtx) ECS() *goke.ECS { return c.ecs }
 // Wrote reports whether Provide/UseModule/Setup/RegSys was called — pluginManager's retry-safety check.
 func (c *GameCtx) Wrote() bool { return c.wrote }
 
-// NotReadyError is returned by Require when T isn't published yet — pluginManager retries Install on it.
-type NotReadyError struct{ Type reflect.Type }
+// NotReadyError is returned by Require/RequirePlugin when the dependency isn't ready yet — pluginManager retries Install on it.
+type NotReadyError struct{ Reason string }
 
-func (e *NotReadyError) Error() string {
-	return "gokebiten: requires " + e.Type.String() + ", not yet published"
-}
+func (e *NotReadyError) Error() string { return "gokebiten: " + e.Reason }

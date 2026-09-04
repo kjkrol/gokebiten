@@ -5,6 +5,9 @@ import "testing"
 type testResourceA struct{ N int }
 type testResourceB struct{ S string }
 
+func (*testResourceA) PluginResource() {}
+func (*testResourceB) PluginResource() {}
+
 func TestResources_InsertGet_RoundTrip(t *testing.T) {
 	r := NewResources()
 	r.Insert(&testResourceA{N: 7})
@@ -59,7 +62,8 @@ func TestResources_DifferentTypesDoNotCollide(t *testing.T) {
 
 type resettableResource struct{ resetCalls int }
 
-func (r *resettableResource) Reset() { r.resetCalls++ }
+func (r *resettableResource) Reset()        { r.resetCalls++ }
+func (*resettableResource) PluginResource() {}
 
 func TestResources_ForEach_VisitsRegisteredResources(t *testing.T) {
 	r := NewResources()

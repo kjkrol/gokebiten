@@ -17,6 +17,9 @@ import (
 type Plugin struct {
 	speed int32
 
+	boardPlugin *board.Plugin
+	worldPlugin *world.Plugin
+
 	board  *board.Board
 	module *module
 
@@ -32,9 +35,10 @@ type Plugin struct {
 
 var _ plugins.Plugin = (*Plugin)(nil)
 
-// NewPlugin builds a navigation plugin, moving entities at speed world-units/sec before scaling.
-func NewPlugin(speed int32) *Plugin {
-	return &Plugin{speed: speed}
+// NewPlugin builds a navigation plugin over boardPlugin/worldPlugin, moving
+// entities at speed world-units/sec before scaling.
+func NewPlugin(speed int32, boardPlugin *board.Plugin, worldPlugin *world.Plugin) *Plugin {
+	return &Plugin{speed: speed, boardPlugin: boardPlugin, worldPlugin: worldPlugin}
 }
 
 // =================================================================
@@ -44,23 +48,22 @@ func NewPlugin(speed int32) *Plugin {
 func (p *Plugin) Name() string { return "gokebiten.navigation" }
 
 func (p *Plugin) Install(ctx *plugins.GameCtx) error {
-	boardPlugin, err := ctx.Require[*board.Plugin]()
-	if err != nil {
-		return err
-	}
 	brd, err := ctx.Require[*board.Board]()
 	if err != nil {
 		return err
 	}
-	worldPlugin, err := ctx.Require[*world.Plugin]()
-	if err != nil {
+
+	if err := ctx.RequirePlugin(p.boardPlugin); err != nil {
 		return err
 	}
-	p.board = brd
-	occupancy := boardPlugin.Occupancy()
+	occupancy := p.boardPlugin.Occupancy()
 	finder := newPathFinder(brd, brd, occupancy)
 	navSys := newNavigationSystem(finder, brd, brd, occupancy, p.speed)
-	navSys.BindSpace(worldPlugin.Space())
+
+	if err := ctx.RequirePlugin(p.worldPlugin); err != nil {
+		return err
+	}
+	navSys.BindSpace(p.worldPlugin.Space())
 
 	camera, err := ctx.Require[render.Camera]()
 	if err != nil {
@@ -70,7 +73,7 @@ func (p *Plugin) Install(ctx *plugins.GameCtx) error {
 
 	if p.rendererEnabled {
 		p.pathRenderer = NewPathRenderer(brd, p.pathAtlas, p.pathSprites)
-		p.pathRenderer.BindSpace(worldPlugin.Space())
+		p.pathRenderer.BindSpace(p.worldPlugin.Space())
 	}
 	p.commandState = &CommandState{}
 	moveCommandSystem := newMoveCommandSystem(finder, p.commandState)

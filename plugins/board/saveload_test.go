@@ -29,10 +29,11 @@ func TestPlugin_SaveLoad_TerrainRoundTrip(t *testing.T) {
 	}
 
 	game := gokebiten.NewGame(&gokebiten.GameProps{})
-	if err := game.UsePlugin(newSaveLoadTestWorldPlugin()); err != nil {
+	worldPlugin := newSaveLoadTestWorldPlugin()
+	if err := game.UsePlugin(worldPlugin); err != nil {
 		t.Fatalf("UsePlugin(world): %v", err)
 	}
-	boardPlugin := board.NewPlugin(grid, &board.SingleOccupancy{}, nil)
+	boardPlugin := board.NewPlugin(grid, &board.SingleOccupancy{}, nil, worldPlugin)
 	if err := game.UsePlugin(boardPlugin); err != nil {
 		t.Fatalf("UsePlugin(board): %v", err)
 	}
@@ -43,10 +44,11 @@ func TestPlugin_SaveLoad_TerrainRoundTrip(t *testing.T) {
 	}
 
 	game2 := gokebiten.NewGame(&gokebiten.GameProps{})
-	if err := game2.UsePlugin(newSaveLoadTestWorldPlugin()); err != nil {
+	worldPlugin2 := newSaveLoadTestWorldPlugin()
+	if err := game2.UsePlugin(worldPlugin2); err != nil {
 		t.Fatalf("UsePlugin(world) 2: %v", err)
 	}
-	boardPlugin2 := board.NewPlugin(grid, &board.SingleOccupancy{}, nil)
+	boardPlugin2 := board.NewPlugin(grid, &board.SingleOccupancy{}, nil, worldPlugin2)
 	if err := game2.UsePlugin(boardPlugin2); err != nil {
 		t.Fatalf("UsePlugin(board) 2: %v", err)
 	}

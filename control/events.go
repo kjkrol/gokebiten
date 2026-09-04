@@ -35,6 +35,8 @@ type InputEvents struct {
 	ScrollDelta float64
 }
 
+func (*InputEvents) PluginResource() {}
+
 func (e *InputEvents) ResetTransient() {
 	e.ClickQueue = e.ClickQueue[:0]
 	e.KeyEvents = e.KeyEvents[:0]

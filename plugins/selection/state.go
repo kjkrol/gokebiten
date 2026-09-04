@@ -23,6 +23,8 @@ type State struct {
 	PendingIDs  []uid.UID64
 }
 
+func (*State) PluginResource() {}
+
 // DragBox reports the screen-space rectangle of the drag gesture in progress, if any.
 func (s *State) DragBox() (start, current geom.Vec[int32], dragging bool) {
 	return s.DragStart, s.DragCurrent, s.Dragging

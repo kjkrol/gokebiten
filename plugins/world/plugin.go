@@ -41,7 +41,6 @@ func (p *Plugin) Install(ctx *plugins.GameCtx) error {
 	ctx.UseModule(p.module)
 	ctx.Provide(p.config)
 	ctx.Provide(&p.module.telemetry)
-	ctx.Provide(p)
 	return nil
 }
 

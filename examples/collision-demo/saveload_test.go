@@ -38,7 +38,8 @@ func TestSaveLoadCycle(t *testing.T) {
 
 	var pending []func() []goke.System
 	ctx := plugins.NewGameCtx(plugins.NewResources(), ecs,
-		func(any) {}, func(p func() []goke.System) { pending = append(pending, p) })
+		func(any) {}, func(p func() []goke.System) { pending = append(pending, p) },
+		func(string) bool { return true })
 	if err := plugin.Install(ctx); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
@@ -85,7 +86,8 @@ func TestSaveLoadCycle(t *testing.T) {
 
 	var registered []any
 	ctx2 := plugins.NewGameCtx(plugins.NewResources(), ecs2,
-		func(v any) { registered = append(registered, v) }, func(func() []goke.System) {})
+		func(v any) { registered = append(registered, v) }, func(func() []goke.System) {},
+		func(string) bool { return true })
 	if err := plugin2.Install(ctx2); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
