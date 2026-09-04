@@ -40,6 +40,6 @@ func (p *Persistence) Load(basePath, label string, resources ...any) error {
 		return err
 	}
 	systems := pm.postLoadSystems()
-	p.game.pendingSetup = append(p.game.pendingSetup, func() []goke.System { return systems })
+	pm.addPendingSetup(func() []goke.System { return systems })
 	return nil
 }

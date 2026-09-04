@@ -42,9 +42,6 @@ type Game struct {
 	layers        []render.Renderer
 	controller    *control.DefaultController
 	pluginManager *pluginManager
-
-	// TODO: should be part of pluginManager
-	pendingSetup []func() []goke.System
 }
 
 var _ ebiten.Game = (*Game)(nil)
@@ -121,27 +118,12 @@ func (g *Game) Run() {
 	if err := g.pluginManager.finalizePending(); err != nil {
 		log.Fatal(err)
 	}
-	g.flushPendingSetup()
 
 	ebiten.SetWindowSize(g.props.ScreenWidth, g.props.ScreenHeight)
 	ebiten.SetWindowTitle(g.props.Title)
 	if err := ebiten.RunGame(g); err != nil {
 		log.Fatal(err)
 	}
-}
-
-// TODO: include to pendingManager as a last step of finalizePending
-// flushPendingSetup evaluates every deferred producer once and runs the result through a single ecs.Setup call.
-func (g *Game) flushPendingSetup() {
-	if len(g.pendingSetup) == 0 {
-		return
-	}
-	var systems []goke.System
-	for _, produce := range g.pendingSetup {
-		systems = append(systems, produce()...)
-	}
-	g.ecs.Setup(systems...)
-	g.pendingSetup = nil
 }
 
 // =================================================================
@@ -201,10 +183,8 @@ func (g *Game) registerRenderer(factory func() render.Renderer) render.Renderer 
 		r.BindCamera(camera)
 	}
 
-	// TODO: should use pluginManager to append pendingSetup
 	sys := goke.SystemFn{OnInit: func(si *goke.SysInit) { r.Init(si) }}
-	g.pendingSetup = append(g.pendingSetup, func() []goke.System { return []goke.System{sys} })
-	// ------------------------------------------------------
+	g.pluginManager.addPendingSetup(func() []goke.System { return []goke.System{sys} })
 
 	return r
 }

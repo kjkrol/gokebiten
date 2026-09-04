@@ -12,11 +12,12 @@ import (
 
 // pluginManager installs plugins (retrying until their dependencies are available) and tracks what they register.
 type pluginManager struct {
-	game       *Game
-	plugins    map[string]plugins.Plugin
-	pending    []plugins.Plugin
-	waitingOn  map[string]reflect.Type
-	registered []any
+	game         *Game
+	plugins      map[string]plugins.Plugin
+	pending      []plugins.Plugin
+	waitingOn    map[string]reflect.Type
+	registered   []any
+	pendingSetup []func() []goke.System
 }
 
 // install queues p, resolves as much of the pending queue as possible, and rejects a duplicate Name.
@@ -34,6 +35,11 @@ func (m *pluginManager) install(p plugins.Plugin) error {
 
 // track records v so providedComps/postLoadSystems/saveTargets can find it later.
 func (m *pluginManager) track(v any) { m.registered = append(m.registered, v) }
+
+// addPendingSetup queues producer to run once, during finalizePending's final flush.
+func (m *pluginManager) addPendingSetup(producer func() []goke.System) {
+	m.pendingSetup = append(m.pendingSetup, producer)
+}
 
 // providedComps collects LoadComps from every tracked value implementing goke.CompProvider.
 func (m *pluginManager) providedComps() []goke.CompToken { return goke.ProvidedComps(m.registered...) }
@@ -66,11 +72,7 @@ func (m *pluginManager) resolvePending() error {
 		progressed := false
 		var stillPending []plugins.Plugin
 		for _, p := range m.pending {
-			ctx := plugins.NewGameCtx(
-				m.game.resources, m.game.ecs,
-				func(v any) { m.track(v) },
-				func(producer func() []goke.System) { m.game.pendingSetup = append(m.game.pendingSetup, producer) },
-			)
+			ctx := plugins.NewGameCtx(m.game.resources, m.game.ecs, m.track, m.addPendingSetup)
 			err := p.Install(ctx)
 			var nr *plugins.NotReadyError
 			switch {
@@ -97,17 +99,31 @@ func (m *pluginManager) resolvePending() error {
 	}
 }
 
-// finalizePending retries once more, then fails loudly if any plugin never became ready.
+// finalizePending retries once more, fails loudly if any plugin never became ready, then flushes pendingSetup.
 func (m *pluginManager) finalizePending() error {
 	if err := m.resolvePending(); err != nil {
 		return err
 	}
-	if len(m.pending) == 0 {
-		return nil
+	if len(m.pending) != 0 {
+		reasons := make([]string, len(m.pending))
+		for i, p := range m.pending {
+			reasons[i] = fmt.Sprintf("%q waits on %s", p.Name(), m.waitingOn[p.Name()])
+		}
+		return fmt.Errorf("gokebiten: plugins never became ready (missing dependency or cycle among them): %s", strings.Join(reasons, "; "))
 	}
-	reasons := make([]string, len(m.pending))
-	for i, p := range m.pending {
-		reasons[i] = fmt.Sprintf("%q waits on %s", p.Name(), m.waitingOn[p.Name()])
+	m.flushPendingSetup()
+	return nil
+}
+
+// flushPendingSetup evaluates every deferred producer once and runs the result through a single ecs.Setup call.
+func (m *pluginManager) flushPendingSetup() {
+	if len(m.pendingSetup) == 0 {
+		return
 	}
-	return fmt.Errorf("gokebiten: plugins never became ready (missing dependency or cycle among them): %s", strings.Join(reasons, "; "))
+	var systems []goke.System
+	for _, produce := range m.pendingSetup {
+		systems = append(systems, produce()...)
+	}
+	m.game.ecs.Setup(systems...)
+	m.pendingSetup = nil
 }

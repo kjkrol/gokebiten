@@ -99,11 +99,7 @@ func (s *stubSetupProvider) SetupSystems() []goke.System {
 
 func TestGameCtx_Setup_EvaluatesSetupSystemsLazily(t *testing.T) {
 	game := NewGame(&GameProps{})
-	ctx := plugins.NewGameCtx(
-		game.resources, game.ecs,
-		func(v any) { game.pluginManager.track(v) },
-		func(producer func() []goke.System) { game.pendingSetup = append(game.pendingSetup, producer) },
-	)
+	ctx := plugins.NewGameCtx(game.resources, game.ecs, game.pluginManager.track, game.pluginManager.addPendingSetup)
 	stub := &stubSetupProvider{}
 	ctx.Setup(stub)
 
@@ -111,7 +107,7 @@ func TestGameCtx_Setup_EvaluatesSetupSystemsLazily(t *testing.T) {
 		t.Fatalf("SetupSystems called %d times by Setup(), want 0 (must stay lazy)", stub.callCount)
 	}
 
-	game.flushPendingSetup()
+	game.pluginManager.flushPendingSetup()
 	if stub.callCount != 1 {
 		t.Errorf("SetupSystems called %d times after flushPendingSetup(), want 1", stub.callCount)
 	}
