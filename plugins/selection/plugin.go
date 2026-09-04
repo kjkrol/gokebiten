@@ -10,7 +10,9 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 )
 
-// Plugin wires selection into a Game — depends on world (shared spatial index) and a registered camera plugin (screen<->world conversion).
+// Plugin wires selection into a Game — depends on:
+//   - world (shared spatial index)
+//   - registered camera plugin (screen<->world conversion)
 type Plugin struct {
 	state    *State
 	sys      *SelectionSystem
@@ -46,7 +48,8 @@ func (p *Plugin) Install(ctx *plugins.GameCtx) error {
 
 func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) { p.module.RunPlan(ctx, d) }
 
-// WithRenderer builds this plugin's own highlight renderer (outline for every Selected entity, plus the drag marquee) — atlas is unused, selection draws primitives.
+// WithRenderer builds this plugin's own highlight renderer (outline for every Selected
+// entity,plus the drag marquee) — atlas is unused, selection draws primitives.
 func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
 	p.renderer = NewRenderer(p.state)
 }
@@ -58,5 +61,6 @@ func (p *Plugin) Renderer() render.Renderer {
 	return p.renderer
 }
 
-// EventHandler returns the default left-click/drag control.EventHandler for selection — write your own against State for a different binding scheme.
+// EventHandler returns the default left-click/drag control.EventHandler for selection
+// or write your own against State for a different binding scheme.
 func (p *Plugin) EventHandler() control.EventHandler { return NewDefaultEventHandler(p.state) }

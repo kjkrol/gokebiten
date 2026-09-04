@@ -11,10 +11,9 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 )
 
-// Plugin wires navigation (and, with WithCommands, right-click move orders)
-// into a Game — depends on plugins/board (for Grid/Terrain) and plugins/world
-// (for Position/Velocity/Space). WithCommands additionally depends on
-// plugins/selection (Selected).
+// Plugin moves entities along a MoveOrder's path across a board, re-pathing automatically
+// when terrain along the route changes. WithCommands adds right-click move orders for
+// Selected entities; WithRenderer draws the remaining route.
 type Plugin struct {
 	speed int32
 

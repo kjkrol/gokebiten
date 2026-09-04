@@ -10,8 +10,8 @@ import (
 	"github.com/kjkrol/gokg"
 )
 
-// Plugin builds a world — the mandatory foundation for any game with
-// moving, drawable entities — and publishes Config as a resource.
+// Plugin builds a world - the mandatory foundation for any game with
+// moving, drawable entities - and publishes Config as a resource.
 type Plugin struct {
 	config   Config
 	module   *module
