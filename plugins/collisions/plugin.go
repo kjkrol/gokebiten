@@ -20,7 +20,10 @@ type Plugin struct {
 
 var _ plugins.Plugin = (*Plugin)(nil)
 
-func NewPlugin() *Plugin { return &Plugin{} }
+// NewPlugin builds the collisions plugin — hitExpires is the default Hit
+// lifetime for entities that don't supply their own HitExpires (0 for a
+// Hit that never auto-expires on its own).
+func NewPlugin(hitExpires time.Duration) *Plugin { return &Plugin{hitExpires: hitExpires} }
 
 // =================================================================
 // plugins.Plugin contract
@@ -35,12 +38,9 @@ func (p *Plugin) Install(ctx *plugins.GameCtx) error {
 	}
 	space := worldPlugin.Space()
 
-	p.module = New(space, ctx.ECS())
+	p.module = New(space, ctx.ECS(), p.hitExpires)
 	if len(p.handlers) > 0 {
 		p.module.SetCollisionHandlers(p.handlers...)
-	}
-	if p.hitExpires > 0 {
-		p.module.SetHitExpires(p.hitExpires)
 	}
 
 	ctx.UseModule(p.module)
@@ -65,11 +65,5 @@ func (p *Plugin) EventHandler() control.EventHandler { return nil }
 
 func (p *Plugin) SetCollisionHandlers(handlers ...CollisionHandler) *Plugin {
 	p.handlers = handlers
-	return p
-}
-
-// SetHitExpires sets how long a Hit tag lingers before auto-expiring.
-func (p *Plugin) SetHitExpires(d time.Duration) *Plugin {
-	p.hitExpires = d
 	return p
 }

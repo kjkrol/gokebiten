@@ -18,11 +18,12 @@ type NarrowPhase struct {
 	handler     CollisionHandler
 	hitDuration time.Duration
 
-	hitQry    *goke.Query
-	pos       goke.Comp[world.Position]
-	vel       goke.Comp[world.Velocity]
-	hitTag    goke.Comp[Hit]
-	collision goke.Comp[Collision]
+	hitQry     *goke.Query
+	pos        goke.Comp[world.Position]
+	vel        goke.Comp[world.Velocity]
+	hitTag     goke.Comp[Hit]
+	collision  goke.Comp[Collision]
+	hitExpires goke.OptComp[HitExpires]
 
 	dynQry *goke.Query
 	dynPos goke.Comp[world.Position]
@@ -53,7 +54,7 @@ func NewNarrowPhase(space *gokg.Space, handler CollisionHandler, hitDuration tim
 }
 
 func (n *NarrowPhase) Init(si *goke.SysInit) {
-	n.hitQry = si.NewQueryBuilder(&n.pos, &n.vel, &n.hitTag, &n.collision).Build()
+	n.hitQry = si.NewQueryBuilder(&n.pos, &n.vel, &n.hitTag, &n.collision).Optional(&n.hitExpires).Build()
 	n.dynQry = si.NewQueryBuilder(&n.dynPos, &n.dynVel).Build()
 	n.staticQuery = si.NewQueryBuilder(&n.staticPos).Build()
 	if init, ok := n.handler.(Initializer); ok {
@@ -208,12 +209,18 @@ func (n *NarrowPhase) solve(cb *goke.CmdBuf, solverIterations int) {
 }
 
 func (n *NarrowPhase) finalizeHitTags(cb *goke.CmdBuf) {
-	until := time.Now().Add(n.hitDuration)
+	now := time.Now()
+	defaultUntil := now.Add(n.hitDuration)
 
 	n.hitQry.All()
 	for n.hitQry.Next() {
 		cursor := n.hitQry.Cursor()
 		tags := n.hitTag.Slice(cursor)
+		hasOverride := n.hitExpires.Present(cursor)
+		var overrides []HitExpires
+		if hasOverride {
+			overrides = n.hitExpires.Slice(cursor)
+		}
 		buf := n.hitQry.BeginMigrate(cb)
 		for i, id := range cursor.IDs {
 			confirmedThisTick, tracked := n.confirmed[id]
@@ -221,6 +228,10 @@ func (n *NarrowPhase) finalizeHitTags(cb *goke.CmdBuf) {
 				continue
 			}
 			if confirmedThisTick {
+				until := defaultUntil
+				if hasOverride {
+					until = now.Add(overrides[i].Duration)
+				}
 				tags[i].SetExpiresAt(until)
 				continue
 			}

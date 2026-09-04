@@ -34,7 +34,7 @@ func TestSaveLoadCycle(t *testing.T) {
 		}).
 		With(func(index int) collisions.Collision { return collisions.Collision{} })
 	plugin.Populate(count, spawner)
-	cm := collisions.New(plugin.Space(), ecs)
+	cm := collisions.New(plugin.Space(), ecs, 0)
 
 	var pending []func() []goke.System
 	ctx := plugins.NewGameCtx(plugins.NewResources(), ecs,
@@ -81,7 +81,7 @@ func TestSaveLoadCycle(t *testing.T) {
 
 	ecs2 := goke.New()
 	plugin2 := world.NewPlugin(cfg)
-	cm2 := collisions.New(plugin2.Space(), ecs2)
+	cm2 := collisions.New(plugin2.Space(), ecs2, 0)
 
 	var registered []any
 	ctx2 := plugins.NewGameCtx(plugins.NewResources(), ecs2,

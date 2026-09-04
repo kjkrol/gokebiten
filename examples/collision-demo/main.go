@@ -71,9 +71,8 @@ func main() {
 	worldPlugin.WithRenderer(atlas)
 
 	var collisionStats stats.Stats
-	collisionsPlugin := collisions.NewPlugin().
-		SetCollisionHandlers(elastic.NewHandler(), stats.NewHandler(&collisionStats)).
-		SetHitExpires(100 * time.Millisecond)
+	collisionsPlugin := collisions.NewPlugin(100*time.Millisecond).
+		SetCollisionHandlers(elastic.NewHandler(), stats.NewHandler(&collisionStats))
 
 	cameraPlugin := camera.NewPlugin()
 

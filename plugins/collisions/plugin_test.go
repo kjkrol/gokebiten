@@ -9,7 +9,7 @@ import (
 
 func TestPlugin_Install_StaysPendingWithoutWorld(t *testing.T) {
 	game := gokebiten.NewGame(&gokebiten.GameProps{})
-	plugin := NewPlugin()
+	plugin := NewPlugin(0)
 
 	if err := game.UsePlugin(plugin); err != nil {
 		t.Fatalf("UsePlugin: %v", err)
@@ -21,7 +21,7 @@ func TestPlugin_Install_StaysPendingWithoutWorld(t *testing.T) {
 
 func TestPlugin_Install_ResolvesWhenRegisteredBeforeWorld(t *testing.T) {
 	game := gokebiten.NewGame(&gokebiten.GameProps{})
-	collisionsPlugin := NewPlugin()
+	collisionsPlugin := NewPlugin(0)
 	if err := game.UsePlugin(collisionsPlugin); err != nil {
 		t.Fatalf("UsePlugin(collisionsPlugin): %v", err)
 	}
@@ -52,7 +52,7 @@ func TestPlugin_Install_BuildsCollisionsAfterWorld(t *testing.T) {
 		t.Fatalf("UsePlugin(worldPlugin): %v", err)
 	}
 
-	collisionsPlugin := NewPlugin()
+	collisionsPlugin := NewPlugin(0)
 	if err := game.UsePlugin(collisionsPlugin); err != nil {
 		t.Fatalf("UsePlugin(collisionsPlugin): %v", err)
 	}
@@ -62,7 +62,7 @@ func TestPlugin_Install_BuildsCollisionsAfterWorld(t *testing.T) {
 }
 
 func TestPlugin_Name(t *testing.T) {
-	p := NewPlugin()
+	p := NewPlugin(0)
 	if p.Name() != "gokebiten.collisions" {
 		t.Errorf("Name() = %q, want %q", p.Name(), "gokebiten.collisions")
 	}

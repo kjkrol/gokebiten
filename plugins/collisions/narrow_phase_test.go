@@ -288,3 +288,59 @@ func TestNarrowPhase_AlreadyExpiring_SurvivesUnconfirmedTick(t *testing.T) {
 		t.Error("expected an already-expiring Hit tag to survive one unconfirmed tick (grace period until it actually expires)")
 	}
 }
+
+func TestNarrowPhase_ConfirmedHit_UsesPerEntityHitExpiresOverride(t *testing.T) {
+	space := testSpace(t)
+	var idA, idB uid.UID64
+	var hitTag goke.Comp[collisions.Hit]
+	var q *goke.Query
+	const custom = 5 * time.Minute // far from the global default (time.Hour) below
+
+	runNarrowPhase(t, space, &spyHandler{}, goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		var posA goke.Comp[world.Position]
+		var velA goke.Comp[world.Velocity]
+		var collA goke.Comp[collisions.Collision]
+		var hitExpiresA goke.Comp[collisions.HitExpires]
+		fa := si.NewFactory(&posA, &velA, &hitTag, &collA, &hitExpiresA)
+		fa.Create(1)
+		fa.Next()
+		posA.Slice(&fa.Cursor)[0] = posAt(100, 100, 10, 10)
+		hitExpiresA.Slice(&fa.Cursor)[0] = collisions.HitExpires{Duration: custom}
+		idA = fa.IDs[0]
+
+		var posB goke.Comp[world.Position]
+		var velB goke.Comp[world.Velocity]
+		fb := si.NewFactory(&posB, &velB)
+		fb.Create(1)
+		fb.Next()
+		posB.Slice(&fb.Cursor)[0] = posAt(105, 100, 10, 10)
+		idB = fb.IDs[0]
+
+		coll := collA.Slice(&fa.Cursor)
+		coll[0].Touching[0] = idB
+		coll[0].TouchingCount = 1
+
+		q = si.NewQueryBuilder(&hitTag).Build()
+	}})
+
+	q.All()
+	found := false
+	for q.Next() {
+		cursor := q.Cursor()
+		tags := hitTag.Slice(cursor)
+		for i, id := range cursor.IDs {
+			if id != idA {
+				continue
+			}
+			found = true
+			exp := tags[i].ExpiresAt()
+			now := time.Now()
+			if exp.Before(now.Add(custom-time.Second)) || exp.After(now.Add(custom+time.Second)) {
+				t.Errorf("ExpiresAt = %v, want ~now+%v (HitExpires override), not ~now+%v (global default)", exp, custom, time.Hour)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected to find entity A's Hit tag")
+	}
+}
