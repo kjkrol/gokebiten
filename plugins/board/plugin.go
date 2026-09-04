@@ -38,6 +38,10 @@ func NewPlugin(grid Grid, occupancy Occupancy, kinds CellKindDict) *Plugin {
 	}
 }
 
+// =================================================================
+// plugins.Plugin contract
+// =================================================================
+
 func (p *Plugin) Name() string { return "gokebiten.board" }
 
 func (p *Plugin) Install(ctx *plugins.GameCtx) error {
@@ -62,17 +66,13 @@ func (p *Plugin) Install(ctx *plugins.GameCtx) error {
 	return nil
 }
 
-// Occupancy returns the occupancy tracker this plugin was built with.
-func (p *Plugin) Occupancy() Occupancy { return p.occupancy }
-
-// SaveTargets returns terrain for Persistence.Save/Load to include automatically.
-func (p *Plugin) SaveTargets() []any { return []any{p.board.TerrainMap} }
+// RunPlan is a no-op — board has no per-tick work of its own; see plugins/navigation.
+func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {}
 
 // WithRenderer builds this plugin's own board renderer, drawing each cell's CellKind.SpriteID from atlas.
-func (p *Plugin) WithRenderer(atlas render.AtlasSource) *Plugin {
+func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
 	p.renderState = &RenderState{ShowGridLines: true}
 	p.renderer = newRenderer(p.board, atlas, p.renderState)
-	return p
 }
 
 // Renderer returns this plugin's own render.Renderer, or nil unless WithRenderer was called.
@@ -83,8 +83,15 @@ func (p *Plugin) Renderer() render.Renderer {
 	return p.renderer
 }
 
-// RunPlan is a no-op — board has no per-tick work of its own; see plugins/navigation.
-func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {}
-
 // EventHandler always returns nil — board has no input handling of its own; see plugins/navigation.
 func (p *Plugin) EventHandler() control.EventHandler { return nil }
+
+// =================================================================
+// board-specific
+// =================================================================
+
+// Occupancy returns the occupancy tracker this plugin was built with.
+func (p *Plugin) Occupancy() Occupancy { return p.occupancy }
+
+// SaveTargets returns terrain for Persistence.Save/Load to include automatically.
+func (p *Plugin) SaveTargets() []any { return []any{p.board.TerrainMap} }

@@ -33,7 +33,7 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 	cmds := newCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
 	cmdHandler := NewDefaultCommandEventHandler(grid, camera, cmdState)
 	selState := &selection.State{}
-	selSys := selection.NewSystem(selState)
+	selSys := selection.NewSelectionSystem(selState, nil, camera)
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Position]
@@ -71,7 +71,7 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 		ctx.Sync()
 	})
 
-	selSys.Select([]uid.UID64{selectedID})
+	selState.PendingIDs = []uid.UID64{selectedID}
 	ecs.Tick(time.Second)
 
 	center := grid.CellCenter(newTarget)
@@ -124,7 +124,7 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 	cmds := newCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
 	cmdHandler := NewDefaultCommandEventHandler(grid, camera, cmdState)
 	selState := &selection.State{}
-	selSys := selection.NewSystem(selState)
+	selSys := selection.NewSelectionSystem(selState, nil, camera)
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Position]
@@ -157,7 +157,7 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 		ctx.Sync()
 	})
 
-	selSys.Select([]uid.UID64{idleID})
+	selState.PendingIDs = []uid.UID64{idleID}
 	ecs.Tick(time.Second)
 
 	readQuery.All()
@@ -222,7 +222,7 @@ func TestCommandSystem_Update_UnreachableTargetLeavesInFlightEntityUntouched(t *
 	cmds := newCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
 	cmdHandler := NewDefaultCommandEventHandler(grid, camera, cmdState)
 	selState := &selection.State{}
-	selSys := selection.NewSystem(selState)
+	selSys := selection.NewSelectionSystem(selState, nil, camera)
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Position]
@@ -257,7 +257,7 @@ func TestCommandSystem_Update_UnreachableTargetLeavesInFlightEntityUntouched(t *
 		ctx.Sync()
 	})
 
-	selSys.Select([]uid.UID64{movingID})
+	selState.PendingIDs = []uid.UID64{movingID}
 	ecs.Tick(time.Second)
 
 	center := grid.CellCenter(wall)

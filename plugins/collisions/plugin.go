@@ -22,16 +22,9 @@ var _ plugins.Plugin = (*Plugin)(nil)
 
 func NewPlugin() *Plugin { return &Plugin{} }
 
-func (p *Plugin) SetCollisionHandlers(handlers ...CollisionHandler) *Plugin {
-	p.handlers = handlers
-	return p
-}
-
-// SetHitExpires sets how long a Hit tag lingers before auto-expiring.
-func (p *Plugin) SetHitExpires(d time.Duration) *Plugin {
-	p.hitExpires = d
-	return p
-}
+// =================================================================
+// plugins.Plugin contract
+// =================================================================
 
 func (p *Plugin) Name() string { return "gokebiten.collisions" }
 
@@ -57,8 +50,26 @@ func (p *Plugin) Install(ctx *plugins.GameCtx) error {
 // RunPlan runs the collision engine for this tick — call from your own Game.Loop closure.
 func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) { p.module.RunPlan(ctx, d) }
 
+// WithRenderer is a no-op — collisions has no render.Renderer of its own.
+func (p *Plugin) WithRenderer(render.AtlasSource) {}
+
 // Renderer is a no-op — collisions has no render.Renderer of its own.
 func (p *Plugin) Renderer() render.Renderer { return nil }
 
 // EventHandler is a no-op — collisions has no control.EventHandler of its own.
 func (p *Plugin) EventHandler() control.EventHandler { return nil }
+
+// =================================================================
+// collisions-specific
+// =================================================================
+
+func (p *Plugin) SetCollisionHandlers(handlers ...CollisionHandler) *Plugin {
+	p.handlers = handlers
+	return p
+}
+
+// SetHitExpires sets how long a Hit tag lingers before auto-expiring.
+func (p *Plugin) SetHitExpires(d time.Duration) *Plugin {
+	p.hitExpires = d
+	return p
+}

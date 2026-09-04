@@ -7,6 +7,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten"
 	"github.com/kjkrol/gokebiten/control"
+	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
 )
@@ -25,11 +26,12 @@ type saveTestResourceB struct{ S string }
 type ecsAccessor struct{ ecs *goke.ECS }
 
 func (a *ecsAccessor) Name() string { return "test.ecs-accessor" }
-func (a *ecsAccessor) Install(ctx *gokebiten.GameCtx) error {
+func (a *ecsAccessor) Install(ctx *plugins.GameCtx) error {
 	a.ecs = ctx.ECS()
 	return nil
 }
 func (a *ecsAccessor) RunPlan(goke.RunCtx, time.Duration) {}
+func (a *ecsAccessor) WithRenderer(render.AtlasSource)    {}
 func (a *ecsAccessor) Renderer() render.Renderer          { return nil }
 func (a *ecsAccessor) EventHandler() control.EventHandler { return nil }
 

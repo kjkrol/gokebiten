@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/uid"
@@ -31,9 +32,20 @@ func TestValueExtras_WithEffect_EntersOccupancyOnSpawn(t *testing.T) {
 	plugin.Populate(1, spawner)
 
 	ecs := goke.New()
+	var pending []func() []goke.System
+	ctx := plugins.NewGameCtx(plugins.NewResources(), ecs,
+		func(any) {}, func(p func() []goke.System) { pending = append(pending, p) })
+	if err := plugin.Install(ctx); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
 	var cell goke.Comp[board.Cell]
 	var q *goke.Query
-	systems := append(plugin.Module().SetupSystems(), goke.SystemFn{OnInit: func(si *goke.SysInit) {
+	var systems []goke.System
+	for _, produce := range pending {
+		systems = append(systems, produce()...)
+	}
+	systems = append(systems, goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		q = si.NewQueryBuilder(&cell).Build()
 	}})
 	ecs.Setup(systems...)

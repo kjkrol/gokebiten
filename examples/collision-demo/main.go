@@ -12,6 +12,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten"
 	"github.com/kjkrol/gokebiten/control"
+	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/plugins/camera"
 	"github.com/kjkrol/gokebiten/plugins/collisions"
 	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/elastic"
@@ -66,7 +67,8 @@ func main() {
 	worldPlugin := world.NewPlugin(world.Config{
 		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
 		Entities: world.EntitiesCfg{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize},
-	}).WithRenderer(atlas)
+	})
+	worldPlugin.WithRenderer(atlas)
 
 	var collisionStats stats.Stats
 	collisionsPlugin := collisions.NewPlugin().
@@ -86,7 +88,7 @@ func main() {
 	}
 
 	var state *State
-	if err := game.Init(func(ctx *gokebiten.GameCtx) error {
+	if err := game.Init(func(ctx *plugins.GameCtx) error {
 		state = &State{}
 		ctx.Provide(state)
 		return nil

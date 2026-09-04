@@ -352,7 +352,7 @@ func TestNavigationSystem_Update_ArrivalGlidesSmoothlyToCellCenter(t *testing.T)
 	}})
 
 	steerHandle := ecs.RegSys(steer)
-	moveHandle := ecs.RegSys(world.NewMoveSystem(space))
+	moveHandle := ecs.RegSys(world.NewMoveSystem(space, 0))
 	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(steerHandle, d)
 		ctx.Run(moveHandle, d)
@@ -451,7 +451,7 @@ func TestNavigationSystem_Update_ReproducesBoardDemoWallScenario(t *testing.T) {
 	}})
 
 	steerHandle := ecs.RegSys(steer)
-	moveHandle := ecs.RegSys(world.NewMoveSystem(space))
+	moveHandle := ecs.RegSys(world.NewMoveSystem(space, 0))
 	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(steerHandle, d)
 		ctx.Run(moveHandle, d)

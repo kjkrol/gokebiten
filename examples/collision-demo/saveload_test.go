@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten"
+	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/plugins/collisions"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
@@ -34,9 +36,20 @@ func TestSaveLoadCycle(t *testing.T) {
 	plugin.Populate(count, spawner)
 	cm := collisions.New(plugin.Space(), ecs)
 
+	var pending []func() []goke.System
+	ctx := plugins.NewGameCtx(plugins.NewResources(), ecs,
+		func(any) {}, func(p func() []goke.System) { pending = append(pending, p) })
+	if err := plugin.Install(ctx); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
 	var origIDs []uint64
 	var origAppearance map[uint64]render.SpriteID
-	systems := append(plugin.Module().SetupSystems(),
+	var systems []goke.System
+	for _, produce := range pending {
+		systems = append(systems, produce()...)
+	}
+	systems = append(systems,
 		goke.SystemFn{OnInit: func(si *goke.SysInit) {
 			var posQ goke.Comp[world.Position]
 			var appQ goke.Comp[world.Appearance]
@@ -70,6 +83,13 @@ func TestSaveLoadCycle(t *testing.T) {
 	plugin2 := world.NewPlugin(cfg)
 	cm2 := collisions.New(plugin2.Space(), ecs2)
 
+	var registered []any
+	ctx2 := plugins.NewGameCtx(plugins.NewResources(), ecs2,
+		func(v any) { registered = append(registered, v) }, func(func() []goke.System) {})
+	if err := plugin2.Install(ctx2); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
 	comps := append(goke.ProvidedComps(cm2),
 		goke.LoadComp[world.Position](),
 		goke.LoadComp[world.Appearance](),
@@ -80,8 +100,15 @@ func TestSaveLoadCycle(t *testing.T) {
 	}
 	cm2.RegSystems(ecs2)
 
+	var postLoad []goke.System
+	for _, v := range registered {
+		if pl, ok := v.(gokebiten.PostLoader); ok {
+			postLoad = append(postLoad, pl.PostLoad())
+		}
+	}
+
 	var loadedCount int
-	ecs2.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
+	postLoad = append(postLoad, goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		var posQ goke.Comp[world.Position]
 		var appQ goke.Comp[world.Appearance]
 		q := si.NewQueryBuilder(&posQ, &appQ).Build()
@@ -99,7 +126,8 @@ func TestSaveLoadCycle(t *testing.T) {
 				loadedCount++
 			}
 		}
-	}}, plugin2.Module().PostLoad())
+	}})
+	ecs2.Setup(postLoad...)
 
 	if loadedCount != count {
 		t.Fatalf("loaded %d entities, want %d", loadedCount, count)

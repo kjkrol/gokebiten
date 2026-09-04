@@ -236,7 +236,7 @@ func TestBroadPhase_Update_DetectsEntityMovedByMoveSystem(t *testing.T) {
 		hitQ = si.NewQueryBuilder(&hitTag).Build()
 	}})
 
-	moveSystem := world.NewMoveSystem(space)
+	moveSystem := world.NewMoveSystem(space, 0)
 	moveHandle := ecs.RegSys(moveSystem)
 	bp := collisions.NewBroadPhase(space)
 	bpHandle := ecs.RegSys(bp)

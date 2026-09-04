@@ -30,21 +30,9 @@ func New(space *gokg.Space, ecs *goke.ECS) *module {
 	return &module{space: space, ecs: ecs}
 }
 
-func (p *module) SetCollisionHandlers(handlers ...CollisionHandler) *module {
-	p.handlers = handlers
-	return p
-}
-
-func (p *module) SetHitExpires(duration time.Duration) *module {
-	p.hitDuration = duration
-	p.extra = append(p.extra, NewTagExpirySystem(func(h *Hit) time.Time { return h.ExpiresAt() }))
-	return p
-}
-
-func (p *module) RegSys(sys goke.System) *module {
-	p.extra = append(p.extra, sys)
-	return p
-}
+// =================================================================
+// goke.Module contract
+// =================================================================
 
 // RegSystems builds and registers the collision systems — see [goke.Module].
 func (p *module) RegSystems(ecs *goke.ECS) {
@@ -77,6 +65,26 @@ func (p *module) LoadComps() []goke.CompToken {
 		goke.LoadComp[Sensor](),
 		goke.LoadComp[Static](),
 	}
+}
+
+// =================================================================
+// collisions-specific
+// =================================================================
+
+func (p *module) SetCollisionHandlers(handlers ...CollisionHandler) *module {
+	p.handlers = handlers
+	return p
+}
+
+func (p *module) SetHitExpires(duration time.Duration) *module {
+	p.hitDuration = duration
+	p.extra = append(p.extra, NewTagExpirySystem(func(h *Hit) time.Time { return h.ExpiresAt() }))
+	return p
+}
+
+func (p *module) RegSys(sys goke.System) *module {
+	p.extra = append(p.extra, sys)
+	return p
 }
 
 func (p *module) build() {

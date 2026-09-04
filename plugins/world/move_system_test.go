@@ -33,7 +33,8 @@ type testHandles struct {
 // newTestWorld seeds one entity with the given starting Velocity and
 // returns the ECS (with world.MoveSystem registered and plan set), a
 // verification query, and the seeded entity's component handles.
-func newTestWorld(t *testing.T, vel world.Velocity) (*goke.ECS, *goke.Query, testHandles) {
+// maxDelta caps per-tick displacement (0 for no limit).
+func newTestWorld(t *testing.T, vel world.Velocity, maxDelta uint32) (*goke.ECS, *goke.Query, testHandles) {
 	t.Helper()
 	space := testSpace(t)
 
@@ -53,7 +54,7 @@ func newTestWorld(t *testing.T, vel world.Velocity) (*goke.ECS, *goke.Query, tes
 		q = si.NewQueryBuilder(&pos, &velComp).Build()
 	}})
 
-	sys := world.NewMoveSystem(space)
+	sys := world.NewMoveSystem(space, maxDelta)
 	handle := ecs.RegSys(sys)
 	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(handle, d)
@@ -79,7 +80,7 @@ func readFirst(t *testing.T, q *goke.Query, h testHandles) (world.Position, worl
 
 func TestMoveSystem_Update_SubPixelAccumulatesWithoutMoving(t *testing.T) {
 	vel := world.Velocity{Dir: geom.NewVec[float64](1, 0), Value: 1} // 1 unit/sec
-	ecs, q, h := newTestWorld(t, vel)
+	ecs, q, h := newTestWorld(t, vel, 0)
 
 	ecs.Tick(10 * time.Millisecond) // AccX += 1*0.01 = 0.01, dx=0
 
@@ -94,7 +95,7 @@ func TestMoveSystem_Update_SubPixelAccumulatesWithoutMoving(t *testing.T) {
 
 func TestMoveSystem_Update_TranslatesOnWholePixels(t *testing.T) {
 	vel := world.Velocity{Dir: geom.NewVec[float64](1, 0), Value: 100} // 100 units/sec
-	ecs, q, h := newTestWorld(t, vel)
+	ecs, q, h := newTestWorld(t, vel, 0)
 
 	for range 3 {
 		ecs.Tick(20 * time.Millisecond) // AccX += 100*0.02 = 2.0 exactly, each tick
@@ -106,5 +107,20 @@ func TestMoveSystem_Update_TranslatesOnWholePixels(t *testing.T) {
 	}
 	if v.AccX != 0 {
 		t.Errorf("AccX = %v, want 0 (each tick's 2.0 was a whole number, nothing left over)", v.AccX)
+	}
+}
+
+func TestMoveSystem_Update_ClampsDisplacementToMaxDelta(t *testing.T) {
+	vel := world.Velocity{Dir: geom.NewVec[float64](1, 0), Value: 1000} // 1000 units/sec
+	ecs, q, h := newTestWorld(t, vel, 3)                                // cap: 3 units/tick
+
+	ecs.Tick(100 * time.Millisecond) // uncapped would be AccX += 100, clamped to 3
+
+	p, v := readFirst(t, q, h)
+	if p.TopLeft.X != 3 {
+		t.Errorf("TopLeft.X = %d, want 3 (displacement clamped to maxDelta)", p.TopLeft.X)
+	}
+	if v.AccX != 0 {
+		t.Errorf("AccX = %v, want 0 (clamp applies before truncation, no debt left over)", v.AccX)
 	}
 }

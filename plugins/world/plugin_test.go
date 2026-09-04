@@ -43,8 +43,8 @@ func TestPlugin_Install_PublishesTelemetryResource(t *testing.T) {
 	if !ok {
 		t.Fatal("expected *world.Telemetry to be registered as a resource")
 	}
-	if telemetry != plugin.Telemetry() {
-		t.Error("registered *world.Telemetry resource is not plugin.Telemetry()")
+	if telemetry.Count != 0 {
+		t.Errorf("Telemetry.Count = %d, want 0 (nothing populated)", telemetry.Count)
 	}
 }
 

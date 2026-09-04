@@ -67,7 +67,7 @@ func (m *pluginManager) resolvePending() error {
 		var stillPending []plugins.Plugin
 		for _, p := range m.pending {
 			ctx := plugins.NewGameCtx(
-				m.game.resources, m.game.ecs, m.game.step,
+				m.game.resources, m.game.ecs,
 				func(v any) { m.track(v) },
 				func(producer func() []goke.System) { m.game.pendingSetup = append(m.game.pendingSetup, producer) },
 			)

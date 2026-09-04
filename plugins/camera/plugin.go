@@ -36,6 +36,10 @@ func NewPlugin(viewport ...render.AABB) *Plugin {
 	return p
 }
 
+// =================================================================
+// plugins.Plugin contract
+// =================================================================
+
 func (p *Plugin) Name() string { return "gokebiten.camera" }
 
 func (p *Plugin) Install(ctx *plugins.GameCtx) error {
@@ -63,6 +67,9 @@ func (p *Plugin) Install(ctx *plugins.GameCtx) error {
 
 // RunPlan is a no-op — camera has no per-tick work of its own.
 func (p *Plugin) RunPlan(goke.RunCtx, time.Duration) {}
+
+// WithRenderer is a no-op — camera has no render.Renderer of its own.
+func (p *Plugin) WithRenderer(render.AtlasSource) {}
 
 // Renderer is a no-op — camera has no render.Renderer of its own.
 func (p *Plugin) Renderer() render.Renderer { return nil }

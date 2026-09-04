@@ -42,6 +42,10 @@ func NewPlugin(speed int32) *Plugin {
 	return &Plugin{speed: speed}
 }
 
+// =================================================================
+// plugins.Plugin contract
+// =================================================================
+
 func (p *Plugin) Name() string { return "gokebiten.navigation" }
 
 func (p *Plugin) Install(ctx *plugins.GameCtx) error {
@@ -85,26 +89,15 @@ func (p *Plugin) Install(ctx *plugins.GameCtx) error {
 	return nil
 }
 
-// WithCommands enables right-click move orders for Selected, en-route entities.
-func (p *Plugin) WithCommands() *Plugin {
-	p.commandsEnabled = true
-	return p
+// RunPlan runs the navigation system (and the command system, if enabled) for this tick — call before world's own RunPlan.
+func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
+	p.module.RunPlan(ctx, d)
 }
 
-// EventHandler returns the default right-click move-order control.EventHandler, or nil unless WithCommands was called.
-func (p *Plugin) EventHandler() control.EventHandler {
-	if p.commands == nil {
-		return nil
-	}
-	return NewDefaultCommandEventHandler(p.board, p.camera, p.commandState)
-}
-
-// WithRenderer builds this plugin's own PathRenderer, drawing the remaining route for every selected, en-route entity.
-func (p *Plugin) WithRenderer(atlas render.AtlasSource, sprites PathSprites) *Plugin {
+// WithRenderer builds this plugin's own PathRenderer, drawing the remaining route for every selected, en-route entity — call SetPathSprites first.
+func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
 	p.rendererEnabled = true
 	p.pathAtlas = atlas
-	p.pathSprites = sprites
-	return p
 }
 
 // Renderer returns this plugin's own render.Renderer, or nil unless WithRenderer was called.
@@ -115,7 +108,26 @@ func (p *Plugin) Renderer() render.Renderer {
 	return p.pathRenderer
 }
 
-// RunPlan runs the navigation system (and the command system, if enabled) for this tick — call before world's own RunPlan.
-func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
-	p.module.RunPlan(ctx, d)
+// EventHandler returns the default right-click move-order control.EventHandler, or nil unless WithCommands was called.
+func (p *Plugin) EventHandler() control.EventHandler {
+	if p.commands == nil {
+		return nil
+	}
+	return NewDefaultCommandEventHandler(p.board, p.camera, p.commandState)
+}
+
+// =================================================================
+// navigation-specific
+// =================================================================
+
+// WithCommands enables right-click move orders for Selected, en-route entities.
+func (p *Plugin) WithCommands() *Plugin {
+	p.commandsEnabled = true
+	return p
+}
+
+// SetPathSprites sets the sprite set WithRenderer's PathRenderer draws — call before UsePlugin.
+func (p *Plugin) SetPathSprites(sprites PathSprites) *Plugin {
+	p.pathSprites = sprites
+	return p
 }

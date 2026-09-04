@@ -29,7 +29,7 @@ type harness struct {
 	t         *testing.T
 	space     *gokg.Space
 	state     *State
-	sys       *module
+	sys       *SelectionSystem
 	handler   *DefaultEventHandler
 	ecs       *goke.ECS
 	pos       goke.Comp[world.Position]
@@ -52,9 +52,7 @@ func newHarness(t *testing.T) *harness {
 	camera := render.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
 
 	state := &State{}
-	sys := NewSystem(state)
-	sys.bindSpace(space)
-	sys.bindCamera(camera)
+	sys := NewSelectionSystem(state, space, camera)
 	handler := NewDefaultEventHandler(state)
 
 	return &harness{t: t, space: space, state: state, sys: sys, handler: handler, ecs: goke.New()}
@@ -244,7 +242,7 @@ func TestSystem_Update_SelectByID_TagsExactlyGivenEntities(t *testing.T) {
 		t.Fatal("sanity check failed: expected other to be selected first")
 	}
 
-	h.sys.Select([]uid.UID64{*target})
+	h.state.PendingIDs = []uid.UID64{*target}
 	h.ecs.Tick(time.Second)
 
 	if !h.isSelected(*target) {

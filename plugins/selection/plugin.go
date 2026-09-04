@@ -8,22 +8,23 @@ import (
 	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
-	"github.com/kjkrol/uid"
 )
 
 // Plugin wires selection into a Game — depends on world (shared spatial index) and a registered camera plugin (screen<->world conversion).
 type Plugin struct {
 	state    *State
+	sys      *SelectionSystem
 	module   *module
 	renderer *Renderer
 }
 
 var _ plugins.Plugin = (*Plugin)(nil)
 
-func NewPlugin() *Plugin {
-	state := &State{}
-	return &Plugin{state: state, module: NewSystem(state)}
-}
+func NewPlugin() *Plugin { return &Plugin{state: &State{}} }
+
+// =================================================================
+// plugins.Plugin contract
+// =================================================================
 
 func (p *Plugin) Name() string { return "gokebiten.selection" }
 
@@ -36,17 +37,18 @@ func (p *Plugin) Install(ctx *plugins.GameCtx) error {
 	if err != nil {
 		return err
 	}
-	p.module.bindSpace(worldPlugin.Space())
-	p.module.bindCamera(camera)
+	p.sys = NewSelectionSystem(p.state, worldPlugin.Space(), camera)
+	p.module = &module{sys: p.sys}
 	ctx.Provide(p.state)
 	ctx.UseModule(p.module)
 	return nil
 }
 
-// WithRenderer builds this plugin's own highlight renderer (outline for every Selected entity, plus the drag marquee).
-func (p *Plugin) WithRenderer() *Plugin {
+func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) { p.module.RunPlan(ctx, d) }
+
+// WithRenderer builds this plugin's own highlight renderer (outline for every Selected entity, plus the drag marquee) — atlas is unused, selection draws primitives.
+func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
 	p.renderer = NewRenderer(p.state)
-	return p
 }
 
 func (p *Plugin) Renderer() render.Renderer {
@@ -58,9 +60,3 @@ func (p *Plugin) Renderer() render.Renderer {
 
 // EventHandler returns the default left-click/drag control.EventHandler for selection — write your own against State for a different binding scheme.
 func (p *Plugin) EventHandler() control.EventHandler { return NewDefaultEventHandler(p.state) }
-
-func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) { p.module.RunPlan(ctx, d) }
-
-// Select replaces the current selection with exactly ids — for programmatic
-// selection (e.g. tagging entities Selected at spawn), independent of mouse input.
-func (p *Plugin) Select(ids []uid.UID64) { p.module.Select(ids) }

@@ -19,6 +19,9 @@ type Plugin interface {
 	// RunPlan runs this plugin's per-tick work — call from your own Game.Loop closure, in whatever order you need.
 	RunPlan(ctx goke.RunCtx, d time.Duration)
 
+	// WithRenderer configures this plugin's own render.Renderer to draw from atlas — call before UsePlugin. A no-op for a plugin with no renderer of its own.
+	WithRenderer(atlas render.AtlasSource)
+
 	// Renderer returns this plugin's own render.Renderer, or nil if it has none.
 	Renderer() render.Renderer
 

@@ -9,8 +9,6 @@ import (
 	"github.com/kjkrol/gokg/spatial"
 )
 
-func (w *module) Space() *gokg.Space { return w.space }
-
 func buildSpace(cfg Config) *gokg.Space {
 	const minCapacity, maxCapacity = 2.0, 8.0
 

@@ -17,11 +17,11 @@ type testResourceB struct{ S string }
 type stubPlugin struct {
 	name      string
 	installed int
-	installFn func(ctx *GameCtx) error
+	installFn func(ctx *plugins.GameCtx) error
 }
 
 func (p *stubPlugin) Name() string { return p.name }
-func (p *stubPlugin) Install(ctx *GameCtx) error {
+func (p *stubPlugin) Install(ctx *plugins.GameCtx) error {
 	p.installed++
 	if p.installFn != nil {
 		return p.installFn(ctx)
@@ -29,6 +29,7 @@ func (p *stubPlugin) Install(ctx *GameCtx) error {
 	return nil
 }
 func (p *stubPlugin) RunPlan(goke.RunCtx, time.Duration) {}
+func (p *stubPlugin) WithRenderer(render.AtlasSource)    {}
 func (p *stubPlugin) Renderer() render.Renderer          { return nil }
 func (p *stubPlugin) EventHandler() control.EventHandler { return nil }
 
@@ -58,7 +59,7 @@ func TestGame_UsePlugin_DuplicateNameRejected(t *testing.T) {
 
 func TestGame_Init_RejectsSecondCall(t *testing.T) {
 	game := NewGame(&GameProps{})
-	noop := func(ctx *GameCtx) error { return nil }
+	noop := func(ctx *plugins.GameCtx) error { return nil }
 
 	if err := game.Init(noop); err != nil {
 		t.Fatalf("first Init: %v", err)
@@ -72,7 +73,7 @@ func TestGame_UsePlugin_InstallErrorPropagates(t *testing.T) {
 	game := NewGame(&GameProps{})
 	p := &stubPlugin{
 		name: "test.failing",
-		installFn: func(ctx *GameCtx) error {
+		installFn: func(ctx *plugins.GameCtx) error {
 			_, ok := ctx.Resources.TryGet[*testResourceA]()
 			if !ok {
 				return errors.New("missing testResourceA")
@@ -99,7 +100,7 @@ func (s *stubSetupProvider) SetupSystems() []goke.System {
 func TestGameCtx_Setup_EvaluatesSetupSystemsLazily(t *testing.T) {
 	game := NewGame(&GameProps{})
 	ctx := plugins.NewGameCtx(
-		game.resources, game.ecs, game.step,
+		game.resources, game.ecs,
 		func(v any) { game.pluginManager.track(v) },
 		func(producer func() []goke.System) { game.pendingSetup = append(game.pendingSetup, producer) },
 	)
@@ -120,14 +121,14 @@ func TestGame_UsePlugin_ResolvesOutOfOrderViaNotReady(t *testing.T) {
 	game := NewGame(&GameProps{})
 	consumer := &stubPlugin{
 		name: "test.consumer",
-		installFn: func(ctx *GameCtx) error {
+		installFn: func(ctx *plugins.GameCtx) error {
 			_, err := ctx.Require[*testResourceA]()
 			return err
 		},
 	}
 	producer := &stubPlugin{
 		name: "test.producer",
-		installFn: func(ctx *GameCtx) error {
+		installFn: func(ctx *plugins.GameCtx) error {
 			ctx.Provide(&testResourceA{N: 1})
 			return nil
 		},
@@ -152,7 +153,7 @@ func TestGame_Run_FailsWhenPluginNeverBecomesReady(t *testing.T) {
 	game := NewGame(&GameProps{})
 	consumer := &stubPlugin{
 		name: "test.consumer",
-		installFn: func(ctx *GameCtx) error {
+		installFn: func(ctx *plugins.GameCtx) error {
 			_, err := ctx.Require[*testResourceA]()
 			return err
 		},
@@ -171,7 +172,7 @@ func TestGame_UsePlugin_PanicsWhenPluginWritesBeforeNotReady(t *testing.T) {
 	game := NewGame(&GameProps{})
 	bad := &stubPlugin{
 		name: "test.bad",
-		installFn: func(ctx *GameCtx) error {
+		installFn: func(ctx *plugins.GameCtx) error {
 			ctx.Provide(&testResourceB{S: "too early"})
 			_, err := ctx.Require[*testResourceA]()
 			return err
@@ -190,7 +191,7 @@ func TestGameCtx_InsertResource_VisibleToLaterPlugins(t *testing.T) {
 	game := NewGame(&GameProps{})
 	first := &stubPlugin{
 		name: "test.provider",
-		installFn: func(ctx *GameCtx) error {
+		installFn: func(ctx *plugins.GameCtx) error {
 			ctx.Provide(&testResourceA{N: 9})
 			return nil
 		},
@@ -198,7 +199,7 @@ func TestGameCtx_InsertResource_VisibleToLaterPlugins(t *testing.T) {
 	var gotN int
 	second := &stubPlugin{
 		name: "test.consumer",
-		installFn: func(ctx *GameCtx) error {
+		installFn: func(ctx *plugins.GameCtx) error {
 			gotN = ctx.Resources.Get[*testResourceA]().N
 			return nil
 		},

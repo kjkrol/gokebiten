@@ -2,7 +2,6 @@ package plugins
 
 import (
 	"reflect"
-	"time"
 
 	"github.com/kjkrol/goke/v3"
 )
@@ -12,7 +11,6 @@ type GameCtx struct {
 	Resources *Resources
 
 	ecs        *goke.ECS
-	step       time.Duration
 	track      func(v any)
 	addPending func(producer func() []goke.System)
 
@@ -20,8 +18,8 @@ type GameCtx struct {
 }
 
 // NewGameCtx builds a GameCtx — called by gokebiten per Install attempt.
-func NewGameCtx(resources *Resources, ecs *goke.ECS, step time.Duration, track func(v any), addPending func(func() []goke.System)) *GameCtx {
-	return &GameCtx{Resources: resources, ecs: ecs, step: step, track: track, addPending: addPending}
+func NewGameCtx(resources *Resources, ecs *goke.ECS, track func(v any), addPending func(func() []goke.System)) *GameCtx {
+	return &GameCtx{Resources: resources, ecs: ecs, track: track, addPending: addPending}
 }
 
 // Require returns the published value of T, or an error if it isn't published yet — Install may be retried until it is.
@@ -67,9 +65,6 @@ func (c *GameCtx) RegSys(factory func() goke.System) goke.Runnable {
 
 // ECS returns the underlying goke ECS.
 func (c *GameCtx) ECS() *goke.ECS { return c.ecs }
-
-// Step returns the game's fixed tick duration.
-func (c *GameCtx) Step() time.Duration { return c.step }
 
 // Wrote reports whether Provide/UseModule/Setup/RegSys was called — pluginManager's retry-safety check.
 func (c *GameCtx) Wrote() bool { return c.wrote }

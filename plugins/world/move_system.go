@@ -1,6 +1,7 @@
 package world
 
 import (
+	"math"
 	"time"
 
 	"github.com/kjkrol/goke/v3"
@@ -14,14 +15,16 @@ var _ goke.System = (*MoveSystem)(nil)
 // Position, translating through space (which keeps its spatial index in sync).
 type MoveSystem struct {
 	space     *gokg.Space
+	maxDelta  uint32
 	moveQuery *goke.Query
 	pos       goke.Comp[Position]
 	vel       goke.Comp[Velocity]
 }
 
-// NewMoveSystem builds world's movement system.
-func NewMoveSystem(space *gokg.Space) *MoveSystem {
-	return &MoveSystem{space: space}
+// NewMoveSystem builds world's movement system, capping per-tick displacement
+// to maxDelta (0 for no limit) so nothing can tunnel through another entity.
+func NewMoveSystem(space *gokg.Space, maxDelta uint32) *MoveSystem {
+	return &MoveSystem{space: space, maxDelta: maxDelta}
 }
 
 func (s *MoveSystem) Init(si *goke.SysInit) {
@@ -40,6 +43,10 @@ func (s *MoveSystem) Update(_ *goke.CmdBuf, d time.Duration) {
 			rate := vel[i].Delta()
 			vel[i].AccX += float64(rate.X) * dt
 			vel[i].AccY += float64(rate.Y) * dt
+
+			if s.maxDelta > 0 {
+				clampAcc(&vel[i].AccX, &vel[i].AccY, s.maxDelta)
+			}
 
 			dx := int32(vel[i].AccX)
 			dy := int32(vel[i].AccY)
@@ -61,4 +68,15 @@ func (s *MoveSystem) Update(_ *goke.CmdBuf, d time.Duration) {
 	if moved {
 		s.space.Flush(nil)
 	}
+}
+
+// clampAcc scales (accX,accY) down to magnitude max if it exceeds it.
+func clampAcc(accX, accY *float64, max uint32) {
+	mag := math.Hypot(*accX, *accY)
+	if mag <= float64(max) {
+		return
+	}
+	scale := float64(max) / mag
+	*accX *= scale
+	*accY *= scale
 }

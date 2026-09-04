@@ -21,6 +21,10 @@ type module struct {
 var _ goke.Module = (*module)(nil)
 var _ gokebiten.PostLoader = (*module)(nil)
 
+// =================================================================
+// goke.Module contract
+// =================================================================
+
 // RegSystems registers nav (and cmd, if enabled) as the per-tick systems — see [goke.Module].
 func (m *module) RegSystems(ecs *goke.ECS) {
 	if m.navRunnable != nil {
@@ -53,6 +57,10 @@ func (m *module) LoadComps() []goke.CompToken {
 		goke.LoadComp[CellEntered](),
 	}
 }
+
+// =================================================================
+// gokebiten.PostLoader contract
+// =================================================================
 
 // PostLoad rebuilds board.Occupancy from every loaded entity's Cell component.
 func (m *module) PostLoad() goke.System {

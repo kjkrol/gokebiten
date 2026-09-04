@@ -10,6 +10,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten"
 	"github.com/kjkrol/gokebiten/control"
+	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/camera"
 	"github.com/kjkrol/gokebiten/plugins/navigation"
@@ -51,7 +52,8 @@ func main() {
 	worldPlugin := world.NewPlugin(world.Config{
 		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: false},
 		Entities: world.EntitiesCfg{MaxCount: MaxEntCount, MinSize: EntitySize, MaxSize: EntitySize},
-	}).WithRenderer(worldAtlas)
+	})
+	worldPlugin.WithRenderer(worldAtlas)
 
 	// setup board plugin
 	boardAtlas := render.NewAtlas(CellSize, 3)
@@ -66,15 +68,19 @@ func main() {
 	)
 	grid := board.DefaultGrids{}.Square(GridWidth, GridHeight, CellSize)
 	occupancy := &board.SingleOccupancy{}
-	boardPlugin := board.NewPlugin(grid, occupancy, cellKindDict).WithRenderer(boardAtlas)
+	boardPlugin := board.NewPlugin(grid, occupancy, cellKindDict)
+	boardPlugin.WithRenderer(boardAtlas)
 
 	// setup navigation plugin
 	pathAtlas, pathSprites := navigation.RegisterDefaultPathSprites(CellSize, 2, color.RGBA{R: 255, G: 140, B: 0, A: 255})
-	navigationPlugin := navigation.NewPlugin(UnitSpeed).WithCommands().WithRenderer(pathAtlas, pathSprites)
+	navigationPlugin := navigation.NewPlugin(UnitSpeed).WithCommands()
+	navigationPlugin.SetPathSprites(pathSprites) // TODO: try do this better
+	navigationPlugin.WithRenderer(pathAtlas)
 
 	// setup other plugins
 	cameraPlugin := camera.NewPlugin()
-	selectionPlugin := selection.NewPlugin().WithRenderer()
+	selectionPlugin := selection.NewPlugin()
+	selectionPlugin.WithRenderer(nil)
 
 	// use plugins
 	if err := game.UsePlugin(worldPlugin); err != nil {
@@ -100,7 +106,7 @@ func main() {
 	hasSave := slices.Contains(saves, "")
 
 	var state *State
-	if err := game.Init(func(ctx *gokebiten.GameCtx) error {
+	if err := game.Init(func(ctx *plugins.GameCtx) error {
 		state = &State{}
 		ctx.Provide(state)
 

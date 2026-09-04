@@ -23,8 +23,8 @@ func TestWorld_Populate_EndToEnd(t *testing.T) {
 	}})
 	ecs.Setup(systems...)
 
-	if wm.Telemetry().Count != 3 {
-		t.Errorf("Telemetry().Count = %d, want 3", wm.Telemetry().Count)
+	if wm.telemetry.Count != 3 {
+		t.Errorf("telemetry.Count = %d, want 3", wm.telemetry.Count)
 	}
 
 	count := 0

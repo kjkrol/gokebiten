@@ -1,6 +1,9 @@
 package world
 
-import "github.com/kjkrol/uid"
+import (
+	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/uid"
+)
 
 // Spawner builds one World.Populate call: Position and Velocity are
 // required, bound at construction; every other component is attached via
@@ -9,6 +12,11 @@ type Spawner struct {
 	position func(index, count int) Position
 	velocity func(index int) Velocity
 	extras   []entityExtras
+}
+
+type entityExtras interface {
+	Components() []goke.Addable
+	Init(cursor *goke.Cursor, i, index int, id uid.UID64)
 }
 
 // NewSpawner requires the two components every entity must have —
