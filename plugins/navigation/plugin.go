@@ -48,14 +48,15 @@ func NewPlugin(speed int32, boardPlugin *board.Plugin, worldPlugin *world.Plugin
 func (p *Plugin) Name() string { return "gokebiten.navigation" }
 
 func (p *Plugin) Install(ctx *plugins.GameCtx) error {
+	if err := ctx.RequirePlugin(p.boardPlugin); err != nil {
+		return err
+	}
 	brd, err := ctx.Require[*board.Board]()
 	if err != nil {
 		return err
 	}
+	p.board = brd
 
-	if err := ctx.RequirePlugin(p.boardPlugin); err != nil {
-		return err
-	}
 	occupancy := p.boardPlugin.Occupancy()
 	finder := newPathFinder(brd, brd, occupancy)
 	navSys := newNavigationSystem(finder, brd, brd, occupancy, p.speed)
