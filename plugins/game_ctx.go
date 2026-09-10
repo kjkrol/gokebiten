@@ -4,12 +4,12 @@ import (
 	"reflect"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/plugins/resource"
+	"github.com/kjkrol/gokebiten/resources"
 )
 
 // GameCtx is the capability surface Game exposes to Plugin.Install.
 type GameCtx struct {
-	Resources *Resources
+	Resources *resources.Storage
 
 	ecs        *goke.ECS
 	track      func(v any)
@@ -20,12 +20,12 @@ type GameCtx struct {
 }
 
 // NewGameCtx builds a GameCtx — called by gokebiten per Install attempt.
-func NewGameCtx(resources *Resources, ecs *goke.ECS, track func(v any), addPending func(func() []goke.System), installed func(name string) bool) *GameCtx {
-	return &GameCtx{Resources: resources, ecs: ecs, track: track, addPending: addPending, installed: installed}
+func NewGameCtx(res *resources.Storage, ecs *goke.ECS, track func(v any), addPending func(func() []goke.System), installed func(name string) bool) *GameCtx {
+	return &GameCtx{Resources: res, ecs: ecs, track: track, addPending: addPending, installed: installed}
 }
 
 // Require returns the published value of T, or an error if it isn't published yet — Install may be retried until it is.
-func (c *GameCtx) Require[T resource.PluginResource]() (T, error) {
+func (c *GameCtx) Require[T resources.Resources]() (T, error) {
 	if v, ok := c.Resources.TryGet[T](); ok {
 		return v, nil
 	}
@@ -44,7 +44,7 @@ func (c *GameCtx) RequirePlugin(p Plugin) error {
 }
 
 // Provide publishes v so other plugins and the rest of the game can read it.
-func (c *GameCtx) Provide[T resource.PluginResource](v T) {
+func (c *GameCtx) Provide[T resources.Resources](v T) {
 	c.wrote = true
 	c.Resources.Insert(v)
 }

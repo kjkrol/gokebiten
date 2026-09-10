@@ -4,9 +4,11 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gokebiten/resources"
 )
 
 // Plugin adapts a plain closure to plugins.Plugin — see gokebiten.Game.Init.
@@ -25,10 +27,13 @@ func (p *Plugin) Install(ctx *plugins.GameCtx) error { return p.fn(ctx) }
 func (p *Plugin) RunPlan(goke.RunCtx, time.Duration) {}
 
 // WithRenderer is a no-op — Plugin has no render.Renderer of its own.
-func (p *Plugin) WithRenderer(render.AtlasSource) {}
+func (p *Plugin) WithRenderer(camera.Camera, render.AtlasSource) {}
 
 // Renderer is a no-op — Plugin has no render.Renderer of its own.
 func (p *Plugin) Renderer() render.Renderer { return nil }
 
 // EventHandler is a no-op — Plugin has no control.EventHandler of its own.
 func (p *Plugin) EventHandler() control.EventHandler { return nil }
+
+// Resources is a no-op — Plugin has no state of its own to publish.
+func (p *Plugin) Resources() resources.Resources { return nil }

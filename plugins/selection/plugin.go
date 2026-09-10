@@ -4,25 +4,28 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gokebiten/resources"
 )
 
-// Plugin wires selection into a Game — depends on a registered camera plugin (screen<->world conversion).
+// Plugin wires selection into a Game — depends on worldPlugin and a Camera for screen<->world conversion.
 type Plugin struct {
-	state       *State
+	state       *Resources
 	worldPlugin *world.Plugin
+	camera      camera.Camera
 	module      *module
 	renderer    *Renderer
 }
 
 var _ plugins.Plugin = (*Plugin)(nil)
 
-// NewPlugin builds the selection plugin over worldPlugin's shared spatial index.
-func NewPlugin(worldPlugin *world.Plugin) *Plugin {
-	return &Plugin{state: &State{}, worldPlugin: worldPlugin}
+// NewPlugin builds the selection plugin over worldPlugin's shared spatial index, using cam for click/drag hit-testing.
+func NewPlugin(worldPlugin *world.Plugin, cam camera.Camera) *Plugin {
+	return &Plugin{state: &Resources{}, worldPlugin: worldPlugin, camera: cam}
 }
 
 // =================================================================
@@ -38,13 +41,8 @@ func (p *Plugin) Install(ctx *plugins.GameCtx) error {
 	if err := ctx.RequirePlugin(p.worldPlugin); err != nil {
 		return err
 	}
-	camera, err := ctx.Require[render.Camera]()
-	if err != nil {
-		return err
-	}
-	sys := NewSelectionSystem(p.state, p.worldPlugin.Space(), camera)
+	sys := NewSelectionSystem(p.state, p.worldPlugin.Space(), p.camera)
 	p.module = &module{sys: sys}
-	ctx.Provide(p.state)
 	ctx.UseModule(p.module)
 	return nil
 }
@@ -53,8 +51,8 @@ func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) { p.module.RunPlan(ct
 
 // WithRenderer builds this plugin's own highlight renderer (outline for every Selected
 // entity,plus the drag marquee) — atlas is unused, selection draws primitives.
-func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
-	p.renderer = NewRenderer(p.state)
+func (p *Plugin) WithRenderer(cam camera.Camera, atlas render.AtlasSource) {
+	p.renderer = NewRenderer(cam, p.state)
 }
 
 func (p *Plugin) Renderer() render.Renderer {
@@ -65,5 +63,8 @@ func (p *Plugin) Renderer() render.Renderer {
 }
 
 // EventHandler returns the default left-click/drag control.EventHandler for selection
-// or write your own against State for a different binding scheme.
+// or write your own against Resources for a different binding scheme.
 func (p *Plugin) EventHandler() control.EventHandler { return NewDefaultEventHandler(p.state) }
+
+// Resources returns selection's single published Resources.
+func (p *Plugin) Resources() resources.Resources { return p.state }

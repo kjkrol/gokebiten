@@ -4,10 +4,12 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gokebiten/resources"
 )
 
 // Plugin wires the collision engine into a Game — optional, borrows world.Plugin's own Space.
@@ -53,13 +55,16 @@ func (p *Plugin) Install(ctx *plugins.GameCtx) error {
 func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) { p.module.RunPlan(ctx, d) }
 
 // WithRenderer is a no-op — collisions has no render.Renderer of its own.
-func (p *Plugin) WithRenderer(render.AtlasSource) {}
+func (p *Plugin) WithRenderer(camera.Camera, render.AtlasSource) {}
 
 // Renderer is a no-op — collisions has no render.Renderer of its own.
 func (p *Plugin) Renderer() render.Renderer { return nil }
 
 // EventHandler is a no-op — collisions has no control.EventHandler of its own.
 func (p *Plugin) EventHandler() control.EventHandler { return nil }
+
+// Resources is a no-op — collisions has no state of its own to publish.
+func (p *Plugin) Resources() resources.Resources { return nil }
 
 // =================================================================
 // collisions-specific

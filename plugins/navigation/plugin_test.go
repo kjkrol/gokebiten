@@ -5,11 +5,12 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gokebiten/resources"
 	"github.com/kjkrol/gokg/geom"
 	"github.com/kjkrol/gokg/plane"
 )
@@ -31,15 +32,16 @@ func TestPlugin_Install_WiresBoardForEventHandler(t *testing.T) {
 	boardPlugin := board.NewPlugin(grid, &board.SingleOccupancy{}, nil, worldPlugin)
 
 	surface := plane.NewEuclidean2D[uint32](50, 50)
-	camera := render.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 50, 50))
+	cam := camera.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 50, 50))
 
-	resources := plugins.NewResources()
-	resources.Insert(brd)
-	resources.Insert[render.Camera](camera)
-	ctx := plugins.NewGameCtx(resources, goke.New(),
+	res := resources.NewStorage()
+	boardRes := &board.Resources{}
+	boardRes.Logic.Board = brd
+	res.Insert(boardRes)
+	ctx := plugins.NewGameCtx(res, goke.New(),
 		func(any) {}, func(func() []goke.System) {}, func(string) bool { return true })
 
-	navPlugin := NewPlugin(10, boardPlugin, worldPlugin)
+	navPlugin := NewPlugin(10, boardPlugin, worldPlugin, cam)
 	if err := navPlugin.Install(ctx); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
@@ -49,7 +51,7 @@ func TestPlugin_Install_WiresBoardForEventHandler(t *testing.T) {
 
 	navPlugin.EventHandler().HandleEvents(events) // must not panic — this is the exact crash site
 
-	if navPlugin.commandState.PendingTarget == nil {
-		t.Error("expected a right-click to set CommandState.PendingTarget")
+	if navPlugin.res.PendingTarget == nil {
+		t.Error("expected a right-click to set Resources.PendingTarget")
 	}
 }

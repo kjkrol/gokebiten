@@ -6,20 +6,21 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
 )
 
 // HighlightStyle draws one Selected entity's outline, given its world-space AABB.
 type HighlightStyle interface {
-	Draw(screen *ebiten.Image, camera render.Camera, box render.AABB)
+	Draw(screen *ebiten.Image, cam camera.Camera, box camera.AABB)
 }
 
 // HighlightStyleFn adapts a plain function to HighlightStyle.
-type HighlightStyleFn func(screen *ebiten.Image, camera render.Camera, box render.AABB)
+type HighlightStyleFn func(screen *ebiten.Image, cam camera.Camera, box camera.AABB)
 
-func (f HighlightStyleFn) Draw(screen *ebiten.Image, camera render.Camera, box render.AABB) {
-	f(screen, camera, box)
+func (f HighlightStyleFn) Draw(screen *ebiten.Image, cam camera.Camera, box camera.AABB) {
+	f(screen, cam, box)
 }
 
 var _ HighlightStyle = HighlightStyleFn(nil)
@@ -28,9 +29,9 @@ var highlightColor = color.RGBA{R: 220, G: 40, B: 40, A: 255}
 
 // DefaultHighlightStyle draws a thin red outline around box.
 func DefaultHighlightStyle() HighlightStyle {
-	return HighlightStyleFn(func(screen *ebiten.Image, camera render.Camera, box render.AABB) {
-		x0, y0 := camera.ToScreen(float32(box.TopLeft.X), float32(box.TopLeft.Y))
-		x1, y1 := camera.ToScreen(float32(box.BottomRight.X), float32(box.BottomRight.Y))
+	return HighlightStyleFn(func(screen *ebiten.Image, cam camera.Camera, box camera.AABB) {
+		x0, y0 := cam.ToScreen(float32(box.TopLeft.X), float32(box.TopLeft.Y))
+		x1, y1 := cam.ToScreen(float32(box.BottomRight.X), float32(box.BottomRight.Y))
 		vector.StrokeRect(screen, x0, y0, x1-x0, y1-y0, 2, highlightColor, true)
 	})
 }
@@ -41,8 +42,8 @@ var marqueeColor = color.RGBA{R: 255, G: 140, B: 0, A: 255}
 // marquee rectangle while a drag-select is in progress — register alongside
 // your other layers.
 type Renderer struct {
-	state  *State
-	camera render.Camera
+	state  *Resources
+	camera camera.Camera
 	style  HighlightStyle
 
 	query *goke.Query
@@ -52,8 +53,8 @@ type Renderer struct {
 var _ render.Renderer = (*Renderer)(nil)
 
 // NewRenderer builds a Renderer over state's live selection/drag state, with DefaultHighlightStyle — override via WithStyle.
-func NewRenderer(state *State) *Renderer {
-	return &Renderer{state: state, style: DefaultHighlightStyle()}
+func NewRenderer(cam camera.Camera, state *Resources) *Renderer {
+	return &Renderer{state: state, camera: cam, style: DefaultHighlightStyle()}
 }
 
 // WithStyle overrides how the highlight is drawn — the escape hatch for a custom HighlightStyle.
@@ -61,9 +62,6 @@ func (r *Renderer) WithStyle(style HighlightStyle) *Renderer {
 	r.style = style
 	return r
 }
-
-// BindCamera attaches camera — Draw needs it, so call this before the first Draw.
-func (r *Renderer) BindCamera(camera render.Camera) { r.camera = camera }
 
 func (r *Renderer) Init(si *goke.SysInit) {
 	r.query = si.NewQueryBuilder(&r.pos).Include(goke.Include[Selected]()).Build()

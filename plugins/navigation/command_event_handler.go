@@ -2,26 +2,26 @@ package navigation
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins/board"
-	"github.com/kjkrol/gokebiten/render"
 	"github.com/kjkrol/gokg/geom"
 )
 
 // DefaultCommandEventHandler turns a right-click into a move-order target —
 // the default control.EventHandler for a navigation Plugin with WithCommands.
-// Write your own against the same CommandState for a different binding scheme.
+// Write your own against the same Resources for a different binding scheme.
 type DefaultCommandEventHandler struct {
 	grid   board.Grid
-	camera render.Camera
-	state  *CommandState
+	camera camera.Camera
+	state  *Resources
 }
 
 var _ control.EventHandler = (*DefaultCommandEventHandler)(nil)
 
 // NewDefaultCommandEventHandler builds a DefaultCommandEventHandler writing into state.
-func NewDefaultCommandEventHandler(grid board.Grid, camera render.Camera, state *CommandState) *DefaultCommandEventHandler {
-	return &DefaultCommandEventHandler{grid: grid, camera: camera, state: state}
+func NewDefaultCommandEventHandler(grid board.Grid, cam camera.Camera, state *Resources) *DefaultCommandEventHandler {
+	return &DefaultCommandEventHandler{grid: grid, camera: cam, state: state}
 }
 
 func (h *DefaultCommandEventHandler) HandleEvents(events *control.InputEvents) {

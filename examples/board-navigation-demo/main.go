@@ -9,10 +9,10 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/plugins/board"
-	"github.com/kjkrol/gokebiten/plugins/camera"
 	"github.com/kjkrol/gokebiten/plugins/navigation"
 	"github.com/kjkrol/gokebiten/plugins/selection"
 	"github.com/kjkrol/gokebiten/plugins/world"
@@ -36,7 +36,7 @@ const (
 
 type State struct{ Saves int }
 
-func (*State) PluginResource() {}
+func (*State) Resources() {}
 
 func main() {
 	game := gokebiten.NewGame(&gokebiten.GameProps{
@@ -51,11 +51,13 @@ func main() {
 	blueSprite := worldAtlas.Register(render.Solid(color.RGBA{R: 90, G: 140, B: 220, A: 255}))
 	worldAtlas.Close()
 
-	worldPlugin := world.NewPlugin(world.Config{
+	worldCfg := world.Config{
 		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: false},
 		Entities: world.EntitiesCfg{MaxCount: MaxEntCount, MinSize: EntitySize, MaxSize: EntitySize},
-	})
-	worldPlugin.WithRenderer(worldAtlas)
+	}
+	worldPlugin := world.NewPlugin(worldCfg)
+	cam := camera.NewFromSpace(worldCfg.Space.Width, worldCfg.Space.Height, worldCfg.Space.Toroidal)
+	worldPlugin.WithRenderer(cam, worldAtlas)
 
 	// setup board plugin
 	boardAtlas := render.NewAtlas(CellSize, 3)
@@ -71,18 +73,17 @@ func main() {
 	grid := board.DefaultGrids{}.Square(GridWidth, GridHeight, CellSize)
 	occupancy := &board.SingleOccupancy{}
 	boardPlugin := board.NewPlugin(grid, occupancy, cellKindDict, worldPlugin)
-	boardPlugin.WithRenderer(boardAtlas)
+	boardPlugin.WithRenderer(cam, boardAtlas)
 
 	// setup navigation plugin
 	pathAtlas, pathSprites := navigation.RegisterDefaultPathSprites(CellSize, 2, color.RGBA{R: 255, G: 140, B: 0, A: 255})
-	navigationPlugin := navigation.NewPlugin(UnitSpeed, boardPlugin, worldPlugin)
+	navigationPlugin := navigation.NewPlugin(UnitSpeed, boardPlugin, worldPlugin, cam)
 	navigationPlugin.SetPathSprites(pathSprites) // TODO: try do this better
-	navigationPlugin.WithRenderer(pathAtlas)
+	navigationPlugin.WithRenderer(cam, pathAtlas)
 
 	// setup other plugins
-	cameraPlugin := camera.NewPlugin()
-	selectionPlugin := selection.NewPlugin(worldPlugin)
-	selectionPlugin.WithRenderer(nil)
+	selectionPlugin := selection.NewPlugin(worldPlugin, cam)
+	selectionPlugin.WithRenderer(cam, nil)
 
 	// use plugins
 	if err := game.UsePlugin(worldPlugin); err != nil {
@@ -92,9 +93,6 @@ func main() {
 		log.Fatal(err)
 	}
 	if err := game.UsePlugin(navigationPlugin); err != nil {
-		log.Fatal(err)
-	}
-	if err := game.UsePlugin(cameraPlugin); err != nil {
 		log.Fatal(err)
 	}
 	if err := game.UsePlugin(selectionPlugin); err != nil {
@@ -119,8 +117,9 @@ func main() {
 			log.Printf("loaded saved board (save #%d)", state.Saves)
 		} else {
 			// setup board
-			brd := ctx.Resources.Get[*board.Board]()
-			kinds := ctx.Resources.Get[board.CellKindDict]()
+			boardRes := ctx.Resources.Get[*board.Resources]()
+			brd := boardRes.Logic.Board
+			kinds := boardRes.Logic.Kinds
 			brd.SetAll(kinds["grass"])
 			buildWall(brd, kinds)
 
@@ -175,7 +174,7 @@ func main() {
 
 	selectionCmdHandler := selectionPlugin.EventHandler()
 	navigationCmdHandler := navigationPlugin.EventHandler()
-	renderState := game.Resources().Get[*board.RenderState]()
+	renderState := game.Resources().Get[*board.Resources]().Render
 	game.EventHandlerFn(func(events *control.InputEvents) {
 		selectionCmdHandler.HandleEvents(events)
 		navigationCmdHandler.HandleEvents(events)
@@ -189,7 +188,8 @@ func main() {
 			case ebiten.KeyB:
 				renderState.ShowGridLines = !renderState.ShowGridLines
 			case ebiten.KeyR:
-				buildShortcut(game.Resources().Get[*board.Board](), game.Resources().Get[board.CellKindDict]())
+				shortcutRes := game.Resources().Get[*board.Resources]()
+				buildShortcut(shortcutRes.Logic.Board, shortcutRes.Logic.Kinds)
 				log.Print("built a road through the wall — in-flight units re-path onto it as soon as they deviate")
 			case ebiten.KeyF5:
 				state.Saves++

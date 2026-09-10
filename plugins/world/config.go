@@ -6,8 +6,6 @@ type Config struct {
 	Entities EntitiesCfg
 }
 
-func (Config) PluginResource() {}
-
 type SpaceCfg struct {
 	Width, Height uint32
 	Toroidal      bool
@@ -22,5 +20,3 @@ type EntitiesCfg struct {
 type Telemetry struct {
 	Count int
 }
-
-func (*Telemetry) PluginResource() {}

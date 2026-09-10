@@ -6,21 +6,24 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gokebiten/resources"
 )
 
 type testResourceA struct{ N int }
 type testResourceB struct{ S string }
 
-func (*testResourceA) PluginResource() {}
-func (*testResourceB) PluginResource() {}
+func (*testResourceA) Resources() {}
+func (*testResourceB) Resources() {}
 
 type stubPlugin struct {
 	name      string
 	installed int
 	installFn func(ctx *plugins.GameCtx) error
+	resource  resources.Resources
 }
 
 func (p *stubPlugin) Name() string { return p.name }
@@ -31,10 +34,11 @@ func (p *stubPlugin) Install(ctx *plugins.GameCtx) error {
 	}
 	return nil
 }
-func (p *stubPlugin) RunPlan(goke.RunCtx, time.Duration) {}
-func (p *stubPlugin) WithRenderer(render.AtlasSource)    {}
-func (p *stubPlugin) Renderer() render.Renderer          { return nil }
-func (p *stubPlugin) EventHandler() control.EventHandler { return nil }
+func (p *stubPlugin) RunPlan(goke.RunCtx, time.Duration)             {}
+func (p *stubPlugin) WithRenderer(camera.Camera, render.AtlasSource) {}
+func (p *stubPlugin) Renderer() render.Renderer                      { return nil }
+func (p *stubPlugin) EventHandler() control.EventHandler             { return nil }
+func (p *stubPlugin) Resources() resources.Resources                 { return p.resource }
 
 func TestGame_UsePlugin_InstallsOnce(t *testing.T) {
 	game := NewGame(&GameProps{})
@@ -213,5 +217,17 @@ func TestGameCtx_InsertResource_VisibleToLaterPlugins(t *testing.T) {
 	}
 	if gotN != 9 {
 		t.Errorf("second plugin read N = %d, want 9", gotN)
+	}
+}
+
+func TestGame_UsePlugin_AutoRegistersResource(t *testing.T) {
+	game := NewGame(&GameProps{})
+	p := &stubPlugin{name: "test.resource", resource: &testResourceA{N: 7}}
+	if err := game.UsePlugin(p); err != nil {
+		t.Fatalf("UsePlugin: %v", err)
+	}
+	got, ok := game.Resources().TryGet[*testResourceA]()
+	if !ok || got.N != 7 {
+		t.Errorf("expected stubPlugin's Resources() to be auto-registered, got %+v, ok=%v", got, ok)
 	}
 }

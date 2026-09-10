@@ -4,16 +4,28 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gokebiten/resources"
 	"github.com/kjkrol/gokg"
 )
 
+// Resources is world's single published Resources.
+type Resources struct {
+	Config    Config
+	Telemetry *Telemetry
+}
+
+func (*Resources) Resources() {}
+
+var _ resources.Resources = (*Resources)(nil)
+
 // Plugin builds a world - the mandatory foundation for any game with
-// moving, drawable entities - and publishes Config as a resource.
+// moving, drawable entities - and publishes Resources as a resource.
 type Plugin struct {
-	config   Config
+	res      Resources
 	module   *module
 	renderer *Renderer
 }
@@ -23,7 +35,8 @@ var _ plugins.Plugin = (*Plugin)(nil)
 // NewPlugin builds Plugin around a fresh world — Populate/Space are usable
 // immediately, before Install (e.g. in tests).
 func NewPlugin(cfg Config) *Plugin {
-	return &Plugin{config: cfg, module: newModule(cfg)}
+	m := newModule(cfg)
+	return &Plugin{res: Resources{Config: cfg, Telemetry: &m.telemetry}, module: m}
 }
 
 // =================================================================
@@ -33,14 +46,7 @@ func NewPlugin(cfg Config) *Plugin {
 func (p *Plugin) Name() string { return "gokebiten.world" }
 
 func (p *Plugin) Install(ctx *plugins.GameCtx) error {
-	if p.renderer != nil {
-		if _, err := ctx.Require[render.Camera](); err != nil {
-			return err
-		}
-	}
 	ctx.UseModule(p.module)
-	ctx.Provide(p.config)
-	ctx.Provide(&p.module.telemetry)
 	return nil
 }
 
@@ -49,9 +55,9 @@ func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	p.module.RunPlan(ctx, d)
 }
 
-// WithRenderer builds this plugin's own entity renderer, drawing sprites from atlas.
-func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
-	p.renderer = newRenderer(atlas)
+// WithRenderer builds this plugin's own entity renderer, drawing cam-relative sprites from atlas.
+func (p *Plugin) WithRenderer(cam camera.Camera, atlas render.AtlasSource) {
+	p.renderer = newRenderer(cam, atlas)
 }
 
 // Renderer returns this plugin's own render.Renderer, or nil unless WithRenderer was called.
@@ -64,6 +70,9 @@ func (p *Plugin) Renderer() render.Renderer {
 
 // EventHandler is a no-op — world has no control.EventHandler of its own.
 func (p *Plugin) EventHandler() control.EventHandler { return nil }
+
+// Resources returns world's single published Resources.
+func (p *Plugin) Resources() resources.Resources { return &p.res }
 
 // =================================================================
 // world-specific

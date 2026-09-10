@@ -7,6 +7,7 @@ import (
 	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gokebiten/resources"
 	"github.com/kjkrol/uid"
 )
 
@@ -33,7 +34,7 @@ func TestValueExtras_WithEffect_EntersOccupancyOnSpawn(t *testing.T) {
 
 	ecs := goke.New()
 	var pending []func() []goke.System
-	ctx := plugins.NewGameCtx(plugins.NewResources(), ecs,
+	ctx := plugins.NewGameCtx(resources.NewStorage(), ecs,
 		func(any) {}, func(p func() []goke.System) { pending = append(pending, p) },
 		func(string) bool { return true })
 	if err := plugin.Install(ctx); err != nil {

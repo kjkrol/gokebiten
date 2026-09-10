@@ -13,8 +13,6 @@ type Board struct {
 	*TerrainMap
 }
 
-func (*Board) PluginResource() {}
-
 // Cell is an entity's current position on the board.
 type Cell struct{ ID CellID }
 

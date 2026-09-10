@@ -37,7 +37,7 @@ func TestPlugin_SaveLoad_TerrainRoundTrip(t *testing.T) {
 	if err := game.UsePlugin(boardPlugin); err != nil {
 		t.Fatalf("UsePlugin(board): %v", err)
 	}
-	game.Resources().Get[*board.Board]().Set(cell, wall)
+	game.Resources().Get[*board.Resources]().Logic.Board.Set(cell, wall)
 
 	if err := game.Persistence.Save(basePath, ""); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -57,7 +57,7 @@ func TestPlugin_SaveLoad_TerrainRoundTrip(t *testing.T) {
 		t.Fatalf("Load: %v", err)
 	}
 
-	if got := game2.Resources().Get[*board.Board]().Kind(cell); got != wall {
+	if got := game2.Resources().Get[*board.Resources]().Logic.Board.Kind(cell); got != wall {
 		t.Errorf("Board().Kind(cell) after Load = %+v, want %+v", got, wall)
 	}
 }

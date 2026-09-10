@@ -11,6 +11,7 @@ import (
 	"github.com/kjkrol/gokebiten/internal/timing"
 	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gokebiten/resources"
 )
 
 const (
@@ -23,12 +24,12 @@ type GameProps struct {
 	ScreenWidth, ScreenHeight int
 }
 
-func (*GameProps) PluginResource() {}
+func (*GameProps) Resources() {}
 
 // TPS is the built-in measured-ticks-per-second counter, inserted by NewGame.
 type TPS struct{ Ticks int }
 
-func (*TPS) PluginResource() {}
+func (*TPS) Resources() {}
 
 // resettable resources get Reset called each stats interval — see Game.Update.
 type resettable interface{ Reset() }
@@ -38,7 +39,7 @@ type Game struct {
 	ticks         int
 	step          time.Duration
 	timeTracker   *timing.Tracker
-	resources     *plugins.Resources
+	resources     *resources.Storage
 	props         *GameProps
 	inputs        *control.InputEvents
 	tps           *TPS
@@ -52,12 +53,12 @@ var _ ebiten.Game = (*Game)(nil)
 
 // NewGame builds a Game, pre-populating its resource registry with *GameProps, *control.InputEvents, and *TPS.
 func NewGame(props *GameProps) *Game {
-	resources := plugins.NewResources()
+	res := resources.NewStorage()
 	inputs := &control.InputEvents{}
 	tps := &TPS{}
-	resources.Insert(props)
-	resources.Insert(inputs)
-	resources.Insert(tps)
+	res.Insert(props)
+	res.Insert(inputs)
+	res.Insert(tps)
 
 	targetTPS := defaultTargetTPS
 	if props != nil && props.TargetTPS != 0 {
@@ -65,7 +66,7 @@ func NewGame(props *GameProps) *Game {
 	}
 	controller := control.NewDefaultController(&control.DesktopAdapter{}, inputs)
 	game := &Game{
-		resources:   resources,
+		resources:   res,
 		props:       props,
 		inputs:      inputs,
 		tps:         tps,
@@ -88,7 +89,7 @@ func (g *Game) Init(fn func(ctx *plugins.GameCtx) error) error {
 }
 
 // Resources returns the game's shared resource registry.
-func (g *Game) Resources() *plugins.Resources { return g.resources }
+func (g *Game) Resources() *resources.Storage { return g.resources }
 
 // EventHandler sets the handler Update calls once per tick with this tick's input events.
 func (g *Game) EventHandler(handler control.EventHandler) {
@@ -152,7 +153,7 @@ func (g *Game) Update() error {
 	if g.timeTracker.ProcessStatsInterval() {
 		g.tps.Ticks = g.ticks
 		g.ticks = 0
-		g.resources.ForEach(func(v any) {
+		g.resources.ForEach(func(v resources.Resources) {
 			if r, ok := v.(resettable); ok {
 				r.Reset()
 			}
@@ -183,9 +184,6 @@ func (g *Game) Layers(layerFactories ...func() render.Renderer) {
 
 func (g *Game) registerRenderer(factory func() render.Renderer) render.Renderer {
 	r := factory()
-	if camera, ok := g.resources.TryGet[render.Camera](); ok {
-		r.BindCamera(camera)
-	}
 
 	sys := goke.SystemFn{OnInit: func(si *goke.SysInit) { r.Init(si) }}
 	g.pluginManager.addPendingSetup(func() []goke.System { return []goke.System{sys} })

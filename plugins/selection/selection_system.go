@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokg"
 	"github.com/kjkrol/gokg/geom"
 	"github.com/kjkrol/gokg/plane"
@@ -13,13 +13,13 @@ import (
 
 var _ goke.System = (*SelectionSystem)(nil)
 
-// SelectionSystem turns State into Selected tags — the actual query+migrate
+// SelectionSystem turns Resources into Selected tags — the actual query+migrate
 // happens in Update, reading whatever HandleEvents implementation wrote
-// into State this tick.
+// into Resources this tick.
 type SelectionSystem struct {
 	space  *gokg.Space
-	camera render.Camera
-	state  *State
+	camera camera.Camera
+	state  *Resources
 
 	query        *goke.Query
 	present      goke.OptComp[Selected]
@@ -28,9 +28,9 @@ type SelectionSystem struct {
 	removeEditor *goke.Editor
 }
 
-// NewSelectionSystem builds a SelectionSystem driven by state, querying space and translating drag boxes through camera.
-func NewSelectionSystem(state *State, space *gokg.Space, camera render.Camera) *SelectionSystem {
-	return &SelectionSystem{state: state, space: space, camera: camera}
+// NewSelectionSystem builds a SelectionSystem driven by state, querying space and translating drag boxes through cam.
+func NewSelectionSystem(state *Resources, space *gokg.Space, cam camera.Camera) *SelectionSystem {
+	return &SelectionSystem{state: state, space: space, camera: cam}
 }
 
 func (s *SelectionSystem) Init(si *goke.SysInit) {

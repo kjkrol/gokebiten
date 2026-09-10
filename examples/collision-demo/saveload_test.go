@@ -9,6 +9,7 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/collisions"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gokebiten/resources"
 )
 
 // TestSaveLoadCycle exercises the same mechanics Game.Save/Game.Load use, below the level of Game (no Ebiten window).
@@ -37,7 +38,7 @@ func TestSaveLoadCycle(t *testing.T) {
 	cm := collisions.New(plugin.Space(), ecs, 0)
 
 	var pending []func() []goke.System
-	ctx := plugins.NewGameCtx(plugins.NewResources(), ecs,
+	ctx := plugins.NewGameCtx(resources.NewStorage(), ecs,
 		func(any) {}, func(p func() []goke.System) { pending = append(pending, p) },
 		func(string) bool { return true })
 	if err := plugin.Install(ctx); err != nil {
@@ -85,7 +86,7 @@ func TestSaveLoadCycle(t *testing.T) {
 	cm2 := collisions.New(plugin2.Space(), ecs2, 0)
 
 	var registered []any
-	ctx2 := plugins.NewGameCtx(plugins.NewResources(), ecs2,
+	ctx2 := plugins.NewGameCtx(resources.NewStorage(), ecs2,
 		func(v any) { registered = append(registered, v) }, func(func() []goke.System) {},
 		func(string) bool { return true })
 	if err := plugin2.Install(ctx2); err != nil {

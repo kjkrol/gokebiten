@@ -4,11 +4,13 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gokebiten/resources"
 )
 
 // Plugin moves entities along a MoveOrder's path across a board, re-pathing automatically
@@ -23,22 +25,23 @@ type Plugin struct {
 	board  *board.Board
 	module *module
 
-	commandState *CommandState
+	res *Resources
 
 	rendererEnabled bool
 	pathAtlas       render.AtlasSource
 	pathSprites     PathSprites
 	pathRenderer    *PathRenderer
 
-	camera render.Camera
+	camera camera.Camera
 }
 
 var _ plugins.Plugin = (*Plugin)(nil)
 
 // NewPlugin builds a navigation plugin over boardPlugin/worldPlugin, moving
-// entities at speed world-units/sec before scaling.
-func NewPlugin(speed int32, boardPlugin *board.Plugin, worldPlugin *world.Plugin) *Plugin {
-	return &Plugin{speed: speed, boardPlugin: boardPlugin, worldPlugin: worldPlugin}
+// entities at speed world-units/sec before scaling, using cam for
+// screen<->world conversion (right-click targeting and route rendering).
+func NewPlugin(speed int32, boardPlugin *board.Plugin, worldPlugin *world.Plugin, cam camera.Camera) *Plugin {
+	return &Plugin{speed: speed, boardPlugin: boardPlugin, worldPlugin: worldPlugin, camera: cam}
 }
 
 // =================================================================
@@ -51,10 +54,11 @@ func (p *Plugin) Install(ctx *plugins.GameCtx) error {
 	if err := ctx.RequirePlugin(p.boardPlugin); err != nil {
 		return err
 	}
-	brd, err := ctx.Require[*board.Board]()
+	boardRes, err := ctx.Require[*board.Resources]()
 	if err != nil {
 		return err
 	}
+	brd := boardRes.Logic.Board
 	p.board = brd
 
 	occupancy := p.boardPlugin.Occupancy()
@@ -66,19 +70,12 @@ func (p *Plugin) Install(ctx *plugins.GameCtx) error {
 	}
 	navSys.BindSpace(p.worldPlugin.Space())
 
-	camera, err := ctx.Require[render.Camera]()
-	if err != nil {
-		return err
-	}
-	p.camera = camera
-
 	if p.rendererEnabled {
-		p.pathRenderer = NewPathRenderer(brd, p.pathAtlas, p.pathSprites)
+		p.pathRenderer = NewPathRenderer(p.camera, brd, p.pathAtlas, p.pathSprites)
 		p.pathRenderer.BindSpace(p.worldPlugin.Space())
 	}
-	p.commandState = &CommandState{}
-	moveCommandSystem := newMoveCommandSystem(finder, p.commandState)
-	ctx.Provide(p.commandState)
+	p.res = &Resources{}
+	moveCommandSystem := newMoveCommandSystem(finder, p.res)
 
 	p.module = &module{navigationSystem: navSys, moveCommandSystem: moveCommandSystem}
 	ctx.UseModule(p.module)
@@ -91,7 +88,7 @@ func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
 }
 
 // WithRenderer builds this plugin's own PathRenderer, drawing the remaining route for every selected, en-route entity — call SetPathSprites first.
-func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
+func (p *Plugin) WithRenderer(cam camera.Camera, atlas render.AtlasSource) {
 	p.rendererEnabled = true
 	p.pathAtlas = atlas
 }
@@ -106,8 +103,11 @@ func (p *Plugin) Renderer() render.Renderer {
 
 // EventHandler returns the default right-click move-order control.EventHandler, or nil unless WithCommands was called.
 func (p *Plugin) EventHandler() control.EventHandler {
-	return NewDefaultCommandEventHandler(p.board, p.camera, p.commandState)
+	return NewDefaultCommandEventHandler(p.board, p.camera, p.res)
 }
+
+// Resources returns navigation's single published Resources.
+func (p *Plugin) Resources() resources.Resources { return p.res }
 
 // =================================================================
 // navigation-specific

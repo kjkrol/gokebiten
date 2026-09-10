@@ -6,9 +6,9 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/render"
 	"github.com/kjkrol/gokg"
 	"github.com/kjkrol/gokg/geom"
 	"github.com/kjkrol/gokg/plane"
@@ -28,7 +28,7 @@ type pendingSeed struct {
 type harness struct {
 	t         *testing.T
 	space     *gokg.Space
-	state     *State
+	state     *Resources
 	sys       *SelectionSystem
 	handler   *DefaultEventHandler
 	ecs       *goke.ECS
@@ -49,10 +49,10 @@ func newHarness(t *testing.T) *harness {
 	}
 
 	surface := plane.NewEuclidean2D[uint32](1000, 1000)
-	camera := render.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
+	cam := camera.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
 
-	state := &State{}
-	sys := NewSelectionSystem(state, space, camera)
+	state := &Resources{}
+	sys := NewSelectionSystem(state, space, cam)
 	handler := NewDefaultEventHandler(state)
 
 	return &harness{t: t, space: space, state: state, sys: sys, handler: handler, ecs: goke.New()}
