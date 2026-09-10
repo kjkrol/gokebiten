@@ -20,8 +20,6 @@ func NewCachedRenderer(inner Renderer, w, h int) *CachedRenderer {
 
 func (c *CachedRenderer) Init(si *goke.SysInit) { c.inner.Init(si) }
 
-func (c *CachedRenderer) BindCamera(camera Camera) { c.inner.BindCamera(camera) }
-
 // Invalidate forces the next Draw to redraw the cached image.
 func (c *CachedRenderer) Invalidate() { c.dirty = true }
 

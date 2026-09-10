@@ -6,11 +6,11 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/selection"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/render"
 	"github.com/kjkrol/gokg/geom"
 	"github.com/kjkrol/gokg/plane"
 	"github.com/kjkrol/uid"
@@ -27,13 +27,13 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 	newTarget, _ := grid.CellIndex(8, 0)
 
 	surface := plane.NewEuclidean2D[uint32](1000, 1000)
-	camera := render.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
+	cam := camera.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
 
-	cmdState := &CommandState{}
+	cmdState := &Resources{}
 	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
-	cmdHandler := NewDefaultCommandEventHandler(grid, camera, cmdState)
-	selState := &selection.State{}
-	selSys := selection.NewSelectionSystem(selState, nil, camera)
+	cmdHandler := NewDefaultCommandEventHandler(grid, cam, cmdState)
+	selState := &selection.Resources{}
+	selSys := selection.NewSelectionSystem(selState, nil, cam)
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Position]
@@ -75,7 +75,7 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 	ecs.Tick(time.Second)
 
 	center := grid.CellCenter(newTarget)
-	sx, sy := camera.ToScreen(float32(center.X), float32(center.Y))
+	sx, sy := cam.ToScreen(float32(center.X), float32(center.Y))
 	events := &control.InputEvents{}
 	events.AddClickEvent(int(sx), int(sy), ebiten.MouseButtonRight, control.ActionPress)
 	cmdHandler.HandleEvents(events)
@@ -118,13 +118,13 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 	newTarget, _ := grid.CellIndex(8, 0)
 
 	surface := plane.NewEuclidean2D[uint32](1000, 1000)
-	camera := render.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
+	cam := camera.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
 
-	cmdState := &CommandState{}
+	cmdState := &Resources{}
 	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
-	cmdHandler := NewDefaultCommandEventHandler(grid, camera, cmdState)
-	selState := &selection.State{}
-	selSys := selection.NewSelectionSystem(selState, nil, camera)
+	cmdHandler := NewDefaultCommandEventHandler(grid, cam, cmdState)
+	selState := &selection.Resources{}
+	selSys := selection.NewSelectionSystem(selState, nil, cam)
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Position]
@@ -169,7 +169,7 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 	}
 
 	center := grid.CellCenter(newTarget)
-	sx, sy := camera.ToScreen(float32(center.X), float32(center.Y))
+	sx, sy := cam.ToScreen(float32(center.X), float32(center.Y))
 	events := &control.InputEvents{}
 	events.AddClickEvent(int(sx), int(sy), ebiten.MouseButtonRight, control.ActionPress)
 	cmdHandler.HandleEvents(events)
@@ -216,13 +216,13 @@ func TestCommandSystem_Update_UnreachableTargetLeavesInFlightEntityUntouched(t *
 	terrain.Set(wall, board.CellKind{Cost: 1, Passable: false})
 
 	surface := plane.NewEuclidean2D[uint32](1000, 1000)
-	camera := render.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
+	cam := camera.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
 
-	cmdState := &CommandState{}
+	cmdState := &Resources{}
 	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
-	cmdHandler := NewDefaultCommandEventHandler(grid, camera, cmdState)
-	selState := &selection.State{}
-	selSys := selection.NewSelectionSystem(selState, nil, camera)
+	cmdHandler := NewDefaultCommandEventHandler(grid, cam, cmdState)
+	selState := &selection.Resources{}
+	selSys := selection.NewSelectionSystem(selState, nil, cam)
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Position]
@@ -261,7 +261,7 @@ func TestCommandSystem_Update_UnreachableTargetLeavesInFlightEntityUntouched(t *
 	ecs.Tick(time.Second)
 
 	center := grid.CellCenter(wall)
-	sx, sy := camera.ToScreen(float32(center.X), float32(center.Y))
+	sx, sy := cam.ToScreen(float32(center.X), float32(center.Y))
 	events := &control.InputEvents{}
 	events.AddClickEvent(int(sx), int(sy), ebiten.MouseButtonRight, control.ActionPress)
 	cmdHandler.HandleEvents(events)

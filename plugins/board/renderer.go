@@ -6,6 +6,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/render"
 	"github.com/kjkrol/gokg/geom"
 )
@@ -19,13 +20,11 @@ type RenderState struct {
 	ShowGridLines bool
 }
 
-func (*RenderState) PluginResource() {}
-
 // Renderer draws Board's cells — register it before the entities layer in
 // Game.Layers so terrain sits underneath.
 type Renderer struct {
 	board     *Board
-	camera    render.Camera
+	camera    camera.Camera
 	cellSize  float32
 	state     *RenderState
 	batch     *render.QuadBatch
@@ -38,12 +37,9 @@ type gridLine struct{ x0, y0, x1, y1 float32 }
 
 var _ render.Renderer = (*Renderer)(nil)
 
-func newRenderer(board *Board, atlas render.AtlasSource, state *RenderState) *Renderer {
-	return &Renderer{board: board, cellSize: board.CellSpan(), state: state, batch: render.NewQuadBatch(atlas)}
+func newRenderer(cam camera.Camera, board *Board, atlas render.AtlasSource, state *RenderState) *Renderer {
+	return &Renderer{board: board, camera: cam, cellSize: board.CellSpan(), state: state, batch: render.NewQuadBatch(atlas, cam)}
 }
-
-// BindCamera attaches camera — Draw needs it, so call this before the first Draw.
-func (l *Renderer) BindCamera(camera render.Camera) { l.camera = camera; l.batch.BindCamera(camera) }
 
 func (l *Renderer) Init(*goke.SysInit) {}
 

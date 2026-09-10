@@ -38,16 +38,16 @@ func TestPluginManager_ProvidedComps_SkipsValuesWithoutCompProvider(t *testing.T
 	}
 }
 
-type stubSaveable struct{ targets []any }
+type stubSerializable struct{ targets []any }
 
-func (s *stubSaveable) SaveTargets() []any { return s.targets }
+func (s *stubSerializable) Persisted() []any { return s.targets }
 
 type saveTargetPayload struct{ N int }
 
-func TestPluginManager_SaveTargets_CollectsTrackedSaveable(t *testing.T) {
+func TestPluginManager_SaveTargets_CollectsTrackedSerializable(t *testing.T) {
 	game := NewGame(&GameProps{})
 	a, b := &saveTargetPayload{N: 1}, &saveTargetPayload{N: 2}
-	game.pluginManager.track(&stubSaveable{targets: []any{a, b}})
+	game.pluginManager.track(&stubSerializable{targets: []any{a, b}})
 	game.pluginManager.track(&stubPostLoader{})
 
 	got := game.pluginManager.saveTargets()

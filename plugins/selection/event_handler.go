@@ -5,15 +5,15 @@ import (
 	"github.com/kjkrol/gokebiten/control"
 )
 
-// DefaultEventHandler turns left-click/left-drag input into State — the
+// DefaultEventHandler turns left-click/left-drag input into Resources — the
 // default control.EventHandler for Plugin. Write your own against the same
-// State for a different binding scheme.
-type DefaultEventHandler struct{ state *State }
+// Resources for a different binding scheme.
+type DefaultEventHandler struct{ state *Resources }
 
 var _ control.EventHandler = (*DefaultEventHandler)(nil)
 
 // NewDefaultEventHandler builds a DefaultEventHandler writing into state.
-func NewDefaultEventHandler(state *State) *DefaultEventHandler {
+func NewDefaultEventHandler(state *Resources) *DefaultEventHandler {
 	return &DefaultEventHandler{state: state}
 }
 

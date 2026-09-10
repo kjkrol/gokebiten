@@ -3,6 +3,7 @@ package navigation
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/selection"
 	"github.com/kjkrol/gokebiten/plugins/world"
@@ -41,13 +42,11 @@ type PathRenderer struct {
 
 var _ render.Renderer = (*PathRenderer)(nil)
 
-func NewPathRenderer(grid board.Grid, atlas render.AtlasSource, sprites PathSprites) *PathRenderer {
-	return &PathRenderer{grid: grid, sprites: sprites, batch: render.NewQuadBatch(atlas)}
+func NewPathRenderer(cam camera.Camera, grid board.Grid, atlas render.AtlasSource, sprites PathSprites) *PathRenderer {
+	return &PathRenderer{grid: grid, sprites: sprites, batch: render.NewQuadBatch(atlas, cam)}
 }
 
 func (r *PathRenderer) BindSpace(space *gokg.Space) { r.space = space }
-
-func (r *PathRenderer) BindCamera(camera render.Camera) { r.batch.BindCamera(camera) }
 
 func (r *PathRenderer) Init(si *goke.SysInit) {
 	r.query = si.NewQueryBuilder(&r.pos, &r.vel, &r.cell, &r.order).

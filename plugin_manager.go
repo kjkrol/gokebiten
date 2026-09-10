@@ -7,6 +7,7 @@ import (
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugins"
+	"github.com/kjkrol/gokebiten/resources"
 )
 
 // pluginManager installs plugins (retrying until their dependencies are available) and tracks what they register.
@@ -55,12 +56,12 @@ func (m *pluginManager) postLoadSystems() []goke.System {
 	return systems
 }
 
-// saveTargets collects SaveTargets from every tracked value implementing Saveable.
+// saveTargets collects Persisted from every tracked value implementing resources.Serializable.
 func (m *pluginManager) saveTargets() []any {
 	var out []any
 	for _, v := range m.registered {
-		if s, ok := v.(Saveable); ok {
-			out = append(out, s.SaveTargets()...)
+		if s, ok := v.(resources.Serializable); ok {
+			out = append(out, s.Persisted()...)
 		}
 	}
 	return out
@@ -83,6 +84,9 @@ func (m *pluginManager) resolvePending() error {
 					m.installed = make(map[string]bool)
 				}
 				m.installed[p.Name()] = true
+				if res := p.Resources(); res != nil {
+					m.game.resources.InsertDynamic(res)
+				}
 				m.track(p)
 			case errors.As(err, &nr):
 				if ctx.Wrote() {

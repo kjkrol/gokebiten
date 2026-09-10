@@ -1,4 +1,4 @@
-package render
+package camera
 
 import (
 	"bytes"
@@ -196,4 +196,52 @@ func TestBasicCamera_GobRoundTrip_SilentlyDropsUnexportedState(t *testing.T) {
 		}()
 		decoded.Translate(1, 1)
 	}()
+}
+
+func TestNewFromSpace_DefaultViewportMatchesSize(t *testing.T) {
+	c := NewFromSpace(800, 600, false)
+
+	bounds := c.Bounds()
+	if bounds.TopLeft.X != 0 || bounds.TopLeft.Y != 0 {
+		t.Errorf("Bounds().TopLeft = %+v, want (0,0)", bounds.TopLeft)
+	}
+	if w := bounds.BottomRight.X - bounds.TopLeft.X; w != 800 {
+		t.Errorf("Bounds() width = %d, want 800", w)
+	}
+	if h := bounds.BottomRight.Y - bounds.TopLeft.Y; h != 600 {
+		t.Errorf("Bounds() height = %d, want 600", h)
+	}
+}
+
+func TestNewFromSpace_WithViewportOverride(t *testing.T) {
+	override := geom.NewAABBAt(geom.NewVec[uint32](100, 100), 50, 30)
+	c := NewFromSpace(800, 600, false, override)
+
+	if got := c.Bounds(); got != override {
+		t.Errorf("Bounds() = %+v, want overridden viewport %+v (not the size-derived default)", got, override)
+	}
+}
+
+func TestNewFromSpace_ToroidalWrapsOnTranslate(t *testing.T) {
+	c := NewFromSpace(20, 20, true)
+
+	c.MoveTo(2, 2)
+	c.Translate(-10, 0)
+
+	got := c.Bounds()
+	if got.TopLeft.X != 12 {
+		t.Errorf("after wrap-around Translate, Bounds().TopLeft.X = %d, want 12 (wrapped, not clamped)", got.TopLeft.X)
+	}
+}
+
+func TestNewFromSpace_EuclideanClampsOnTranslate(t *testing.T) {
+	c := NewFromSpace(20, 20, false)
+
+	c.MoveTo(2, 2)
+	c.Translate(-10, 0)
+
+	got := c.Bounds()
+	if got.TopLeft.X != 0 {
+		t.Errorf("Bounds().TopLeft.X = %d, want 0 (clamped euclidean, not wrapped)", got.TopLeft.X)
+	}
 }

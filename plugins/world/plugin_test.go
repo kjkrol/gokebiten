@@ -7,7 +7,7 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/world"
 )
 
-func TestPlugin_Install_PublishesConfigResource(t *testing.T) {
+func TestPlugin_Install_PublishesResources(t *testing.T) {
 	game := gokebiten.NewGame(&gokebiten.GameProps{})
 	cfg := world.Config{
 		Space:    world.SpaceCfg{Width: 100, Height: 100, Toroidal: true},
@@ -19,32 +19,15 @@ func TestPlugin_Install_PublishesConfigResource(t *testing.T) {
 		t.Fatalf("UsePlugin: %v", err)
 	}
 
-	got, ok := game.Resources().TryGet[world.Config]()
+	res, ok := game.Resources().TryGet[*world.Resources]()
 	if !ok {
-		t.Fatal("expected world.Config to be registered as a resource")
+		t.Fatal("expected *world.Resources to be registered as a resource")
 	}
-	if got != cfg {
-		t.Errorf("registered world.Config = %+v, want %+v", got, cfg)
+	if res.Config != cfg {
+		t.Errorf("registered Resources.Config = %+v, want %+v", res.Config, cfg)
 	}
-}
-
-func TestPlugin_Install_PublishesTelemetryResource(t *testing.T) {
-	game := gokebiten.NewGame(&gokebiten.GameProps{})
-	plugin := world.NewPlugin(world.Config{
-		Space:    world.SpaceCfg{Width: 100, Height: 100},
-		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
-	})
-
-	if err := game.UsePlugin(plugin); err != nil {
-		t.Fatalf("UsePlugin: %v", err)
-	}
-
-	telemetry, ok := game.Resources().TryGet[*world.Telemetry]()
-	if !ok {
-		t.Fatal("expected *world.Telemetry to be registered as a resource")
-	}
-	if telemetry.Count != 0 {
-		t.Errorf("Telemetry.Count = %d, want 0 (nothing populated)", telemetry.Count)
+	if res.Telemetry.Count != 0 {
+		t.Errorf("Resources.Telemetry.Count = %d, want 0 (nothing populated)", res.Telemetry.Count)
 	}
 }
 

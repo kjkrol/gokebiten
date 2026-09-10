@@ -12,7 +12,7 @@ import (
 // entity a fresh MoveOrder/Path, unless the target is unreachable.
 type moveCommandSystem struct {
 	pathFinder *pathFinder
-	state      *CommandState
+	state      *Resources
 
 	query   *goke.Query
 	cell    goke.Comp[board.Cell]
@@ -22,7 +22,7 @@ type moveCommandSystem struct {
 var _ goke.System = (*moveCommandSystem)(nil)
 
 // newMoveCommandSystem builds a moveCommandSystem issuing move orders via pathFinder, driven by state.
-func newMoveCommandSystem(pathFinder *pathFinder, state *CommandState) *moveCommandSystem {
+func newMoveCommandSystem(pathFinder *pathFinder, state *Resources) *moveCommandSystem {
 	return &moveCommandSystem{state: state, pathFinder: pathFinder}
 }
 

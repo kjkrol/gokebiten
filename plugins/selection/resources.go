@@ -11,11 +11,9 @@ type PendingSelect struct {
 	Additive   bool
 }
 
-// State is selection's live input state — HandleEvents implementations
-// write to it, System reads/clears it. Published to Resources by Plugin,
-// so a custom EventHandler can drive selection without touching System's
-// internals.
-type State struct {
+// Resources is selection's single published Resources — live input state
+// HandleEvents writes to and System reads/clears.
+type Resources struct {
 	Dragging    bool
 	DragStart   geom.Vec[int32]
 	DragCurrent geom.Vec[int32]
@@ -23,9 +21,9 @@ type State struct {
 	PendingIDs  []uid.UID64
 }
 
-func (*State) PluginResource() {}
+func (*Resources) Resources() {}
 
 // DragBox reports the screen-space rectangle of the drag gesture in progress, if any.
-func (s *State) DragBox() (start, current geom.Vec[int32], dragging bool) {
+func (s *Resources) DragBox() (start, current geom.Vec[int32], dragging bool) {
 	return s.DragStart, s.DragCurrent, s.Dragging
 }

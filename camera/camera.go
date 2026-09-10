@@ -1,17 +1,15 @@
-package render
+package camera
 
 import (
-	"github.com/kjkrol/gokebiten/plugins/resource"
 	"github.com/kjkrol/gokg/geom"
 	"github.com/kjkrol/gokg/plane"
 )
 
-// AABB is an alias for geom.AABB[uint32], the world-coordinate rectangle type used throughout render.
+// AABB is an alias for geom.AABB[uint32], the world-coordinate rectangle type used throughout camera/render.
 type AABB = geom.AABB[uint32]
 
-// Camera is what renderers need: screen conversion, culling, viewport bounds. Control (move/zoom) is not part of it.
+// Camera is what renderers (and plain click/drag logic) need: screen conversion, culling, viewport bounds. Control (move/zoom) is not part of it.
 type Camera interface {
-	resource.PluginResource
 	ToScreen(x, y float32) (float32, float32)
 	// FromScreen inverts ToScreen: screen coordinates back to world coordinates.
 	FromScreen(sx, sy float32) (float32, float32)
@@ -42,6 +40,30 @@ func NewBasicCamera(surface plane.Space2D[uint32], viewport AABB) *BasicCamera {
 	return c
 }
 
+// NewFromSpace builds a Camera sized width x height (toroidal or not) — the
+// viewport defaults to the full surface at (0,0) unless one is given.
+//
+// TODO: this mirrors world.Config.Space almost exactly — consider whether
+// world.Plugin should build/own the Camera itself, and whether world should
+// become a built-in part of the engine (always present, no explicit
+// UsePlugin) rather than an opt-in plugin.
+func NewFromSpace(width, height uint32, toroidal bool, viewport ...AABB) *BasicCamera {
+	var surface plane.Space2D[uint32]
+	if toroidal {
+		surface = plane.NewToroidal2D(width, height)
+	} else {
+		surface = plane.NewEuclidean2D(width, height)
+	}
+	vp := AABB{}
+	if len(viewport) > 0 {
+		vp = viewport[0]
+	}
+	if vp.Equals(AABB{}) {
+		vp = geom.NewAABBAt(geom.NewVec[uint32](0, 0), width, height)
+	}
+	return NewBasicCamera(surface, vp)
+}
+
 // recompute refreshes the effective/scale cache from Viewport+zoom.
 func (c *BasicCamera) recompute() {
 	if c.zoom == 1 {
@@ -60,8 +82,6 @@ func (c *BasicCamera) recompute() {
 	c.effective = eff
 	c.scale = c.zoom
 }
-
-func (c *BasicCamera) PluginResource() {}
 
 func (c *BasicCamera) ToScreen(x, y float32) (float32, float32) {
 	return (x - float32(c.effective.TopLeft.X)) * c.scale, (y - float32(c.effective.TopLeft.Y)) * c.scale

@@ -11,9 +11,9 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins"
-	"github.com/kjkrol/gokebiten/plugins/camera"
 	"github.com/kjkrol/gokebiten/plugins/collisions"
 	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/elastic"
 	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/stats"
@@ -36,7 +36,7 @@ var EntityCount = int(math.Floor(FillPercent / 100.0 * float64(ScreenWidth*Scree
 // State  persisting arbitrary game-owned state across a save/load cycle.
 type State struct{ Saves int }
 
-func (*State) PluginResource() {}
+func (*State) Resources() {}
 
 func main() {
 	game := gokebiten.NewGame(&gokebiten.GameProps{
@@ -66,25 +66,22 @@ func main() {
 	hitSprite := atlas.Register(render.Solid(palette[7]))
 	atlas.Close()
 
-	worldPlugin := world.NewPlugin(world.Config{
+	worldCfg := world.Config{
 		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
 		Entities: world.EntitiesCfg{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize},
-	})
-	worldPlugin.WithRenderer(atlas)
+	}
+	worldPlugin := world.NewPlugin(worldCfg)
+	cam := camera.NewFromSpace(worldCfg.Space.Width, worldCfg.Space.Height, worldCfg.Space.Toroidal)
+	worldPlugin.WithRenderer(cam, atlas)
 
 	var collisionStats stats.Stats
 	collisionsPlugin := collisions.NewPlugin(100*time.Millisecond, worldPlugin).
 		SetCollisionHandlers(elastic.NewHandler(), stats.NewHandler(&collisionStats))
 
-	cameraPlugin := camera.NewPlugin()
-
 	if err := game.UsePlugin(worldPlugin); err != nil {
 		log.Fatal(err)
 	}
 	if err := game.UsePlugin(collisionsPlugin); err != nil {
-		log.Fatal(err)
-	}
-	if err := game.UsePlugin(cameraPlugin); err != nil {
 		log.Fatal(err)
 	}
 
@@ -139,7 +136,7 @@ func main() {
 				WithOverlay[collisions.Hit](world.Appearance{SpriteID: hitSprite})
 		},
 		func() render.Renderer {
-			kin := game.Resources().Get[*world.Telemetry]()
+			kin := game.Resources().Get[*world.Resources]().Telemetry
 			entityCount := func() int { return kin.Count }
 			return render.NewTelemetryRenderer(&game.Resources().Get[*gokebiten.TPS]().Ticks, entityCount, &collisionStats.Counter)
 		},

@@ -2,6 +2,7 @@ package world
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/render"
 	"github.com/kjkrol/gokg/geom"
 	"github.com/kjkrol/gokg/plane"
@@ -18,16 +19,11 @@ const (
 // crossed the world edge, not a full duplicate.
 type spriteBatch struct {
 	batch  *render.QuadBatch
-	camera render.Camera
+	camera camera.Camera
 }
 
-func newSpriteBatch(atlas render.AtlasSource) spriteBatch {
-	return spriteBatch{batch: render.NewQuadBatch(atlas)}
-}
-
-func (b *spriteBatch) bindCamera(camera render.Camera) {
-	b.camera = camera
-	b.batch.BindCamera(camera)
+func newSpriteBatch(cam camera.Camera, atlas render.AtlasSource) spriteBatch {
+	return spriteBatch{batch: render.NewQuadBatch(atlas, cam), camera: cam}
 }
 
 func (b *spriteBatch) reset() { b.batch.Reset() }

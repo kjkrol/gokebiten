@@ -1,22 +1,23 @@
 package render
 
-import "github.com/hajimehoshi/ebiten/v2"
+import (
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/kjkrol/gokebiten/camera"
+)
 
 // QuadBatch batches textured quads from an AtlasSource into a single
-// DrawTriangles call, transformed through a Camera.
+// DrawTriangles call, transformed through a camera.Camera.
 type QuadBatch struct {
 	atlas    AtlasSource
-	camera   Camera
+	camera   camera.Camera
 	vertices []ebiten.Vertex
 	indices  []uint16
 	triOpts  *ebiten.DrawTrianglesOptions
 }
 
-func NewQuadBatch(atlas AtlasSource) *QuadBatch {
-	return &QuadBatch{atlas: atlas, triOpts: &ebiten.DrawTrianglesOptions{}}
+func NewQuadBatch(atlas AtlasSource, cam camera.Camera) *QuadBatch {
+	return &QuadBatch{atlas: atlas, camera: cam, triOpts: &ebiten.DrawTrianglesOptions{}}
 }
-
-func (b *QuadBatch) BindCamera(camera Camera) { b.camera = camera }
 
 func (b *QuadBatch) Reset() { b.vertices = b.vertices[:0]; b.indices = b.indices[:0] }
 

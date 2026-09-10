@@ -3,6 +3,7 @@ package world
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/render"
 )
 
@@ -19,12 +20,9 @@ type Renderer struct {
 	batch       spriteBatch
 }
 
-func newRenderer(atlas render.AtlasSource) *Renderer {
-	return &Renderer{batch: newSpriteBatch(atlas)}
+func newRenderer(cam camera.Camera, atlas render.AtlasSource) *Renderer {
+	return &Renderer{batch: newSpriteBatch(cam, atlas)}
 }
-
-// BindCamera attaches camera — Draw needs it, so call this before the first Draw.
-func (s *Renderer) BindCamera(camera render.Camera) { s.batch.bindCamera(camera) }
 
 func (s *Renderer) Init(si *goke.SysInit) {
 	qb := si.NewQueryBuilder(&s.pos, &s.appearance)

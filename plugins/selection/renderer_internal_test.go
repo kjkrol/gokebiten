@@ -21,7 +21,7 @@ func TestRenderer_Init_QueryMatchesOnlySelectedEntity(t *testing.T) {
 		t.Fatal("sanity check failed: expected the other entity to remain unselected")
 	}
 
-	r := NewRenderer(h.state)
+	r := NewRenderer(h.sys.camera, h.state)
 	// RegSys calls Init immediately, so this builds r's query right away.
 	h.ecs.RegSys(goke.SystemFn{OnInit: func(si *goke.SysInit) { r.Init(si) }})
 

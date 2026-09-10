@@ -6,10 +6,12 @@ import (
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gokebiten/resources"
 )
 
 func newTestWorldPlugin() *world.Plugin {
@@ -30,10 +32,11 @@ func (a *ecsAccessor) Install(ctx *plugins.GameCtx) error {
 	a.ecs = ctx.ECS()
 	return nil
 }
-func (a *ecsAccessor) RunPlan(goke.RunCtx, time.Duration) {}
-func (a *ecsAccessor) WithRenderer(render.AtlasSource)    {}
-func (a *ecsAccessor) Renderer() render.Renderer          { return nil }
-func (a *ecsAccessor) EventHandler() control.EventHandler { return nil }
+func (a *ecsAccessor) RunPlan(goke.RunCtx, time.Duration)             {}
+func (a *ecsAccessor) WithRenderer(camera.Camera, render.AtlasSource) {}
+func (a *ecsAccessor) Renderer() render.Renderer                      { return nil }
+func (a *ecsAccessor) EventHandler() control.EventHandler             { return nil }
+func (a *ecsAccessor) Resources() resources.Resources                 { return nil }
 
 // TestGame_SaveLoad_RoundTrip guards that Game.Persistence.Save/Load correctly delegate to the game's own ECS and resources.
 func TestGame_SaveLoad_RoundTrip(t *testing.T) {
