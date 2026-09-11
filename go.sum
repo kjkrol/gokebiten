@@ -6,12 +6,14 @@ github.com/ebitengine/hideconsole v1.0.0 h1:5J4U0kXF+pv/DhiXt5/lTz0eO5ogJ1iXb8Yj
 github.com/ebitengine/hideconsole v1.0.0/go.mod h1:hTTBTvVYWKBuxPr7peweneWdkUwEuHuB3C1R/ielR1A=
 github.com/ebitengine/purego v0.11.0 h1:jhp/D+Nyv7UUW8HAcmcjt2N2rYrYi9m3SL21k0Ua/NI=
 github.com/ebitengine/purego v0.11.0/go.mod h1:DCHPP08djqhNSoTfImcnHYQRZmd0qhakvrozqaEYhGQ=
-github.com/hajimehoshi/ebiten/v2 v2.10.0 h1:1d0GzCQQ09/SlFD4aV7e6UmE1ZP7nFzoQFuqhmYy7GY=
-github.com/hajimehoshi/ebiten/v2 v2.10.0/go.mod h1:47QNgyS/y2ZRkjVUvlGLx8a+F7MSjcn8/GsjcCZ9Rc8=
+github.com/hajimehoshi/ebiten/v2 v2.10.1 h1:OniNNrTOaDqEU584eIkkWEkJzmSnqKaKT9BVIS3xXCo=
+github.com/hajimehoshi/ebiten/v2 v2.10.1/go.mod h1:47QNgyS/y2ZRkjVUvlGLx8a+F7MSjcn8/GsjcCZ9Rc8=
 github.com/kjkrol/astar v1.1.1 h1:gsPGclCd6BTGbsZkpMgbqBA/VgVg/pgtKAsHZIiL0Yc=
 github.com/kjkrol/astar v1.1.1/go.mod h1:hBjF0fn4Bznw+o8H3VqJ9Gm9Pdd+7or+pgOAYPznuuc=
 github.com/kjkrol/goke/v3 v3.2.2 h1:yvunkEVAI9/WYS9jFzGheC+j0D+UIRjGxznF1xUI6hM=
 github.com/kjkrol/goke/v3 v3.2.2/go.mod h1:58uVZD5rzMFkDp7kOxpwobjcwDV04SYZ58eQzxLeusU=
+github.com/kjkrol/gokg v1.3.2 h1:Ha6Ki6uqaf0TimcERPtkVVM8fN0/gItYzMguLhKv7Ec=
+github.com/kjkrol/gokg v1.3.2/go.mod h1:yVnw+aqE6kXBvU0X7AbRI+wq5qbrvK+0FFzKkI5sSV0=
 github.com/kjkrol/uid v0.3.0 h1:awbHtzOA6tUF/aICp6M/TOMPh6yldNZrzhQd0cvFOjs=
 github.com/kjkrol/uid v0.3.0/go.mod h1:NdpQ5cqvoXGfMDtmgGY4WGmvOK/JrwI74lKWF5SHeWA=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=

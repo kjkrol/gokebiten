@@ -70,7 +70,6 @@ func (dm *Demo) Init(ctx game.Initializer) error {
 
 	dm.world = ctx.World()
 	dm.world.WithRenderer(atlas)
-	dm.world.WithCameraControls()
 
 	dm.collisions = collisions.NewPlugin(100*time.Millisecond, dm.world).
 		SetCollisionHandlers(elastic.NewHandler(), stats.NewHandler(&dm.collisionStats))
@@ -134,7 +133,6 @@ func (dm *Demo) Draw(runtime game.Runtime) []func() render.Renderer {
 }
 
 func (dm *Demo) HandleEvents(events *control.InputEvents, runtime game.Runtime) {
-	dm.world.EventHandler().HandleEvents(events)
 	for _, k := range events.KeyEvents {
 		if k.Action != control.ActionPress {
 			continue

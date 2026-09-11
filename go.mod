@@ -3,10 +3,10 @@ module github.com/kjkrol/gokebiten
 go 1.27.0
 
 require (
-	github.com/hajimehoshi/ebiten/v2 v2.10.0
+	github.com/hajimehoshi/ebiten/v2 v2.10.1
 	github.com/kjkrol/astar v1.1.1
 	github.com/kjkrol/goke/v3 v3.2.2
-	github.com/kjkrol/gokg v1.3.1
+	github.com/kjkrol/gokg v1.3.2
 	github.com/kjkrol/uid v0.3.0
 )
 
@@ -17,6 +17,3 @@ require (
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
-
-// TODO: remove once a gokg release ships Space2D.Reposition.
-replace github.com/kjkrol/gokg => ../gokg
