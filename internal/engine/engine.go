@@ -7,9 +7,11 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/game"
 	"github.com/kjkrol/gokebiten/plugin"
+	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
 )
 
@@ -17,16 +19,18 @@ const (
 	defaultTargetTPS = 60
 )
 
-// Props configures Engine's window and target tick rate.
+// Props configures Engine's window, target tick rate, and the built-in world.
 type Props struct {
 	Title                     string
 	TargetTPS                 int
 	ScreenWidth, ScreenHeight int
+	World                     world.Config
 }
 
 // Engine drives a user-implemented game.Game through the Ebitengine loop.
 type Engine struct {
-	game game.Game
+	game  game.Game
+	world *world.Plugin
 
 	ticks       int
 	step        time.Duration
@@ -42,6 +46,8 @@ type Engine struct {
 	tracked      []any
 	pendingSetup []func() []goke.System
 	names        map[string]bool
+
+	quit bool
 }
 
 var _ ebiten.Game = (*Engine)(nil)
@@ -90,16 +96,44 @@ func (e *Engine) TogglePause() {
 	}
 }
 
+// Camera returns the built-in world's shared Camera.
+func (e *Engine) Camera() camera.Camera { return e.world.Camera() }
+
+// Quit ends the Ebitengine loop after this tick.
+func (e *Engine) Quit() { e.quit = true }
+
 // Init calls Game.Init and flushes queued ECS setup — split out from Run so
 // tests can exercise it without starting the (blocking) Ebitengine loop.
 func (e *Engine) Init() error {
 	ctx := &initializer{engine: e}
+	cfg := e.props.World
+	if cfg.Camera.ViewportWidth == 0 && cfg.Camera.ViewportHeight == 0 {
+		cfg.Camera.ViewportWidth = uint32(e.props.ScreenWidth)
+		cfg.Camera.ViewportHeight = uint32(e.props.ScreenHeight)
+	}
+	e.world = world.NewPlugin(cfg)
+	if err := ctx.useBuiltin(e.world); err != nil {
+		return err
+	}
 	if err := e.game.Init(ctx); err != nil {
 		return err
 	}
+	restored, err := e.game.Restore(e.Persistence())
+	if err != nil {
+		return err
+	}
+	if !restored {
+		batches, err := e.game.Spawn()
+		if err != nil {
+			return err
+		}
+		for _, b := range batches {
+			e.world.Populate(b.Count, b.Spawner)
+		}
+	}
 
-	e.ecs.SetPlan(e.game.RunPlan)
-	for _, factory := range e.game.Layers(e) {
+	e.ecs.SetPlan(e.game.Update)
+	for _, factory := range e.game.Draw(e) {
 		e.layers = append(e.layers, e.registerRenderer(factory))
 	}
 	e.controller.SetHandler(HandlerFn(func(events *control.InputEvents) {
@@ -128,6 +162,10 @@ func (e *Engine) Run() {
 // =================================================================
 
 func (e *Engine) Update() error {
+	if e.quit {
+		return ebiten.Termination
+	}
+
 	e.controller.Capture(e.inputs)
 	e.controller.Update(nil, 0)
 	e.inputs.ResetTransient()

@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/render"
 )
@@ -22,7 +21,7 @@ type Plugin interface {
 	RunPlan(ctx goke.RunCtx, d time.Duration)
 
 	// WithRenderer configures this plugin's own render.Renderer to draw cam-relative sprites from atlas — call before Use. A no-op for a plugin with no renderer of its own.
-	WithRenderer(cam camera.Camera, atlas render.AtlasSource)
+	WithRenderer(atlas render.AtlasSource)
 
 	// Renderer returns this plugin's own render.Renderer, or nil if it has none.
 	Renderer() render.Renderer

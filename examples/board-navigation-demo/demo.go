@@ -8,7 +8,6 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/game"
 	"github.com/kjkrol/gokebiten/plugins/board"
@@ -42,27 +41,21 @@ type Demo struct {
 	nav       *navigation.Plugin
 	selection *selection.Plugin
 
-	state *State
+	state                 *State
+	redSprite, blueSprite render.SpriteID
 }
 
 var _ game.Game = (*Demo)(nil)
 
 func (dm *Demo) Init(ctx game.Initializer) error {
 	worldAtlas := render.NewAtlas(EntitySize, 2)
-	redSprite := worldAtlas.Register(render.Solid(color.RGBA{R: 220, G: 90, B: 90, A: 255}))
-	blueSprite := worldAtlas.Register(render.Solid(color.RGBA{R: 90, G: 140, B: 220, A: 255}))
+	dm.redSprite = worldAtlas.Register(render.Solid(color.RGBA{R: 220, G: 90, B: 90, A: 255}))
+	dm.blueSprite = worldAtlas.Register(render.Solid(color.RGBA{R: 90, G: 140, B: 220, A: 255}))
 	worldAtlas.Close()
 
-	worldCfg := world.Config{
-		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: false},
-		Entities: world.EntitiesCfg{MaxCount: MaxEntCount, MinSize: EntitySize, MaxSize: EntitySize},
-	}
-	dm.world = world.NewPlugin(worldCfg)
-	cam := camera.NewFromSpace(worldCfg.Space.Width, worldCfg.Space.Height, worldCfg.Space.Toroidal)
-	dm.world.WithRenderer(cam, worldAtlas)
-	if err := ctx.Use(dm.world); err != nil {
-		return err
-	}
+	dm.world = ctx.World()
+	dm.world.WithCameraControls()
+	dm.world.WithRenderer(worldAtlas)
 
 	boardAtlas := render.NewAtlas(CellSize, 3)
 	grassSprite := boardAtlas.Register(render.Solid(color.RGBA{R: 60, G: 95, B: 60, A: 255}))
@@ -77,38 +70,43 @@ func (dm *Demo) Init(ctx game.Initializer) error {
 	grid := board.DefaultGrids{}.Square(GridWidth, GridHeight, CellSize)
 	occupancy := &board.SingleOccupancy{}
 	dm.board = board.NewPlugin(grid, occupancy, kinds, dm.world)
-	dm.board.WithRenderer(cam, boardAtlas)
+	dm.board.WithRenderer(boardAtlas)
 	if err := ctx.Use(dm.board); err != nil {
 		return err
 	}
 
 	pathAtlas, pathSprites := navigation.RegisterDefaultPathSprites(CellSize, 2, color.RGBA{R: 255, G: 140, B: 0, A: 255})
-	dm.nav = navigation.NewPlugin(UnitSpeed, dm.board, dm.world, cam)
+	dm.nav = navigation.NewPlugin(UnitSpeed, dm.board, dm.world)
 	dm.nav.SetPathSprites(pathSprites) // TODO: try do this better
-	dm.nav.WithRenderer(cam, pathAtlas)
+	dm.nav.WithRenderer(pathAtlas)
 	if err := ctx.Use(dm.nav); err != nil {
 		return err
 	}
 
-	dm.selection = selection.NewPlugin(dm.world, cam)
-	dm.selection.WithRenderer(cam, nil)
-	if err := ctx.Use(dm.selection); err != nil {
-		return err
-	}
-
-	saves, err := ctx.Runtime().Persistence().List(saveBasePath)
-	if err != nil {
-		return err
-	}
+	dm.selection = selection.NewPlugin(dm.world)
+	dm.selection.WithRenderer(nil)
 	dm.state = &State{}
-	if slices.Contains(saves, "") {
-		if err := ctx.Runtime().Persistence().Load(saveBasePath, "", dm.state); err != nil {
-			return err
-		}
-		log.Printf("loaded saved board (save #%d)", dm.state.Saves)
-		return nil
-	}
+	return ctx.Use(dm.selection)
+}
 
+func (dm *Demo) Restore(p game.Persistence) (bool, error) {
+	saves, err := p.List(saveBasePath)
+	if err != nil {
+		return false, err
+	}
+	if !slices.Contains(saves, "") {
+		return false, nil
+	}
+	if err := p.Load(saveBasePath, "", dm.state); err != nil {
+		return false, err
+	}
+	log.Printf("loaded saved board (save #%d)", dm.state.Saves)
+	return true, nil
+}
+
+func (dm *Demo) Spawn() ([]world.Batch, error) {
+	kinds := dm.board.Res.Logic.Kinds
+	occupancy := dm.board.Occupancy()
 	brd := dm.board.Res.Logic.Board
 	brd.SetAll(kinds["grass"])
 	buildWall(brd, kinds)
@@ -118,8 +116,8 @@ func (dm *Demo) Init(ctx game.Initializer) error {
 		targetX        uint32
 		sprite         render.SpriteID
 	}{
-		{startX: 2, startY: 4, targetX: GridWidth - 3, sprite: redSprite},
-		{startX: 2, startY: 12, targetX: GridWidth - 3, sprite: blueSprite},
+		{startX: 2, startY: 4, targetX: GridWidth - 3, sprite: dm.redSprite},
+		{startX: 2, startY: 12, targetX: GridWidth - 3, sprite: dm.blueSprite},
 	}
 	spawner := world.NewSpawner(
 		func(index, count int) world.Position {
@@ -145,29 +143,31 @@ func (dm *Demo) Init(ctx game.Initializer) error {
 			return world.Appearance{SpriteID: unitRoster[index].sprite}
 		}).
 		With(func(index int) selection.Selected { return selection.Selected{} })
-	dm.world.Populate(len(unitRoster), spawner)
-	return nil
+	return []world.Batch{{Count: len(unitRoster), Spawner: spawner}}, nil
 }
 
-func (dm *Demo) RunPlan(ctx goke.RunCtx, d time.Duration) {
+func (dm *Demo) Update(ctx goke.RunCtx, d time.Duration) {
 	dm.world.RunPlan(ctx, d)
 	dm.nav.RunPlan(ctx, d)
 	dm.selection.RunPlan(ctx, d)
 	ctx.Sync()
 }
 
-func (dm *Demo) Layers(runtime game.Runtime) []func() render.Renderer {
+func (dm *Demo) Draw(runtime game.Runtime) []func() render.Renderer {
 	return []func() render.Renderer{dm.board.Renderer, dm.nav.Renderer, dm.world.Renderer, dm.selection.Renderer}
 }
 
 func (dm *Demo) HandleEvents(events *control.InputEvents, runtime game.Runtime) {
 	dm.selection.EventHandler().HandleEvents(events)
 	dm.nav.EventHandler().HandleEvents(events)
+	dm.world.EventHandler().HandleEvents(events)
 	for _, k := range events.KeyEvents {
 		if k.Action != control.ActionPress {
 			continue
 		}
 		switch k.Key {
+		case ebiten.KeyEscape:
+			runtime.Quit()
 		case ebiten.KeySpace:
 			runtime.TogglePause()
 		case ebiten.KeyB:

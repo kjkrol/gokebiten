@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/game"
 	"github.com/kjkrol/gokebiten/internal/engine"
@@ -14,11 +13,11 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 )
 
-func newTestWorldPlugin() *world.Plugin {
-	return world.NewPlugin(world.Config{
+func testProps() *engine.Props {
+	return &engine.Props{World: world.Config{
 		Space:    world.SpaceCfg{Width: 1000, Height: 1000},
 		Entities: world.EntitiesCfg{MaxCount: 10, MinSize: 1, MaxSize: 100},
-	})
+	}}
 }
 
 type saveTestState struct{ N int }
@@ -43,11 +42,11 @@ func (a *ecsAccessor) Install(ctx plugin.Installer) error {
 func (a *ecsAccessor) SetupSystems() []goke.System {
 	return []goke.System{goke.SystemFn{OnInit: a.setup}}
 }
-func (a *ecsAccessor) RunPlan(goke.RunCtx, time.Duration)             {}
-func (a *ecsAccessor) WithRenderer(camera.Camera, render.AtlasSource) {}
-func (a *ecsAccessor) Renderer() render.Renderer                      { return nil }
-func (a *ecsAccessor) EventHandler() control.EventHandler             { return nil }
-func (a *ecsAccessor) Serializable() plugin.Serializable              { return nil }
+func (a *ecsAccessor) RunPlan(goke.RunCtx, time.Duration) {}
+func (a *ecsAccessor) WithRenderer(render.AtlasSource)    {}
+func (a *ecsAccessor) Renderer() render.Renderer          { return nil }
+func (a *ecsAccessor) EventHandler() control.EventHandler { return nil }
+func (a *ecsAccessor) Serializable() plugin.Serializable  { return nil }
 
 // saveLoadTestGame wires newTestWorldPlugin + ecsAccessor for the round-trip test below.
 type saveLoadTestGame struct {
@@ -58,20 +57,21 @@ type saveLoadTestGame struct {
 }
 
 func (g *saveLoadTestGame) Init(ctx game.Initializer) error {
-	if err := ctx.Use(newTestWorldPlugin()); err != nil {
-		return err
-	}
 	g.acc = &ecsAccessor{setup: g.setup}
-	if err := ctx.Use(g.acc); err != nil {
-		return err
-	}
-	if g.loadFrom != "" {
-		return ctx.Runtime().Persistence().Load(g.loadFrom, "", g.loadArgs...)
-	}
-	return nil
+	return ctx.Use(g.acc)
 }
-func (g *saveLoadTestGame) RunPlan(goke.RunCtx, time.Duration)              {}
-func (g *saveLoadTestGame) Layers(game.Runtime) []func() render.Renderer    { return nil }
+func (g *saveLoadTestGame) Restore(p game.Persistence) (bool, error) {
+	if g.loadFrom == "" {
+		return false, nil
+	}
+	if err := p.Load(g.loadFrom, "", g.loadArgs...); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+func (g *saveLoadTestGame) Spawn() ([]world.Batch, error)                   { return nil, nil }
+func (g *saveLoadTestGame) Update(goke.RunCtx, time.Duration)               {}
+func (g *saveLoadTestGame) Draw(game.Runtime) []func() render.Renderer      { return nil }
 func (g *saveLoadTestGame) HandleEvents(*control.InputEvents, game.Runtime) {}
 
 // TestGame_SaveLoad_RoundTrip guards that Engine.Persistence.Save/Load correctly delegate to the engine's own ECS and resources.
@@ -85,7 +85,7 @@ func TestGame_SaveLoad_RoundTrip(t *testing.T) {
 		f.Next()
 		appearance.Slice(&f.Cursor)[0] = world.Appearance{SpriteID: 7}
 	}}
-	eng := engine.NewEngine(&engine.Props{}, g)
+	eng := engine.NewEngine(testProps(), g)
 	if err := eng.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestGame_SaveLoad_RoundTrip(t *testing.T) {
 		loadFrom: basePath,
 		loadArgs: []any{state2, extra2},
 	}
-	eng2 := engine.NewEngine(&engine.Props{}, game2)
+	eng2 := engine.NewEngine(testProps(), game2)
 	if err := eng2.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}

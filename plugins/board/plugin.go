@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/plugins/world"
@@ -73,9 +72,9 @@ func (p *Plugin) Install(ctx plugin.Installer) error { return nil }
 func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {}
 
 // WithRenderer builds this plugin's own board renderer, drawing each cell's CellKind.SpriteID from atlas.
-func (p *Plugin) WithRenderer(cam camera.Camera, atlas render.AtlasSource) {
+func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
 	p.Res.Render = &RenderState{ShowGridLines: true}
-	p.renderer = newRenderer(cam, p.Res.Logic.Board, atlas, p.Res.Render)
+	p.renderer = newRenderer(p.worldPlugin.Camera(), p.Res.Logic.Board, atlas, p.Res.Render)
 }
 
 // Renderer returns this plugin's own render.Renderer, or nil unless WithRenderer was called.

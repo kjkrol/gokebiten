@@ -31,8 +31,6 @@ type Renderer struct {
 	gridLines []gridLine
 }
 
-// gridLine is one cell's screen-space grid-line rect, drawn after the
-// batched fill so it isn't painted over by it.
 type gridLine struct{ x0, y0, x1, y1 float32 }
 
 var _ render.Renderer = (*Renderer)(nil)
@@ -82,8 +80,8 @@ func (l *Renderer) drawCell(c CellID) {
 	l.batch.AppendQuad(float32(x0), float32(y0), float32(x1), float32(y1), l.board.Kind(c).SpriteID)
 
 	if l.state.ShowGridLines {
-		sx0, sy0 := l.camera.ToScreen(float32(x0), float32(y0))
-		sx1, sy1 := l.camera.ToScreen(float32(x1), float32(y1))
-		l.gridLines = append(l.gridLines, gridLine{sx0, sy0, sx1, sy1})
+		for _, q := range l.camera.ToScreenQuads(float32(x0), float32(y0), float32(x1), float32(y1)) {
+			l.gridLines = append(l.gridLines, gridLine{q.X0, q.Y0, q.X1, q.Y1})
+		}
 	}
 }

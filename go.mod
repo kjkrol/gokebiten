@@ -17,3 +17,6 @@ require (
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
+
+// TODO: remove once a gokg release ships Space2D.Reposition.
+replace github.com/kjkrol/gokg => ../gokg

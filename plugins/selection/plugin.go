@@ -22,9 +22,10 @@ type Plugin struct {
 
 var _ plugin.Plugin = (*Plugin)(nil)
 
-// NewPlugin builds the selection plugin over worldPlugin's shared spatial index, using cam for click/drag hit-testing.
-func NewPlugin(worldPlugin *world.Plugin, cam camera.Camera) *Plugin {
-	return &Plugin{state: &Resources{}, worldPlugin: worldPlugin, camera: cam}
+// NewPlugin builds the selection plugin over worldPlugin's shared spatial
+// index, using worldPlugin's Camera for click/drag hit-testing.
+func NewPlugin(worldPlugin *world.Plugin) *Plugin {
+	return &Plugin{state: &Resources{}, worldPlugin: worldPlugin, camera: worldPlugin.Camera()}
 }
 
 // =================================================================
@@ -44,8 +45,8 @@ func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) { p.module.RunPlan(ct
 
 // WithRenderer builds this plugin's own highlight renderer (outline for every Selected
 // entity,plus the drag marquee) — atlas is unused, selection draws primitives.
-func (p *Plugin) WithRenderer(cam camera.Camera, atlas render.AtlasSource) {
-	p.renderer = NewRenderer(cam, p.state)
+func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
+	p.renderer = NewRenderer(p.camera, p.state)
 }
 
 func (p *Plugin) Renderer() render.Renderer {

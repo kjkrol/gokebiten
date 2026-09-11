@@ -11,27 +11,72 @@ import (
 	"github.com/kjkrol/gokg"
 )
 
+// Batch pairs a spawn count with the Spawner producing its entities — see game.Game.Spawn.
+type Batch struct {
+	Count   int
+	Spawner *Spawner
+}
+
 // Resources is world's single published Resources.
 type Resources struct {
 	Config    Config
 	Telemetry *Telemetry
+	Camera    camera.Camera
+
+	camState camera.State
+}
+
+// Persisted returns the camera's Viewport/Zoom for Persistence.Save/Load to include automatically.
+func (r *Resources) Persisted() []any {
+	r.camState = r.Camera.State()
+	return []any{&r.camState}
 }
 
 // Plugin builds a world - the mandatory foundation for any game with
 // moving, drawable entities - and publishes Resources as a resource.
+// Engine installs this automatically — do not construct/Use your own; get
+// the running instance via ctx.World().
 type Plugin struct {
 	Res      Resources
 	module   *module
 	renderer *Renderer
+
+	cameraControls bool
+	scrollSpeed    int32
 }
 
 var _ plugin.Plugin = (*Plugin)(nil)
+var _ plugin.Builtin = (*Plugin)(nil)
+
+// Builtin marks Plugin as installed automatically by Engine — see ctx.World().
+func (*Plugin) Builtin() {}
 
 // NewPlugin builds Plugin around a fresh world — Populate/Space are usable
 // immediately, before Install (e.g. in tests).
 func NewPlugin(cfg Config) *Plugin {
 	m := newModule(cfg)
-	return &Plugin{Res: Resources{Config: cfg, Telemetry: &m.telemetry}, module: m}
+	cam := camera.NewFromSpaceWithConfig(cfg.Space.Width, cfg.Space.Height, cfg.Space.Toroidal, cfg.Camera)
+	return &Plugin{Res: Resources{Config: cfg, Telemetry: &m.telemetry, Camera: cam}, module: m}
+}
+
+// WithCameraControls enables the default wheel-zoom/middle-drag-pan/edge-scroll EventHandler.
+func (p *Plugin) WithCameraControls(scrollSpeed ...int32) *Plugin {
+	p.cameraControls = true
+	p.scrollSpeed = defaultCameraScrollSpeed
+	if len(scrollSpeed) > 0 {
+		p.scrollSpeed = scrollSpeed[0]
+	}
+	return p
+}
+
+// Camera returns world's shared Camera, built from Config.Space.
+func (p *Plugin) Camera() camera.Camera { return p.Res.Camera }
+
+// PostLoad restores the camera's Viewport/Zoom after Persistence.Load.
+func (p *Plugin) PostLoad() goke.System {
+	return goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		p.Res.Camera.Restore(p.Res.camState)
+	}}
 }
 
 // =================================================================
@@ -51,8 +96,8 @@ func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
 }
 
 // WithRenderer builds this plugin's own entity renderer, drawing cam-relative sprites from atlas.
-func (p *Plugin) WithRenderer(cam camera.Camera, atlas render.AtlasSource) {
-	p.renderer = newRenderer(cam, atlas)
+func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
+	p.renderer = newRenderer(p.Res.Camera, atlas)
 }
 
 // Renderer returns this plugin's own render.Renderer, or nil unless WithRenderer was called.
@@ -63,11 +108,17 @@ func (p *Plugin) Renderer() render.Renderer {
 	return p.renderer
 }
 
-// EventHandler is a no-op — world has no control.EventHandler of its own.
-func (p *Plugin) EventHandler() control.EventHandler { return nil }
+// EventHandler returns the default wheel-zoom/middle-drag-pan/edge-scroll
+// handler, or nil unless WithCameraControls was called.
+func (p *Plugin) EventHandler() control.EventHandler {
+	if !p.cameraControls {
+		return nil
+	}
+	return newDefaultCameraHandler(p.Res.Camera, p.scrollSpeed)
+}
 
-// Serializable is a no-op — world has nothing to persist.
-func (p *Plugin) Serializable() plugin.Serializable { return nil }
+// Serializable returns world's persistable state (its camera's Viewport/Zoom).
+func (p *Plugin) Serializable() plugin.Serializable { return &p.Res }
 
 // =================================================================
 // world-specific

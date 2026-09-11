@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/plugins/world"
@@ -51,7 +50,7 @@ func (p *Plugin) Install(ctx plugin.Installer) error {
 func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) { p.module.RunPlan(ctx, d) }
 
 // WithRenderer is a no-op — collisions has no render.Renderer of its own.
-func (p *Plugin) WithRenderer(camera.Camera, render.AtlasSource) {}
+func (p *Plugin) WithRenderer(render.AtlasSource) {}
 
 // Renderer is a no-op — collisions has no render.Renderer of its own.
 func (p *Plugin) Renderer() render.Renderer { return nil }

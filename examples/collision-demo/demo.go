@@ -10,7 +10,6 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/game"
 	"github.com/kjkrol/gokebiten/plugins/collisions"
@@ -43,6 +42,7 @@ type Demo struct {
 	state          *State
 	collisionStats stats.Stats
 	hitSprite      render.SpriteID
+	entitySprites  [7][4]render.SpriteID
 }
 
 var _ game.Game = (*Demo)(nil)
@@ -60,45 +60,40 @@ func (dm *Demo) Init(ctx game.Initializer) error {
 	}
 	atlas := render.NewAtlas(RectSize, 28*4+1)
 	shapes := [4]func(color.RGBA) render.SpriteDrawer{render.Solid, render.Border, render.Diamond, render.Cross}
-	var entitySprites [7][4]render.SpriteID
 	for ci, c := range palette[:7] {
 		for si, shape := range shapes {
-			entitySprites[ci][si] = atlas.Register(shape(c))
+			dm.entitySprites[ci][si] = atlas.Register(shape(c))
 		}
 	}
 	dm.hitSprite = atlas.Register(render.Solid(palette[7]))
 	atlas.Close()
 
-	worldCfg := world.Config{
-		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
-		Entities: world.EntitiesCfg{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize},
-	}
-	dm.world = world.NewPlugin(worldCfg)
-	cam := camera.NewFromSpace(worldCfg.Space.Width, worldCfg.Space.Height, worldCfg.Space.Toroidal)
-	dm.world.WithRenderer(cam, atlas)
-	if err := ctx.Use(dm.world); err != nil {
-		return err
-	}
+	dm.world = ctx.World()
+	dm.world.WithRenderer(atlas)
+	dm.world.WithCameraControls()
 
 	dm.collisions = collisions.NewPlugin(100*time.Millisecond, dm.world).
 		SetCollisionHandlers(elastic.NewHandler(), stats.NewHandler(&dm.collisionStats))
-	if err := ctx.Use(dm.collisions); err != nil {
-		return err
-	}
-
 	dm.state = &State{}
-	saves, err := ctx.Runtime().Persistence().List(saveBasePath)
-	if err != nil {
-		return err
-	}
-	if slices.Contains(saves, "") {
-		if err := ctx.Runtime().Persistence().Load(saveBasePath, "", dm.state); err != nil {
-			return err
-		}
-		log.Printf("loaded saved world (save #%d)", dm.state.Saves)
-		return nil
-	}
+	return ctx.Use(dm.collisions)
+}
 
+func (dm *Demo) Restore(p game.Persistence) (bool, error) {
+	saves, err := p.List(saveBasePath)
+	if err != nil {
+		return false, err
+	}
+	if !slices.Contains(saves, "") {
+		return false, nil
+	}
+	if err := p.Load(saveBasePath, "", dm.state); err != nil {
+		return false, err
+	}
+	log.Printf("loaded saved world (save #%d)", dm.state.Saves)
+	return true, nil
+}
+
+func (dm *Demo) Spawn() ([]world.Batch, error) {
 	placement := world.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize)
 	motion := newRandomVelocity(200, 50, 10)
 	spawner := world.NewSpawner(
@@ -106,20 +101,19 @@ func (dm *Demo) Init(ctx game.Initializer) error {
 		func(index int) world.Velocity { return motion.initialVelocity(index) },
 	).
 		With(func(index int) world.Appearance {
-			return world.Appearance{SpriteID: entitySprites[rand.IntN(7)][rand.IntN(4)]}
+			return world.Appearance{SpriteID: dm.entitySprites[rand.IntN(7)][rand.IntN(4)]}
 		}).
 		With(func(index int) collisions.Collision { return collisions.Collision{} })
-	dm.world.Populate(EntityCount, spawner)
-	return nil
+	return []world.Batch{{Count: EntityCount, Spawner: spawner}}, nil
 }
 
-func (dm *Demo) RunPlan(ctx goke.RunCtx, d time.Duration) {
+func (dm *Demo) Update(ctx goke.RunCtx, d time.Duration) {
 	dm.world.RunPlan(ctx, d)
 	dm.collisions.RunPlan(ctx, d)
 	ctx.Sync()
 }
 
-func (dm *Demo) Layers(runtime game.Runtime) []func() render.Renderer {
+func (dm *Demo) Draw(runtime game.Runtime) []func() render.Renderer {
 	return []func() render.Renderer{
 		func() render.Renderer {
 			return render.NewCachedRenderer(
@@ -140,11 +134,14 @@ func (dm *Demo) Layers(runtime game.Runtime) []func() render.Renderer {
 }
 
 func (dm *Demo) HandleEvents(events *control.InputEvents, runtime game.Runtime) {
+	dm.world.EventHandler().HandleEvents(events)
 	for _, k := range events.KeyEvents {
 		if k.Action != control.ActionPress {
 			continue
 		}
 		switch k.Key {
+		case ebiten.KeyEscape:
+			runtime.Quit()
 		case ebiten.KeySpace:
 			runtime.TogglePause()
 		case ebiten.KeyF5:

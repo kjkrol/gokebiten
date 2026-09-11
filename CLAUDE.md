@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 **gokebiten** is a public, modular Go game engine library: a
-user-implemented `game.Game` (`Init`/`RunPlan`/`Layers`/`HandleEvents`) is
+user-implemented `game.Game` (`Init`/`Restore`/`Spawn`/`Update`/`Draw`/`HandleEvents`) is
 driven by a `gokebiten.Engine` that wraps
 [goke](https://github.com/kjkrol/goke) (a type-safe, archetype-based ECS)
 into [Ebitengine](https://ebitengine.org/)'s `Update`/`Draw`/`Layout` loop.

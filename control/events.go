@@ -29,6 +29,11 @@ type InputEvents struct {
 	Modifiers   struct {
 		Shift, Ctrl, Alt bool
 	}
+	MiddleDown bool
+	// WindowFillsScreen reports whether the game window currently covers
+	// the entire monitor — true fullscreen, or a borderless window sized
+	// to match it.
+	WindowFillsScreen bool
 
 	ClickQueue  []ClickEvent
 	KeyEvents   []KeyEvent

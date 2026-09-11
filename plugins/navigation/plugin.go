@@ -37,10 +37,10 @@ type Plugin struct {
 var _ plugin.Plugin = (*Plugin)(nil)
 
 // NewPlugin builds a navigation plugin over boardPlugin/worldPlugin, moving
-// entities at speed world-units/sec before scaling, using cam for
-// screen<->world conversion (right-click targeting and route rendering).
-func NewPlugin(speed int32, boardPlugin *board.Plugin, worldPlugin *world.Plugin, cam camera.Camera) *Plugin {
-	return &Plugin{speed: speed, boardPlugin: boardPlugin, worldPlugin: worldPlugin, camera: cam}
+// entities at speed world-units/sec before scaling — screen<->world
+// conversion (right-click targeting and route rendering) uses worldPlugin's Camera.
+func NewPlugin(speed int32, boardPlugin *board.Plugin, worldPlugin *world.Plugin) *Plugin {
+	return &Plugin{speed: speed, boardPlugin: boardPlugin, worldPlugin: worldPlugin, camera: worldPlugin.Camera()}
 }
 
 // =================================================================
@@ -76,7 +76,7 @@ func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
 }
 
 // WithRenderer builds this plugin's own PathRenderer, drawing the remaining route for every selected, en-route entity — call SetPathSprites first.
-func (p *Plugin) WithRenderer(cam camera.Camera, atlas render.AtlasSource) {
+func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
 	p.rendererEnabled = true
 	p.pathAtlas = atlas
 }

@@ -42,4 +42,17 @@ func (a *DesktopAdapter) Capture(e *control.InputEvents) {
 
 	e.Modifiers.Shift = ebiten.IsKeyPressed(ebiten.KeyShift)
 	e.Modifiers.Ctrl = ebiten.IsKeyPressed(ebiten.KeyControl)
+
+	_, wheelY := ebiten.Wheel()
+	e.ScrollDelta = wheelY
+	e.MiddleDown = ebiten.IsMouseButtonPressed(ebiten.MouseButtonMiddle)
+
+	e.WindowFillsScreen = ebiten.IsFullscreen()
+	if !e.WindowFillsScreen {
+		if m := ebiten.Monitor(); m != nil {
+			ww, wh := ebiten.WindowSize()
+			mw, mh := m.Size()
+			e.WindowFillsScreen = ww == mw && wh == mh
+		}
+	}
 }

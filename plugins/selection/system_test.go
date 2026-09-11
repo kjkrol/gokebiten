@@ -48,8 +48,7 @@ func newHarness(t *testing.T) *harness {
 		t.Fatalf("gokg.NewSpace: %v", err)
 	}
 
-	surface := plane.NewEuclidean2D[uint32](1000, 1000)
-	cam := camera.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 1000, 1000))
+	cam := camera.NewFromSpace(1000, 1000, false)
 
 	state := &Resources{}
 	sys := NewSelectionSystem(state, space, cam)
@@ -293,5 +292,34 @@ func TestSystem_DragBox_TracksLiveDragState(t *testing.T) {
 
 	if _, _, dragging := h.state.DragBox(); dragging {
 		t.Error("expected dragging=false after release")
+	}
+}
+
+// TestSelectionSystem_WorldBox_WrapsAcrossSeam guards the reported bug:
+// a drag-select box that straddles a toroidal camera's wrap seam must
+// wrap/fragment (via gokg's Space.WrapAABB) into the small region
+// actually dragged, not the huge (nearly whole-world) box that
+// independently-wrapped corners used to produce.
+func TestSelectionSystem_WorldBox_WrapsAcrossSeam(t *testing.T) {
+	space, err := gokg.NewSpace(gokg.Config{
+		Width: 1000, Height: 1000, Toroidal: true,
+		BucketSize: spatial.ResolutionFrom(64), BucketCapacity: 16, OpsBufferSize: 64,
+	})
+	if err != nil {
+		t.Fatalf("gokg.NewSpace: %v", err)
+	}
+	cam := camera.NewFromSpaceWithConfig(1000, 1000, true, camera.Config{ViewportWidth: 200, ViewportHeight: 200})
+	cam.MoveTo(950, 500) // view spans world 950..1150≡950..150 — straddles the wrap seam
+
+	sys := &SelectionSystem{camera: cam, space: space}
+
+	// dragging the full width of the 200px viewport spans world 950..1150.
+	box := sys.worldBox(geom.NewVec[int32](0, 0), geom.NewVec[int32](200, 10))
+
+	if box.FragMask == 0 {
+		t.Fatal("expected worldBox to fragment when the drag spans the wrap seam")
+	}
+	if w := box.BottomRight.X - box.TopLeft.X; w > 200 {
+		t.Errorf("worldBox main-fragment width = %d, want <= 200 (not the whole-world box independent wrapping used to produce)", w)
 	}
 }

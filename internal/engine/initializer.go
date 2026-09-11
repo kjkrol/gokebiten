@@ -6,6 +6,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/game"
 	"github.com/kjkrol/gokebiten/plugin"
+	"github.com/kjkrol/gokebiten/plugins/world"
 )
 
 // initializer is the only concrete implementation of game.Initializer.
@@ -32,8 +33,22 @@ func (c *initializer) RegSys(factory func() goke.System) goke.Runnable {
 
 func (c *initializer) ECS() *goke.ECS { return c.engine.ecs }
 
-// Use registers p's Serializable (if any) and runs its Install — rejects a duplicate Name.
+// Use registers p's Serializable (if any) and runs its Install — rejects
+// a duplicate Name and any Plugin the engine already installs itself.
 func (c *initializer) Use(p plugin.Plugin) error {
+	if _, ok := p.(plugin.Builtin); ok {
+		return fmt.Errorf("gokebiten: %q is installed automatically by the engine — do not Use it yourself", p.Name())
+	}
+	return c.use(p)
+}
+
+// useBuiltin installs an engine-managed Plugin, bypassing the Builtin
+// check above — called only by Engine's own bootstrap, before Game.Init runs.
+func (c *initializer) useBuiltin(p plugin.Plugin) error { return c.use(p) }
+
+// use is the shared install path: duplicate-Name check, Serializable
+// registration, tracking, Install.
+func (c *initializer) use(p plugin.Plugin) error {
 	if c.engine.names == nil {
 		c.engine.names = make(map[string]bool)
 	}
@@ -48,4 +63,4 @@ func (c *initializer) Use(p plugin.Plugin) error {
 	return p.Install(c)
 }
 
-func (c *initializer) Runtime() game.Runtime { return c.engine }
+func (c *initializer) World() *world.Plugin { return c.engine.world }

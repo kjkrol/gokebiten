@@ -5,12 +5,9 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
 )
 
 // stubInstallCtx is a minimal plugin.Installer for tests that call Install directly.
@@ -47,10 +44,7 @@ func TestPlugin_Install_WiresBoardForEventHandler(t *testing.T) {
 	boardPlugin := board.NewPlugin(grid, &board.SingleOccupancy{}, nil, worldPlugin)
 	boardPlugin.Res.Logic.Board.SetAll(board.CellKind{Cost: 1, Passable: true})
 
-	surface := plane.NewEuclidean2D[uint32](50, 50)
-	cam := camera.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 50, 50))
-
-	navPlugin := NewPlugin(10, boardPlugin, worldPlugin, cam)
+	navPlugin := NewPlugin(10, boardPlugin, worldPlugin)
 	ctx := &stubInstallCtx{ecs: goke.New()}
 	if err := navPlugin.Install(ctx); err != nil {
 		t.Fatalf("Install: %v", err)

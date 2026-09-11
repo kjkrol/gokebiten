@@ -10,8 +10,16 @@ import (
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/game"
 	"github.com/kjkrol/gokebiten/plugin"
+	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
 )
+
+func testProps() *Props {
+	return &Props{World: world.Config{
+		Space:    world.SpaceCfg{Width: 100, Height: 100},
+		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
+	}}
+}
 
 type stubPlugin struct {
 	name         string
@@ -28,11 +36,11 @@ func (p *stubPlugin) Install(ctx plugin.Installer) error {
 	}
 	return nil
 }
-func (p *stubPlugin) RunPlan(goke.RunCtx, time.Duration)             {}
-func (p *stubPlugin) WithRenderer(camera.Camera, render.AtlasSource) {}
-func (p *stubPlugin) Renderer() render.Renderer                      { return nil }
-func (p *stubPlugin) EventHandler() control.EventHandler             { return nil }
-func (p *stubPlugin) Serializable() plugin.Serializable              { return p.serializable }
+func (p *stubPlugin) RunPlan(goke.RunCtx, time.Duration) {}
+func (p *stubPlugin) WithRenderer(render.AtlasSource)    {}
+func (p *stubPlugin) Renderer() render.Renderer          { return nil }
+func (p *stubPlugin) EventHandler() control.EventHandler { return nil }
+func (p *stubPlugin) Serializable() plugin.Serializable  { return p.serializable }
 
 // stubGame is a minimal Game for testing Engine/Initializer.
 type stubGame struct {
@@ -45,12 +53,14 @@ func (g *stubGame) Init(ctx game.Initializer) error {
 	}
 	return nil
 }
-func (g *stubGame) RunPlan(goke.RunCtx, time.Duration)              {}
-func (g *stubGame) Layers(game.Runtime) []func() render.Renderer    { return nil }
+func (g *stubGame) Restore(game.Persistence) (bool, error)          { return false, nil }
+func (g *stubGame) Spawn() ([]world.Batch, error)                   { return nil, nil }
+func (g *stubGame) Update(goke.RunCtx, time.Duration)               {}
+func (g *stubGame) Draw(game.Runtime) []func() render.Renderer      { return nil }
 func (g *stubGame) HandleEvents(*control.InputEvents, game.Runtime) {}
 
 func newTestEngine(initFn func(ctx game.Initializer) error) *Engine {
-	return NewEngine(&Props{}, &stubGame{initFn: initFn})
+	return NewEngine(testProps(), &stubGame{initFn: initFn})
 }
 
 func TestInitializer_Use_InstallsOnce(t *testing.T) {
@@ -133,3 +143,59 @@ func TestInitializer_Use_RegistersSerializableByName(t *testing.T) {
 type testPersisted struct{ N int }
 
 func (p *testPersisted) Persisted() []any { return []any{&p.N} }
+
+// stubBuiltinPlugin implements Builtin, so Use must reject it.
+type stubBuiltinPlugin struct{ stubPlugin }
+
+func (*stubBuiltinPlugin) Builtin() {}
+
+func TestInitializer_Use_RejectsBuiltinPlugin(t *testing.T) {
+	p := &stubBuiltinPlugin{stubPlugin: stubPlugin{name: "test.builtin"}}
+	eng := newTestEngine(func(ctx game.Initializer) error { return ctx.Use(p) })
+
+	if err := eng.Init(); err == nil {
+		t.Fatal("expected Use to reject a Plugin implementing Builtin")
+	}
+	if p.installed != 0 {
+		t.Errorf("installed = %d, want 0 (rejected before Install)", p.installed)
+	}
+}
+
+// TestEngine_Init_WorldViewportDefaultsToScreenSize guards that Engine
+// fills in the built-in world's camera viewport from Props.ScreenWidth/
+// ScreenHeight when the game leaves World.Camera.Viewport* unset — otherwise the
+// camera's pannable window defaults to the world's own size, leaving
+// zero room to pan or zoom out regardless of screen size.
+func TestEngine_Init_WorldViewportDefaultsToScreenSize(t *testing.T) {
+	props := &Props{ScreenWidth: 200, ScreenHeight: 150, World: world.Config{
+		Space:    world.SpaceCfg{Width: 1000, Height: 1000},
+		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
+	}}
+	var got camera.Camera
+	eng := NewEngine(props, &stubGame{initFn: func(ctx game.Initializer) error {
+		got = ctx.World().Camera()
+		return nil
+	}})
+	if err := eng.Init(); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	b := got.Bounds()
+	if w, h := b.BottomRight.X-b.TopLeft.X, b.BottomRight.Y-b.TopLeft.Y; w != 200 || h != 150 {
+		t.Errorf("Camera().Bounds() size = %dx%d, want 200x150 (screen size, not world size)", w, h)
+	}
+}
+
+func TestInitializer_World_ReturnsInstalledInstance(t *testing.T) {
+	var got *world.Plugin
+	eng := newTestEngine(func(ctx game.Initializer) error {
+		got = ctx.World()
+		return nil
+	})
+
+	if err := eng.Init(); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected ctx.World() to return the engine's built-in world.Plugin, got nil")
+	}
+}
