@@ -6,11 +6,10 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/plugins"
+	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
-	"github.com/kjkrol/gokebiten/resources"
 )
 
 // Plugin moves entities along a MoveOrder's path across a board, re-pathing automatically
@@ -35,7 +34,7 @@ type Plugin struct {
 	camera camera.Camera
 }
 
-var _ plugins.Plugin = (*Plugin)(nil)
+var _ plugin.Plugin = (*Plugin)(nil)
 
 // NewPlugin builds a navigation plugin over boardPlugin/worldPlugin, moving
 // entities at speed world-units/sec before scaling, using cam for
@@ -45,29 +44,18 @@ func NewPlugin(speed int32, boardPlugin *board.Plugin, worldPlugin *world.Plugin
 }
 
 // =================================================================
-// plugins.Plugin contract
+// plugin.Plugin contract
 // =================================================================
 
 func (p *Plugin) Name() string { return "gokebiten.navigation" }
 
-func (p *Plugin) Install(ctx *plugins.GameCtx) error {
-	if err := ctx.RequirePlugin(p.boardPlugin); err != nil {
-		return err
-	}
-	boardRes, err := ctx.Require[*board.Resources]()
-	if err != nil {
-		return err
-	}
-	brd := boardRes.Logic.Board
+func (p *Plugin) Install(ctx plugin.Installer) error {
+	brd := p.boardPlugin.Res.Logic.Board
 	p.board = brd
 
 	occupancy := p.boardPlugin.Occupancy()
 	finder := newPathFinder(brd, brd, occupancy)
 	navSys := newNavigationSystem(finder, brd, brd, occupancy, p.speed)
-
-	if err := ctx.RequirePlugin(p.worldPlugin); err != nil {
-		return err
-	}
 	navSys.BindSpace(p.worldPlugin.Space())
 
 	if p.rendererEnabled {
@@ -106,8 +94,8 @@ func (p *Plugin) EventHandler() control.EventHandler {
 	return NewDefaultCommandEventHandler(p.board, p.camera, p.res)
 }
 
-// Resources returns navigation's single published Resources.
-func (p *Plugin) Resources() resources.Resources { return p.res }
+// Serializable is a no-op — navigation has nothing to persist.
+func (p *Plugin) Serializable() plugin.Serializable { return nil }
 
 // =================================================================
 // navigation-specific

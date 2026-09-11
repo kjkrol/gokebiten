@@ -1,19 +1,25 @@
-package control
+package engine
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokg/geom"
 )
 
+// InputAdapter captures one frame's raw input into events.
+type InputAdapter interface {
+	Capture(e *control.InputEvents)
+}
+
 type DesktopAdapter struct{}
 
-func (a *DesktopAdapter) Capture(e *InputEvents) {
+func (a *DesktopAdapter) Capture(e *control.InputEvents) {
 	for _, k := range inpututil.AppendJustPressedKeys(nil) {
-		e.AddKeyEvent(k, ActionPress)
+		e.AddKeyEvent(k, control.ActionPress)
 	}
 	for _, k := range inpututil.AppendJustReleasedKeys(nil) {
-		e.AddKeyEvent(k, ActionRelease)
+		e.AddKeyEvent(k, control.ActionRelease)
 	}
 
 	currX, currY := ebiten.CursorPosition()
@@ -22,16 +28,16 @@ func (a *DesktopAdapter) Capture(e *InputEvents) {
 	e.MousePos = next
 
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-		e.AddClickEvent(currX, currY, ebiten.MouseButtonLeft, ActionPress)
+		e.AddClickEvent(currX, currY, ebiten.MouseButtonLeft, control.ActionPress)
 	}
 	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
-		e.AddClickEvent(currX, currY, ebiten.MouseButtonLeft, ActionRelease)
+		e.AddClickEvent(currX, currY, ebiten.MouseButtonLeft, control.ActionRelease)
 	}
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
-		e.AddClickEvent(currX, currY, ebiten.MouseButtonRight, ActionPress)
+		e.AddClickEvent(currX, currY, ebiten.MouseButtonRight, control.ActionPress)
 	}
 	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonRight) {
-		e.AddClickEvent(currX, currY, ebiten.MouseButtonRight, ActionRelease)
+		e.AddClickEvent(currX, currY, ebiten.MouseButtonRight, control.ActionRelease)
 	}
 
 	e.Modifiers.Shift = ebiten.IsKeyPressed(ebiten.KeyShift)

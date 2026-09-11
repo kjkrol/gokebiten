@@ -7,5 +7,3 @@ import "github.com/kjkrol/gokebiten/plugins/board"
 type Resources struct {
 	PendingTarget *board.CellID
 }
-
-func (*Resources) Resources() {}

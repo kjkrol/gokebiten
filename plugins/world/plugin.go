@@ -6,9 +6,8 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/plugins"
+	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/render"
-	"github.com/kjkrol/gokebiten/resources"
 	"github.com/kjkrol/gokg"
 )
 
@@ -18,39 +17,35 @@ type Resources struct {
 	Telemetry *Telemetry
 }
 
-func (*Resources) Resources() {}
-
-var _ resources.Resources = (*Resources)(nil)
-
 // Plugin builds a world - the mandatory foundation for any game with
 // moving, drawable entities - and publishes Resources as a resource.
 type Plugin struct {
-	res      Resources
+	Res      Resources
 	module   *module
 	renderer *Renderer
 }
 
-var _ plugins.Plugin = (*Plugin)(nil)
+var _ plugin.Plugin = (*Plugin)(nil)
 
 // NewPlugin builds Plugin around a fresh world — Populate/Space are usable
 // immediately, before Install (e.g. in tests).
 func NewPlugin(cfg Config) *Plugin {
 	m := newModule(cfg)
-	return &Plugin{res: Resources{Config: cfg, Telemetry: &m.telemetry}, module: m}
+	return &Plugin{Res: Resources{Config: cfg, Telemetry: &m.telemetry}, module: m}
 }
 
 // =================================================================
-// plugins.Plugin contract
+// plugin.Plugin contract
 // =================================================================
 
 func (p *Plugin) Name() string { return "gokebiten.world" }
 
-func (p *Plugin) Install(ctx *plugins.GameCtx) error {
+func (p *Plugin) Install(ctx plugin.Installer) error {
 	ctx.UseModule(p.module)
 	return nil
 }
 
-// RunPlan runs world's movement pipeline for this tick — call from your own Game.Loop closure.
+// RunPlan runs world's movement pipeline for this tick — call from your own Game.RunPlan.
 func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	p.module.RunPlan(ctx, d)
 }
@@ -71,8 +66,8 @@ func (p *Plugin) Renderer() render.Renderer {
 // EventHandler is a no-op — world has no control.EventHandler of its own.
 func (p *Plugin) EventHandler() control.EventHandler { return nil }
 
-// Resources returns world's single published Resources.
-func (p *Plugin) Resources() resources.Resources { return &p.res }
+// Serializable is a no-op — world has nothing to persist.
+func (p *Plugin) Serializable() plugin.Serializable { return nil }
 
 // =================================================================
 // world-specific

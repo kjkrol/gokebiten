@@ -6,10 +6,9 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/plugins"
+	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
-	"github.com/kjkrol/gokebiten/resources"
 )
 
 // Plugin wires the collision engine into a Game — optional, borrows world.Plugin's own Space.
@@ -21,7 +20,7 @@ type Plugin struct {
 	module      *module
 }
 
-var _ plugins.Plugin = (*Plugin)(nil)
+var _ plugin.Plugin = (*Plugin)(nil)
 
 // NewPlugin builds the collisions plugin over worldPlugin's shared spatial
 // index — hitExpires is the default Hit lifetime for entities that don't
@@ -31,15 +30,12 @@ func NewPlugin(hitExpires time.Duration, worldPlugin *world.Plugin) *Plugin {
 }
 
 // =================================================================
-// plugins.Plugin contract
+// plugin.Plugin contract
 // =================================================================
 
 func (p *Plugin) Name() string { return "gokebiten.collisions" }
 
-func (p *Plugin) Install(ctx *plugins.GameCtx) error {
-	if err := ctx.RequirePlugin(p.worldPlugin); err != nil {
-		return err
-	}
+func (p *Plugin) Install(ctx plugin.Installer) error {
 	space := p.worldPlugin.Space()
 
 	p.module = New(space, ctx.ECS(), p.hitExpires)
@@ -63,8 +59,8 @@ func (p *Plugin) Renderer() render.Renderer { return nil }
 // EventHandler is a no-op — collisions has no control.EventHandler of its own.
 func (p *Plugin) EventHandler() control.EventHandler { return nil }
 
-// Resources is a no-op — collisions has no state of its own to publish.
-func (p *Plugin) Resources() resources.Resources { return nil }
+// Serializable is a no-op — collisions has nothing to persist.
+func (p *Plugin) Serializable() plugin.Serializable { return nil }
 
 // =================================================================
 // collisions-specific

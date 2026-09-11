@@ -35,8 +35,6 @@ type InputEvents struct {
 	ScrollDelta float64
 }
 
-func (*InputEvents) Resources() {}
-
 func (e *InputEvents) ResetTransient() {
 	e.ClickQueue = e.ClickQueue[:0]
 	e.KeyEvents = e.KeyEvents[:0]
@@ -55,8 +53,4 @@ func (e *InputEvents) AddClickEvent(x, y int, button ebiten.MouseButton, action 
 		Button: button,
 		Action: action,
 	})
-}
-
-type InputAdapter interface {
-	Capture(e *InputEvents)
 }

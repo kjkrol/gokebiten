@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten"
+	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/plugins/board"
 )
 
@@ -19,7 +19,7 @@ type module struct {
 }
 
 var _ goke.Module = (*module)(nil)
-var _ gokebiten.PostLoader = (*module)(nil)
+var _ plugin.PostLoader = (*module)(nil)
 
 // =================================================================
 // goke.Module contract
@@ -54,7 +54,7 @@ func (m *module) LoadComps() []goke.CompToken {
 }
 
 // =================================================================
-// gokebiten.PostLoader contract
+// plugin.PostLoader contract
 // =================================================================
 
 // PostLoad rebuilds board.Occupancy from every loaded entity's Cell component.
