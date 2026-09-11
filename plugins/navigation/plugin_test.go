@@ -5,15 +5,30 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/resources"
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
 )
+
+// stubInstallCtx is a minimal plugin.Installer for tests that call Install directly.
+type stubInstallCtx struct {
+	ecs     *goke.ECS
+	pending []func() []goke.System
+}
+
+func (c *stubInstallCtx) UseModule(m goke.Module) {
+	regSys := goke.SystemFn{OnInit: func(si *goke.SysInit) { m.RegSystems(c.ecs) }}
+	c.pending = append(c.pending, func() []goke.System { return append(m.SetupSystems(), regSys) })
+}
+func (c *stubInstallCtx) Setup(providers ...goke.SetupProvider) {
+	for _, p := range providers {
+		c.pending = append(c.pending, p.SetupSystems)
+	}
+}
+func (c *stubInstallCtx) RegSys(factory func() goke.System) goke.Runnable {
+	return c.ecs.RegSys(factory())
+}
+func (c *stubInstallCtx) ECS() *goke.ECS { return c.ecs }
 
 // TestPlugin_Install_WiresBoardForEventHandler guards against the exact
 // regression reported live: Install fetching *board.Board into a local
@@ -22,26 +37,15 @@ import (
 // right-click.
 func TestPlugin_Install_WiresBoardForEventHandler(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(5, 5, 10)
-	brd := board.NewBoard(grid, board.NewTerrainMap())
-	brd.SetAll(board.CellKind{Cost: 1, Passable: true})
-
 	worldPlugin := world.NewPlugin(world.Config{
 		Space:    world.SpaceCfg{Width: 50, Height: 50},
 		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
 	})
 	boardPlugin := board.NewPlugin(grid, &board.SingleOccupancy{}, nil, worldPlugin)
+	boardPlugin.Res.Logic.Board.SetAll(board.CellKind{Cost: 1, Passable: true})
 
-	surface := plane.NewEuclidean2D[uint32](50, 50)
-	cam := camera.NewBasicCamera(surface, geom.NewAABBAt(geom.NewVec[uint32](0, 0), 50, 50))
-
-	res := resources.NewStorage()
-	boardRes := &board.Resources{}
-	boardRes.Logic.Board = brd
-	res.Insert(boardRes)
-	ctx := plugins.NewGameCtx(res, goke.New(),
-		func(any) {}, func(func() []goke.System) {}, func(string) bool { return true })
-
-	navPlugin := NewPlugin(10, boardPlugin, worldPlugin, cam)
+	navPlugin := NewPlugin(10, boardPlugin, worldPlugin)
+	ctx := &stubInstallCtx{ecs: goke.New()}
 	if err := navPlugin.Install(ctx); err != nil {
 		t.Fatalf("Install: %v", err)
 	}

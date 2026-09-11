@@ -2,22 +2,53 @@ package board_test
 
 import (
 	"testing"
+	"time"
 
+	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten"
+	"github.com/kjkrol/gokebiten/control"
+	"github.com/kjkrol/gokebiten/game"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gokebiten/render"
 	"github.com/kjkrol/gokg/geom"
 )
 
-func newSaveLoadTestWorldPlugin() *world.Plugin {
-	return world.NewPlugin(world.Config{
+func testProps() *gokebiten.Props {
+	return &gokebiten.Props{World: world.Config{
 		Space:    world.SpaceCfg{Width: 100, Height: 100},
 		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
-	})
+	}}
 }
 
-// TestPlugin_SaveLoad_TerrainRoundTrip guards that board.Plugin's TerrainMap
-// is saved/restored via Saveable, without the caller ever passing it to
+type boardSaveLoadTestGame struct {
+	worldPlugin *world.Plugin
+	boardPlugin *board.Plugin
+	grid        board.Grid
+	loadFrom    string
+}
+
+func (g *boardSaveLoadTestGame) Init(ctx game.Initializer) error {
+	g.worldPlugin = ctx.World()
+	g.boardPlugin = board.NewPlugin(g.grid, &board.SingleOccupancy{}, nil, g.worldPlugin)
+	return ctx.Use(g.boardPlugin)
+}
+func (g *boardSaveLoadTestGame) Restore(p game.Persistence) (bool, error) {
+	if g.loadFrom == "" {
+		return false, nil
+	}
+	if err := p.Load(g.loadFrom, ""); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+func (g *boardSaveLoadTestGame) Spawn() ([]world.Batch, error)                   { return nil, nil }
+func (g *boardSaveLoadTestGame) Update(goke.RunCtx, time.Duration)               {}
+func (g *boardSaveLoadTestGame) Draw(game.Runtime) []func() render.Renderer      { return nil }
+func (g *boardSaveLoadTestGame) HandleEvents(*control.InputEvents, game.Runtime) {}
+
+// TestPlugin_SaveLoad_TerrainRoundTrip guards that board.Resources' TerrainMap
+// is saved/restored via Serializable, without the caller ever passing it to
 // Persistence.Save/Load explicitly.
 func TestPlugin_SaveLoad_TerrainRoundTrip(t *testing.T) {
 	basePath := t.TempDir() + "/save"
@@ -28,36 +59,24 @@ func TestPlugin_SaveLoad_TerrainRoundTrip(t *testing.T) {
 		t.Fatal("expected (21,21) to land inside the 5x5 grid")
 	}
 
-	game := gokebiten.NewGame(&gokebiten.GameProps{})
-	worldPlugin := newSaveLoadTestWorldPlugin()
-	if err := game.UsePlugin(worldPlugin); err != nil {
-		t.Fatalf("UsePlugin(world): %v", err)
+	game := &boardSaveLoadTestGame{grid: grid}
+	engine := gokebiten.NewEngine(testProps(), game)
+	if err := engine.Init(); err != nil {
+		t.Fatalf("Init: %v", err)
 	}
-	boardPlugin := board.NewPlugin(grid, &board.SingleOccupancy{}, nil, worldPlugin)
-	if err := game.UsePlugin(boardPlugin); err != nil {
-		t.Fatalf("UsePlugin(board): %v", err)
-	}
-	game.Resources().Get[*board.Resources]().Logic.Board.Set(cell, wall)
+	game.boardPlugin.Res.Logic.Board.Set(cell, wall)
 
-	if err := game.Persistence.Save(basePath, ""); err != nil {
+	if err := engine.Persistence().Save(basePath, ""); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 
-	game2 := gokebiten.NewGame(&gokebiten.GameProps{})
-	worldPlugin2 := newSaveLoadTestWorldPlugin()
-	if err := game2.UsePlugin(worldPlugin2); err != nil {
-		t.Fatalf("UsePlugin(world) 2: %v", err)
-	}
-	boardPlugin2 := board.NewPlugin(grid, &board.SingleOccupancy{}, nil, worldPlugin2)
-	if err := game2.UsePlugin(boardPlugin2); err != nil {
-		t.Fatalf("UsePlugin(board) 2: %v", err)
+	game2 := &boardSaveLoadTestGame{grid: grid, loadFrom: basePath}
+	engine2 := gokebiten.NewEngine(testProps(), game2)
+	if err := engine2.Init(); err != nil {
+		t.Fatalf("Init: %v", err)
 	}
 
-	if err := game2.Persistence.Load(basePath, ""); err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-
-	if got := game2.Resources().Get[*board.Resources]().Logic.Board.Kind(cell); got != wall {
+	if got := game2.boardPlugin.Res.Logic.Board.Kind(cell); got != wall {
 		t.Errorf("Board().Kind(cell) after Load = %+v, want %+v", got, wall)
 	}
 }

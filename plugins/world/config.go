@@ -1,9 +1,12 @@
 package world
 
+import "github.com/kjkrol/gokebiten/camera"
+
 // Config configures world's spatial shape and the bounds its entity population must respect.
 type Config struct {
 	Space    SpaceCfg
 	Entities EntitiesCfg
+	Camera   camera.Config
 }
 
 type SpaceCfg struct {

@@ -69,10 +69,10 @@ func (w *module) LoadComps() []goke.CompToken {
 }
 
 // =================================================================
-// gokebiten.PostLoader contract
+// plugin.PostLoader contract
 // =================================================================
 
-// PostLoad recomputes Count and reinserts every loaded entity's Position into space — see gokebiten.PostLoader.
+// PostLoad recomputes Count and reinserts every loaded entity's Position into space — see plugin.PostLoader.
 func (w *module) PostLoad() goke.System {
 	return goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		var pos goke.Comp[Position]

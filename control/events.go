@@ -29,13 +29,16 @@ type InputEvents struct {
 	Modifiers   struct {
 		Shift, Ctrl, Alt bool
 	}
+	MiddleDown bool
+	// WindowFillsScreen reports whether the game window currently covers
+	// the entire monitor — true fullscreen, or a borderless window sized
+	// to match it.
+	WindowFillsScreen bool
 
 	ClickQueue  []ClickEvent
 	KeyEvents   []KeyEvent
 	ScrollDelta float64
 }
-
-func (*InputEvents) Resources() {}
 
 func (e *InputEvents) ResetTransient() {
 	e.ClickQueue = e.ClickQueue[:0]
@@ -55,8 +58,4 @@ func (e *InputEvents) AddClickEvent(x, y int, button ebiten.MouseButton, action 
 		Button: button,
 		Action: action,
 	})
-}
-
-type InputAdapter interface {
-	Capture(e *InputEvents)
 }

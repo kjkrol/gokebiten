@@ -4,10 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-**gokebiten** is a modular Go game engine: a small `Game` core wraps
-[goke](https://github.com/kjkrol/goke) (a type-safe, archetype-based ECS) into
-[Ebitengine](https://ebitengine.org/)'s `Update`/`Draw`/`Layout` loop. Everything
-beyond the tick loop is installed as a `plugins.Plugin` (`plugins/plugin.go`).
+**gokebiten** is a public, modular Go game engine library: a
+user-implemented `game.Game` (`Init`/`Restore`/`Spawn`/`Update`/`Draw`/`HandleEvents`) is
+driven by a `gokebiten.Engine` that wraps
+[goke](https://github.com/kjkrol/goke) (a type-safe, archetype-based ECS)
+into [Ebitengine](https://ebitengine.org/)'s `Update`/`Draw`/`Layout` loop.
+Everything beyond the tick loop is installed as a `plugin.Plugin`, added
+from `Game.Init` via `ctx.Use`.
+
+Since this is a library third parties `go get` and browse on pkg.go.dev,
+the extension contract — `game.Game`/`Initializer`/`Runtime`/`Persistence`
+and `plugin.Plugin`/`Installer`/`Serializable`/`PostLoader` — lives in the
+public root packages `game` and `plugin`, not `internal/`, so it gets full
+godoc treatment. Only pure orchestration (`Engine` itself, nobody's godoc
+a user needs to read) lives in `internal/engine`; root `gokebiten` just
+re-exports `Engine`/`Props`/`NewEngine` as thin aliases over it.
 
 ## Commands
 
@@ -33,16 +44,32 @@ on Go 1.27.0.
 
 ### Plugin system
 
-`plugins.Plugin` — `Name`, `Install(ctx *GameCtx) error`, `RunPlan`,
-`WithRenderer`, `Renderer`, `EventHandler` — is the one extension point.
-`Game.UsePlugin`/`Game.Init` wire plugins in; `pluginManager`
-(`plugin_manager.go`) resolves `Install` calls, retrying any that return
-`plugins.NotReadyError` until every plugin succeeds or the set is stuck.
+`plugin.Plugin` — `Name`, `Install(ctx plugin.Installer) error`, `RunPlan`,
+`WithRenderer`, `Renderer`, `EventHandler`, `Serializable` — is the one
+extension point. A user's `Game` builds its plugins as its own struct
+fields inside `Init` and installs each via `ctx.Use(p)`, which registers
+`p.Serializable()` (if any) and calls `p.Install`. There is no dependency
+retry mechanism: a plugin needing another plugin's *behavior* takes it as
+an explicit constructor argument (e.g.
+`collisions.NewPlugin(hitExpires, worldPlugin)`) rather than looking it
+up — the dependency's construction order in the caller's code, not `Use`
+registration order, is what matters. `Install` itself only queues ECS
+wiring (`ctx.UseModule`/`ctx.Setup`), flushed once via a single
+`ecs.Setup()` call after `Game.Init` returns — this is what lets
+`Persistence.Load` decide fresh-spawn vs. restore before the ECS commits
+to either path.
 
-A plugin needing another plugin's *behavior* takes it as an explicit
-constructor argument (e.g. `collisions.NewPlugin(hitExpires, worldPlugin)`)
-rather than looking it up — the dependency's construction order in the
-caller's code, not `UsePlugin` registration order, is what matters.
+Package layout: `plugin` (root) — `Plugin`/`Installer`/`Serializable`/
+`PostLoader`, the extension contract, zero internal dependencies. `game`
+(root) — `Game`/`Initializer`/`Runtime`/`Persistence`, what a `Game`
+implements and receives; imports `plugin` (`Initializer.Use(p
+plugin.Plugin)`). `internal/engine` — the concrete `Engine` driver plus
+the unexported `initializer`/`persistence`/`storage` implementing
+`game.Initializer`/`game.Persistence`/the save registry; imports both
+`game` and `plugin`. Dependency direction is one-way:
+`plugin` ← `game` ← `internal/engine` ← `gokebiten`. Built-in plugins
+(`plugins/*`) import `plugin` directly (not `gokebiten`), exactly like a
+third-party plugin would.
 
 ### Module naming convention
 
@@ -72,12 +99,18 @@ shows how much of it is boilerplate vs. real behavior.
 
 Each package has a `doc.go` describing the gameplay capability it adds.
 
-### Game / persistence (root package `gokebiten`)
+### Game / persistence
 
-`game.go`'s `Game` owns the `goke.ECS` and the Ebitengine loop.
-`persistence.go` + `internal/persist` implement `Game.Persistence.Save/Load`;
-a tracked plugin/module implementing `gokebiten.Saveable`/`PostLoader` is
-included automatically.
+`internal/engine.Engine` (aliased `gokebiten.Engine`) owns the `goke.ECS`
+and the Ebitengine loop, and drives a user's `game.Game`. Its
+`Persistence()` returns a `game.Persistence` (interface — implemented by
+the unexported `internal/engine.persistence`, see `persistence.go` +
+`persist.go`) implementing `Save`/`Load`/`List`; a tracked plugin/module
+implementing `plugin.Serializable`/`plugin.PostLoader` is included
+automatically. Saved resources are matched by name (a `Plugin`'s `Name()`,
+or the Go type name for anything tracked without one) rather than by
+position, so a save survives plugins being added/removed/reordered
+between game versions — see `internal/engine/persist.go`.
 
 ### Testing conventions
 

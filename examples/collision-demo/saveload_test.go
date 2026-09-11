@@ -4,15 +4,36 @@ import (
 	"testing"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten"
-	"github.com/kjkrol/gokebiten/plugins"
+	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/plugins/collisions"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
-	"github.com/kjkrol/gokebiten/resources"
 )
 
-// TestSaveLoadCycle exercises the same mechanics Game.Save/Game.Load use, below the level of Game (no Ebiten window).
+// testInstallCtx is a minimal plugin.Installer for tests that call Install directly.
+type testInstallCtx struct {
+	ecs     *goke.ECS
+	pending []func() []goke.System
+	tracked []any
+}
+
+func (c *testInstallCtx) UseModule(m goke.Module) {
+	regSys := goke.SystemFn{OnInit: func(si *goke.SysInit) { m.RegSystems(c.ecs) }}
+	c.tracked = append(c.tracked, m)
+	c.pending = append(c.pending, func() []goke.System { return append(m.SetupSystems(), regSys) })
+}
+func (c *testInstallCtx) Setup(providers ...goke.SetupProvider) {
+	for _, p := range providers {
+		c.tracked = append(c.tracked, p)
+		c.pending = append(c.pending, p.SetupSystems)
+	}
+}
+func (c *testInstallCtx) RegSys(factory func() goke.System) goke.Runnable {
+	return c.ecs.RegSys(factory())
+}
+func (c *testInstallCtx) ECS() *goke.ECS { return c.ecs }
+
+// TestSaveLoadCycle exercises the same mechanics Persistence.Save/Load use, below the level of Engine (no Ebiten window).
 func TestSaveLoadCycle(t *testing.T) {
 	path := t.TempDir() + "/save.bin"
 
@@ -23,7 +44,7 @@ func TestSaveLoadCycle(t *testing.T) {
 	}
 
 	ecs := goke.New()
-	plugin := world.NewPlugin(cfg)
+	wp := world.NewPlugin(cfg)
 	placement := world.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize)
 	motion := newRandomVelocity(200, 50, 10)
 	spawner := world.NewSpawner(
@@ -34,21 +55,18 @@ func TestSaveLoadCycle(t *testing.T) {
 			return world.Appearance{SpriteID: render.SpriteID(index)}
 		}).
 		With(func(index int) collisions.Collision { return collisions.Collision{} })
-	plugin.Populate(count, spawner)
-	cm := collisions.New(plugin.Space(), ecs, 0)
+	wp.Populate(count, spawner)
+	cm := collisions.New(wp.Space(), ecs, 0)
 
-	var pending []func() []goke.System
-	ctx := plugins.NewGameCtx(resources.NewStorage(), ecs,
-		func(any) {}, func(p func() []goke.System) { pending = append(pending, p) },
-		func(string) bool { return true })
-	if err := plugin.Install(ctx); err != nil {
+	ctx := &testInstallCtx{ecs: ecs}
+	if err := wp.Install(ctx); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
 
 	var origIDs []uint64
 	var origAppearance map[uint64]render.SpriteID
 	var systems []goke.System
-	for _, produce := range pending {
+	for _, produce := range ctx.pending {
 		systems = append(systems, produce()...)
 	}
 	systems = append(systems,
@@ -85,10 +103,7 @@ func TestSaveLoadCycle(t *testing.T) {
 	plugin2 := world.NewPlugin(cfg)
 	cm2 := collisions.New(plugin2.Space(), ecs2, 0)
 
-	var registered []any
-	ctx2 := plugins.NewGameCtx(resources.NewStorage(), ecs2,
-		func(v any) { registered = append(registered, v) }, func(func() []goke.System) {},
-		func(string) bool { return true })
+	ctx2 := &testInstallCtx{ecs: ecs2}
 	if err := plugin2.Install(ctx2); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
@@ -104,8 +119,8 @@ func TestSaveLoadCycle(t *testing.T) {
 	cm2.RegSystems(ecs2)
 
 	var postLoad []goke.System
-	for _, v := range registered {
-		if pl, ok := v.(gokebiten.PostLoader); ok {
+	for _, v := range ctx2.tracked {
+		if pl, ok := v.(plugin.PostLoader); ok {
 			postLoad = append(postLoad, pl.PostLoad())
 		}
 	}

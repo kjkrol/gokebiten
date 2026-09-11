@@ -4,12 +4,38 @@ import (
 	"testing"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/plugins"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/resources"
 	"github.com/kjkrol/uid"
 )
+
+// testInstallCtx is a minimal plugin.Installer for tests that call Install directly.
+type testInstallCtx struct {
+	ecs     *goke.ECS
+	pending []func() []goke.System
+}
+
+func (c *testInstallCtx) UseModule(m goke.Module) {
+	regSys := goke.SystemFn{OnInit: func(si *goke.SysInit) { m.RegSystems(c.ecs) }}
+	c.pending = append(c.pending, func() []goke.System { return append(m.SetupSystems(), regSys) })
+}
+func (c *testInstallCtx) Setup(providers ...goke.SetupProvider) {
+	for _, p := range providers {
+		c.pending = append(c.pending, p.SetupSystems)
+	}
+}
+func (c *testInstallCtx) RegSys(factory func() goke.System) goke.Runnable {
+	return c.ecs.RegSys(factory())
+}
+func (c *testInstallCtx) ECS() *goke.ECS { return c.ecs }
+
+func (c *testInstallCtx) flush() {
+	var systems []goke.System
+	for _, produce := range c.pending {
+		systems = append(systems, produce()...)
+	}
+	c.ecs.Setup(systems...)
+}
 
 func TestValueExtras_WithEffect_EntersOccupancyOnSpawn(t *testing.T) {
 	sqGrid := board.DefaultGrids{}.Square(5, 5, 10)
@@ -32,25 +58,19 @@ func TestValueExtras_WithEffect_EntersOccupancyOnSpawn(t *testing.T) {
 	})
 	plugin.Populate(1, spawner)
 
-	ecs := goke.New()
-	var pending []func() []goke.System
-	ctx := plugins.NewGameCtx(resources.NewStorage(), ecs,
-		func(any) {}, func(p func() []goke.System) { pending = append(pending, p) },
-		func(string) bool { return true })
+	ctx := &testInstallCtx{ecs: goke.New()}
 	if err := plugin.Install(ctx); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
 
 	var cell goke.Comp[board.Cell]
 	var q *goke.Query
-	var systems []goke.System
-	for _, produce := range pending {
-		systems = append(systems, produce()...)
-	}
-	systems = append(systems, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		q = si.NewQueryBuilder(&cell).Build()
-	}})
-	ecs.Setup(systems...)
+	ctx.pending = append(ctx.pending, func() []goke.System {
+		return []goke.System{goke.SystemFn{OnInit: func(si *goke.SysInit) {
+			q = si.NewQueryBuilder(&cell).Build()
+		}}}
+	})
+	ctx.flush()
 
 	q.All()
 	found := false

@@ -5,8 +5,3 @@ package control
 type EventHandler interface {
 	HandleEvents(events *InputEvents)
 }
-
-// HandlerFn adapts a plain function to EventHandler.
-type HandlerFn func(events *InputEvents)
-
-func (f HandlerFn) HandleEvents(events *InputEvents) { f(events) }

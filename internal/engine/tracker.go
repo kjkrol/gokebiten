@@ -1,25 +1,24 @@
-// Package timing implements Game's fixed-timestep loop bookkeeping.
-package timing
+package engine
 
 import "time"
 
-// Tracker is responsible for the fixed physics step (Fixed Time Step) and statistics.
-type Tracker struct {
+// tracker is responsible for the fixed physics step (Fixed Time Step) and statistics.
+type tracker struct {
 	lastUpdate    time.Time
 	lastTPSUpdate time.Time
 	accumulator   time.Duration
 }
 
-func New() *Tracker {
+func newTracker() *tracker {
 	now := time.Now()
-	return &Tracker{
+	return &tracker{
 		lastUpdate:    now,
 		lastTPSUpdate: now,
 	}
 }
 
-// CalculateSteps calculates how many physics ticks should be performed in the current frame.
-func (t *Tracker) CalculateSteps(physicsStep time.Duration, maxSteps int) int {
+// calculateSteps calculates how many physics ticks should be performed in the current frame.
+func (t *tracker) calculateSteps(physicsStep time.Duration, maxSteps int) int {
 	now := time.Now()
 
 	if t.lastUpdate.IsZero() {
@@ -44,7 +43,7 @@ func (t *Tracker) CalculateSteps(physicsStep time.Duration, maxSteps int) int {
 	return steps
 }
 
-func (t *Tracker) ProcessStatsInterval() bool {
+func (t *tracker) processStatsInterval() bool {
 	duration := time.Since(t.lastTPSUpdate)
 	if duration > 2*time.Second {
 		t.lastTPSUpdate = time.Now()

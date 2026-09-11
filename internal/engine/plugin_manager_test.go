@@ -1,4 +1,4 @@
-package gokebiten
+package engine
 
 import (
 	"testing"
@@ -13,12 +13,12 @@ func (s *stubPostLoader) PostLoad() goke.System {
 	return goke.SystemFn{OnInit: func(si *goke.SysInit) { s.ran = true }}
 }
 
-func TestPluginManager_PostLoadSystems_RunsTrackedPostLoader(t *testing.T) {
-	game := NewGame(&GameProps{})
+func TestEngine_PostLoadSystems_RunsTrackedPostLoader(t *testing.T) {
+	engine := newTestEngine(nil)
 	stub := &stubPostLoader{}
-	game.pluginManager.track(stub)
+	engine.track(stub)
 
-	systems := game.pluginManager.postLoadSystems()
+	systems := engine.postLoadSystems()
 	if len(systems) != 1 {
 		t.Fatalf("postLoadSystems() returned %d systems, want 1", len(systems))
 	}
@@ -29,11 +29,11 @@ func TestPluginManager_PostLoadSystems_RunsTrackedPostLoader(t *testing.T) {
 	}
 }
 
-func TestPluginManager_ProvidedComps_SkipsValuesWithoutCompProvider(t *testing.T) {
-	game := NewGame(&GameProps{})
-	game.pluginManager.track(&stubPostLoader{})
+func TestEngine_ProvidedComps_SkipsValuesWithoutCompProvider(t *testing.T) {
+	engine := newTestEngine(nil)
+	engine.track(&stubPostLoader{})
 
-	if got := game.pluginManager.providedComps(); len(got) != 0 {
+	if got := engine.providedComps(); len(got) != 0 {
 		t.Errorf("providedComps() = %v, want empty (stubPostLoader isn't a CompProvider)", got)
 	}
 }
@@ -44,14 +44,19 @@ func (s *stubSerializable) Persisted() []any { return s.targets }
 
 type saveTargetPayload struct{ N int }
 
-func TestPluginManager_SaveTargets_CollectsTrackedSerializable(t *testing.T) {
-	game := NewGame(&GameProps{})
+func TestEngine_SaveTargets_CollectsTrackedSerializable(t *testing.T) {
+	engine := newTestEngine(nil)
 	a, b := &saveTargetPayload{N: 1}, &saveTargetPayload{N: 2}
-	game.pluginManager.track(&stubSerializable{targets: []any{a, b}})
-	game.pluginManager.track(&stubPostLoader{})
+	engine.track(&stubSerializable{targets: []any{a, b}})
+	engine.track(&stubPostLoader{})
 
-	got := game.pluginManager.saveTargets()
-	if len(got) != 2 || got[0] != any(a) || got[1] != any(b) {
-		t.Errorf("saveTargets() = %v, want [%v %v]", got, a, b)
+	got := engine.saveTargets()
+	if len(got) != 1 {
+		t.Fatalf("saveTargets() returned %d groups, want 1", len(got))
+	}
+	for _, targets := range got {
+		if len(targets) != 2 || targets[0] != any(a) || targets[1] != any(b) {
+			t.Errorf("saveTargets() targets = %v, want [%v %v]", targets, a, b)
+		}
 	}
 }

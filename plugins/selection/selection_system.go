@@ -54,7 +54,12 @@ func (s *SelectionSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 		s.state.Pending = nil
 		box := s.worldBox(p.Start, p.End)
 		hit := make(map[uid.UID64]struct{})
-		s.space.Query(box, func(id uid.UID64, _ plane.FragPosition) { hit[id] = struct{}{} })
+		collect := func(id uid.UID64, _ plane.FragPosition) { hit[id] = struct{}{} }
+		s.space.Query(box.AABB, collect)
+		box.VisitFragments(func(_ plane.FragPosition, fragBox geom.AABB[uint32]) bool {
+			s.space.Query(fragBox, collect)
+			return true
+		})
 		s.applySelection(cb, hit, p.Additive)
 	}
 }
@@ -101,22 +106,17 @@ func (s *SelectionSystem) applySelection(cb *goke.CmdBuf, hit map[uid.UID64]stru
 	}
 }
 
-func (s *SelectionSystem) worldBox(start, end geom.Vec[int32]) geom.AABB[uint32] {
-	x0, y0 := s.camera.FromScreen(float32(start.X), float32(start.Y))
-	x1, y1 := s.camera.FromScreen(float32(end.X), float32(end.Y))
+func (s *SelectionSystem) worldBox(start, end geom.Vec[int32]) plane.AABB[uint32] {
+	x0, y0, x1, y1 := camera.FromScreenRect(s.camera, float32(start.X), float32(start.Y), float32(end.X), float32(end.Y))
 	minX, maxX := min(x0, x1), max(x0, x1)
 	minY, maxY := min(y0, y1), max(y0, y1)
-	if minX < 0 {
-		minX = 0
+	width, height := maxX-minX, maxY-minY
+	if width < 1 {
+		width = 1
 	}
-	if minY < 0 {
-		minY = 0
+	if height < 1 {
+		height = 1
 	}
-	if maxX <= minX {
-		maxX = minX + 1
-	}
-	if maxY <= minY {
-		maxY = minY + 1
-	}
-	return geom.AABB[uint32]{TopLeft: geom.NewVec(uint32(minX), uint32(minY)), BottomRight: geom.NewVec(uint32(maxX), uint32(maxY))}
+	raw := plane.NewAABB(geom.NewVec(uint32(int64(minX)), uint32(int64(minY))), uint32(width), uint32(height))
+	return s.space.WrapAABB(raw.AABB)
 }

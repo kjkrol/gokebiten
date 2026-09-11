@@ -6,6 +6,17 @@ bin/
 *.so
 *.dylib
 
+# Compiled example binaries `go build ./examples/...` (or `go build ./...`)
+# drops at repo root, named after the package directory (e.g.
+# board-navigation-demo, collision-demo) — every real root-level file has an
+# extension or is one of the handful excepted below, so exclude by that
+# instead of naming each example.
+/*
+!/*.*
+!/*/
+!/Makefile
+!/LICENSE
+
 # Test binaries
 *.test
 
