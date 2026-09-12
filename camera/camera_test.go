@@ -404,36 +404,40 @@ func TestBasicCamera_GobRoundTrip_RefusesToEncode(t *testing.T) {
 	}
 }
 
-// TestState_GobRoundTrip_PreservesViewportAndZoom guards the actual
-// persistence path: encode/decode a State (not the camera itself), then
-// Restore it into a fresh Camera.
-func TestState_GobRoundTrip_PreservesViewportAndZoom(t *testing.T) {
+// TestCamera_PersistedRoundTrip_PreservesViewportAndZoom guards the actual
+// persistence path: encode Persisted()'s pointers, decode into a fresh
+// Camera's own Persisted() pointers, then Restore it.
+func TestCamera_PersistedRoundTrip_PreservesViewportAndZoom(t *testing.T) {
 	c := NewFromSpace(1000, 1000, false)
 	c.MoveTo(50, 60)
 	b := c.Bounds()
 	cx, cy := float32(b.TopLeft.X+b.BottomRight.X)/2, float32(b.TopLeft.Y+b.BottomRight.Y)/2
 	c.ZoomIn(2, cx, cy)
-	want := c.State()
+	wantBounds := c.Bounds()
+	wantZoom := c.Zoom()
 
 	var buf bytes.Buffer
-	if err := gob.NewEncoder(&buf).Encode(want); err != nil {
-		t.Fatalf("Encode: %v", err)
-	}
-	var got State
-	if err := gob.NewDecoder(&buf).Decode(&got); err != nil {
-		t.Fatalf("Decode: %v", err)
-	}
-	if got != want {
-		t.Fatalf("State after gob round-trip = %+v, want %+v", got, want)
+	enc := gob.NewEncoder(&buf)
+	for _, target := range c.Persisted() {
+		if err := enc.Encode(target); err != nil {
+			t.Fatalf("Encode: %v", err)
+		}
 	}
 
 	fresh := NewFromSpace(1000, 1000, false)
-	fresh.Restore(got)
-	if fresh.Bounds() != c.Bounds() {
-		t.Errorf("Bounds() after Restore = %+v, want %+v", fresh.Bounds(), c.Bounds())
+	dec := gob.NewDecoder(&buf)
+	for _, target := range fresh.Persisted() {
+		if err := dec.Decode(target); err != nil {
+			t.Fatalf("Decode: %v", err)
+		}
 	}
-	if fresh.Zoom() != c.Zoom() {
-		t.Errorf("Zoom() after Restore = %v, want %v", fresh.Zoom(), c.Zoom())
+	fresh.Restore()
+
+	if fresh.Bounds() != wantBounds {
+		t.Errorf("Bounds() after Restore = %+v, want %+v", fresh.Bounds(), wantBounds)
+	}
+	if fresh.Zoom() != wantZoom {
+		t.Errorf("Zoom() after Restore = %v, want %v", fresh.Zoom(), wantZoom)
 	}
 }
 

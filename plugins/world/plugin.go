@@ -22,15 +22,12 @@ type Resources struct {
 	Config    Config
 	Telemetry *Telemetry
 	Camera    camera.Camera
-
-	camState camera.State
 }
+
+var _ plugin.Serializable = (*Resources)(nil)
 
 // Persisted returns the camera's Viewport/Zoom for Persistence.Save/Load to include automatically.
-func (r *Resources) Persisted() []any {
-	r.camState = r.Camera.State()
-	return []any{&r.camState}
-}
+func (r *Resources) Persisted() []any { return r.Camera.Persisted() }
 
 // Plugin builds a world - the mandatory foundation for any game with
 // moving, drawable entities - and publishes Resources as a resource.
@@ -47,6 +44,7 @@ type Plugin struct {
 
 var _ plugin.Plugin = (*Plugin)(nil)
 var _ plugin.Builtin = (*Plugin)(nil)
+var _ plugin.Restorer = (*Plugin)(nil)
 
 // Builtin marks Plugin as installed automatically by Engine — see ctx.World().
 func (*Plugin) Builtin() {}
@@ -72,12 +70,8 @@ func (p *Plugin) WithCameraControls(scrollSpeed ...int32) *Plugin {
 // Camera returns world's shared Camera, built from Config.Space.
 func (p *Plugin) Camera() camera.Camera { return p.Res.Camera }
 
-// PostLoad restores the camera's Viewport/Zoom after Persistence.Load.
-func (p *Plugin) PostLoad() goke.System {
-	return goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		p.Res.Camera.Restore(p.Res.camState)
-	}}
-}
+// Restore applies the camera's Viewport/Zoom decoded by Persistence.Load.
+func (p *Plugin) Restore() { p.Res.Camera.Restore() }
 
 // =================================================================
 // plugin.Plugin contract

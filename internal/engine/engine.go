@@ -231,6 +231,16 @@ func (e *Engine) postLoadSystems() []goke.System {
 	return systems
 }
 
+// runRestore calls Restore on every tracked value implementing Restorer,
+// synchronously, right after Persistence.Load decodes their Persisted() pointers.
+func (e *Engine) runRestore() {
+	for _, v := range e.tracked {
+		if r, ok := v.(plugin.Restorer); ok {
+			r.Restore()
+		}
+	}
+}
+
 // saveTargets collects Persisted from every tracked value implementing
 // Serializable, keyed by its Go type name (tracked values have no Plugin.Name()).
 func (e *Engine) saveTargets() map[string][]any {

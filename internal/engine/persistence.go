@@ -29,6 +29,7 @@ func (p *persistence) Load(basePath, label string, resources ...any) error {
 	if err := load(p.engine.ecs, basePath, label, comps, p.engine.persistGroups(resources...)); err != nil {
 		return err
 	}
+	p.engine.runRestore()
 	systems := p.engine.postLoadSystems()
 	p.engine.addPendingSetup(func() []goke.System { return systems })
 	return nil

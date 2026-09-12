@@ -48,10 +48,12 @@ type Camera interface {
 	ZoomIn(factor float32, anchorX, anchorY float32)
 	// ZoomOut is ZoomIn(1/factor, anchorX, anchorY).
 	ZoomOut(factor float32, anchorX, anchorY float32)
-	// State returns a gob-safe snapshot for Persistence.Save.
+	// State returns the camera's current Viewport/Zoom.
 	State() State
-	// Restore applies a snapshot from Persistence.Load.
-	Restore(State)
+	// Persisted returns gob-safe pointers directly into the camera's own live Viewport/Zoom for Persistence.Save/Load to include automatically.
+	Persisted() []any
+	// Restore rebuilds cached derived state after Persistence.Load decodes directly into Persisted's pointers.
+	Restore()
 	// SetMinZoom raises ZoomOut's floor above the automatic world-fit
 	// one — 0 (the default) applies only that automatic floor.
 	SetMinZoom(minZoom float32)
@@ -96,7 +98,6 @@ type basicCamera struct {
 	zoom         float32
 
 	effective plane.AABB[uint32] // the current visible window — always valid and clamped to the world
-	scale     float32
 }
 
 var _ Camera = (*basicCamera)(nil)
@@ -110,7 +111,6 @@ func newBasicCamera(surface plane.Space2D[uint32], viewport AABB, toroidal bool)
 		toroidal:     toroidal,
 		zoom:         1,
 		effective:    plane.NewAABB(viewport.TopLeft, w, h),
-		scale:        1,
 	}
 }
 
@@ -190,13 +190,13 @@ func (c *basicCamera) ToScreen(x, y float32) (float32, float32) {
 		x = wrapRelative(x, float32(c.effective.TopLeft.X), float32(world.BottomRight.X-world.TopLeft.X))
 		y = wrapRelative(y, float32(c.effective.TopLeft.Y), float32(world.BottomRight.Y-world.TopLeft.Y))
 	}
-	return (x - float32(c.effective.TopLeft.X)) * c.scale, (y - float32(c.effective.TopLeft.Y)) * c.scale
+	return (x - float32(c.effective.TopLeft.X)) * c.zoom, (y - float32(c.effective.TopLeft.Y)) * c.zoom
 }
 
 func (c *basicCamera) ToScreenQuads(x0, y0, x1, y1 float32) []Quad {
 	if !c.toroidal {
 		sx0, sy0 := c.ToScreen(x0, y0)
-		return []Quad{{sx0, sy0, sx0 + (x1-x0)*c.scale, sy0 + (y1-y0)*c.scale, 0, 1, 0, 1}}
+		return []Quad{{sx0, sy0, sx0 + (x1-x0)*c.zoom, sy0 + (y1-y0)*c.zoom, 0, 1, 0, 1}}
 	}
 	world := c.surface.Viewport()
 	ww := float32(world.BottomRight.X - world.TopLeft.X)
@@ -212,10 +212,10 @@ func (c *basicCamera) ToScreenQuads(x0, y0, x1, y1 float32) []Quad {
 	var quads []Quad
 	for _, xp := range splitRange(u0, u1, ww) {
 		for _, yp := range splitRange(v0, v1, wh) {
-			sx0 := xp.screenLo * c.scale
-			sx1 := sx0 + (xp.hi-xp.lo)*c.scale
-			sy0 := yp.screenLo * c.scale
-			sy1 := sy0 + (yp.hi-yp.lo)*c.scale
+			sx0 := xp.screenLo * c.zoom
+			sx1 := sx0 + (xp.hi-xp.lo)*c.zoom
+			sy0 := yp.screenLo * c.zoom
+			sy1 := sy0 + (yp.hi-yp.lo)*c.zoom
 			quads = append(quads, Quad{
 				X0: sx0, Y0: sy0, X1: sx1, Y1: sy1,
 				T0X: (xp.lo - u0) / (u1 - u0), T1X: (xp.hi - u0) / (u1 - u0),
@@ -236,8 +236,8 @@ func splitRange(u0, u1, size float32) []rangePiece {
 }
 
 func (c *basicCamera) FromScreen(sx, sy float32) (float32, float32) {
-	x := sx/c.scale + float32(c.effective.TopLeft.X)
-	y := sy/c.scale + float32(c.effective.TopLeft.Y)
+	x := sx/c.zoom + float32(c.effective.TopLeft.X)
+	y := sy/c.zoom + float32(c.effective.TopLeft.Y)
 	if c.toroidal {
 		world := c.surface.Viewport()
 		x = wrapMod(x, float32(world.BottomRight.X-world.TopLeft.X))
@@ -294,7 +294,6 @@ func (c *basicCamera) MoveTo(x, y uint32) {
 // this never needs to reason about a separately-tracked reference box.
 func (c *basicCamera) Translate(dx, dy int32) {
 	c.surface.Reposition(&c.effective, geom.NewVec(uint32(dx), uint32(dy)))
-	c.scale = c.zoom
 }
 
 // Zoom returns the current zoom factor (1 = default).
@@ -318,8 +317,8 @@ func (c *basicCamera) ZoomIn(factor float32, anchorX, anchorY float32) {
 	c.setZoom(newZoom)
 
 	afterX, afterY := c.ToScreen(anchorX, anchorY)
-	dx := int32((afterX - beforeX) / c.scale)
-	dy := int32((afterY - beforeY) / c.scale)
+	dx := int32((afterX - beforeX) / c.zoom)
+	dy := int32((afterY - beforeY) / c.zoom)
 	if dx != 0 || dy != 0 {
 		c.Translate(dx, dy)
 	}
@@ -346,7 +345,6 @@ func (c *basicCamera) setZoom(zoom float32) {
 
 	c.zoom = zoom
 	c.effective = eff
-	c.scale = zoom
 }
 
 // minZoom returns the smallest zoom ZoomIn/ZoomOut will settle at — the
@@ -379,14 +377,17 @@ func (c *basicCamera) ZoomOut(factor float32, anchorX, anchorY float32) {
 	c.ZoomIn(1/factor, anchorX, anchorY)
 }
 
-// State returns a gob-safe snapshot for Persistence.Save.
+// State returns the camera's current Viewport/Zoom.
 func (c *basicCamera) State() State { return State{Viewport: c.effective.AABB, Zoom: c.zoom} }
 
-// Restore applies a snapshot from Persistence.Load.
-func (c *basicCamera) Restore(s State) {
-	w := s.Viewport.BottomRight.X - s.Viewport.TopLeft.X
-	h := s.Viewport.BottomRight.Y - s.Viewport.TopLeft.Y
-	c.effective = plane.NewAABB(s.Viewport.TopLeft, w, h)
-	c.zoom = s.Zoom
-	c.scale = s.Zoom
+// Persisted returns gob-safe pointers directly into the camera's own live Viewport/Zoom for Persistence.Save/Load to include automatically.
+func (c *basicCamera) Persisted() []any {
+	return []any{&c.effective.AABB, &c.zoom}
+}
+
+// Restore rebuilds effective's cached derived state after Persistence.Load decodes directly into Persisted's pointers.
+func (c *basicCamera) Restore() {
+	w := c.effective.BottomRight.X - c.effective.TopLeft.X
+	h := c.effective.BottomRight.Y - c.effective.TopLeft.Y
+	c.effective = plane.NewAABB(c.effective.TopLeft, w, h)
 }
