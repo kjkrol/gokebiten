@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	gokebiten.NewEngine(&gokebiten.Props{
+	gokebiten.Run(&gokebiten.Props{
 		Title:       "GOKe + GOKg + Ebiten Integration",
 		ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight,
 		TargetTPS: TPS,
@@ -14,5 +14,5 @@ func main() {
 			Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
 			Entities: world.EntitiesCfg{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize},
 		},
-	}, &Demo{}).Run()
+	}, &Demo{})
 }

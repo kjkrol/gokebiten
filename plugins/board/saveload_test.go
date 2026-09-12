@@ -5,17 +5,17 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/game"
+	"github.com/kjkrol/gokebiten/internal/engine"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
 	"github.com/kjkrol/gokg/geom"
 )
 
-func testProps() *gokebiten.Props {
-	return &gokebiten.Props{World: world.Config{
+func testProps() *engine.Props {
+	return &engine.Props{World: world.Config{
 		Space:    world.SpaceCfg{Width: 100, Height: 100},
 		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
 	}}
@@ -60,19 +60,19 @@ func TestPlugin_SaveLoad_TerrainRoundTrip(t *testing.T) {
 	}
 
 	game := &boardSaveLoadTestGame{grid: grid}
-	engine := gokebiten.NewEngine(testProps(), game)
-	if err := engine.Init(); err != nil {
+	eng := engine.NewEngine(testProps(), game)
+	if err := eng.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
 	game.boardPlugin.Res.Logic.Board.Set(cell, wall)
 
-	if err := engine.Persistence().Save(basePath, ""); err != nil {
+	if err := eng.Persistence().Save(basePath, ""); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 
 	game2 := &boardSaveLoadTestGame{grid: grid, loadFrom: basePath}
-	engine2 := gokebiten.NewEngine(testProps(), game2)
-	if err := engine2.Init(); err != nil {
+	eng2 := engine.NewEngine(testProps(), game2)
+	if err := eng2.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
 
