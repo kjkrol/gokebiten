@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	gokebiten.NewEngine(&gokebiten.Props{
+	gokebiten.Run(&gokebiten.Props{
 		Title:       "gokebiten board & navigation plugins demo",
 		ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight,
 		TargetTPS: TPS,
@@ -14,5 +14,5 @@ func main() {
 			Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: false},
 			Entities: world.EntitiesCfg{MaxCount: MaxEntCount, MinSize: EntitySize, MaxSize: EntitySize},
 		},
-	}, &Demo{}).Run()
+	}, &Demo{})
 }

@@ -14,7 +14,7 @@ type Engine = engine.Engine
 // Props configures Engine's window and target tick rate.
 type Props = engine.Props
 
-// NewEngine builds an Engine driving g.
-func NewEngine(props *Props, g game.Game) *Engine {
-	return engine.NewEngine(props, g)
+// Louch a game
+func Run(props *Props, g game.Game) {
+	engine.NewEngine(props, g).Run()
 }

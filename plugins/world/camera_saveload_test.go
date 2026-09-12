@@ -5,15 +5,15 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/game"
+	"github.com/kjkrol/gokebiten/internal/engine"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
 )
 
-func testEngineProps() *gokebiten.Props {
-	return &gokebiten.Props{World: world.Config{
+func testEngineProps() *engine.Props {
+	return &engine.Props{World: world.Config{
 		Space:    world.SpaceCfg{Width: 1000, Height: 1000},
 		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
 	}}
@@ -49,8 +49,8 @@ func TestPlugin_SaveLoad_CameraRoundTrip(t *testing.T) {
 	basePath := t.TempDir() + "/save"
 
 	g := &cameraSaveLoadTestGame{}
-	engine := gokebiten.NewEngine(testEngineProps(), g)
-	if err := engine.Init(); err != nil {
+	eng := engine.NewEngine(testEngineProps(), g)
+	if err := eng.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
 	g.world.Camera().MoveTo(100, 150)
@@ -60,13 +60,13 @@ func TestPlugin_SaveLoad_CameraRoundTrip(t *testing.T) {
 	wantBounds := g.world.Camera().Bounds()
 	wantZoom := g.world.Camera().Zoom()
 
-	if err := engine.Persistence().Save(basePath, ""); err != nil {
+	if err := eng.Persistence().Save(basePath, ""); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 
 	g2 := &cameraSaveLoadTestGame{loadFrom: basePath}
-	engine2 := gokebiten.NewEngine(testEngineProps(), g2)
-	if err := engine2.Init(); err != nil {
+	eng2 := engine.NewEngine(testEngineProps(), g2)
+	if err := eng2.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
 
