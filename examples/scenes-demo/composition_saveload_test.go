@@ -44,8 +44,8 @@ func TestGameplayStage_Composition_SurvivesSaveLoad(t *testing.T) {
 		t.Fatalf("Init: %v", err)
 	}
 
-	stage.Composition().Show(stage.panel.Name())
-	if got, want := stage.Composition().Active(), stage.panel.Name(); got != want {
+	stage.Stack().Composition().Show(stage.panel.Name())
+	if got, want := stage.Stack().Composition().Active(), stage.panel.Name(); got != want {
 		t.Fatalf("Active() before save = %q, want %q", got, want)
 	}
 
@@ -60,10 +60,10 @@ func TestGameplayStage_Composition_SurvivesSaveLoad(t *testing.T) {
 	}
 
 	wantOrder := []string{"world", "hud", "panel"}
-	if got := stage2.Composition().Order(); !equalStrings(got, wantOrder) {
+	if got := stage2.Stack().Composition().Order(); !equalStrings(got, wantOrder) {
 		t.Errorf("Order() after Load = %v, want %v", got, wantOrder)
 	}
-	if got, want := stage2.Composition().Active(), stage2.panel.Name(); got != want {
+	if got, want := stage2.Stack().Composition().Active(), stage2.panel.Name(); got != want {
 		t.Errorf("Active() after Load = %q, want %q (the panel should still be on top and focused)", got, want)
 	}
 }

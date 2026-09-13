@@ -23,9 +23,6 @@ type Stage interface {
 	// Update advances this stage's simulation by d, once per tick.
 	Update(ctx goke.RunCtx, d time.Duration)
 
-	// Stack lists every Scene this stage can show.
+	// Stack lists every Scene this stage can show, and owns their live Composition.
 	Stack() Stack
-
-	// Composition reports which Scenes are visible, in what order, and which is active.
-	Composition() Composition
 }
