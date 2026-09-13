@@ -193,7 +193,7 @@ func (e *Engine) Draw(screen *ebiten.Image) {
 		e.transitionOverlay.Draw(screen)
 		return
 	}
-	for _, name := range e.current.stage.Composition().Order() {
+	for _, name := range e.current.stage.Stack().Composition().Order() {
 		for _, r := range e.current.sceneLayers[name] {
 			r.Draw(screen)
 		}
@@ -211,13 +211,13 @@ func (e *Engine) Layout(outsideWidth, outsideHeight int) (int, int) {
 // Stage has no HandleEvents of its own: input is the Scene's sole
 // responsibility.
 func (e *Engine) dispatchEvents(events *control.InputEvents) {
-	stage := e.current.stage
-	comp := stage.Composition()
+	stack := e.current.stage.Stack()
+	comp := stack.Composition()
 	active := comp.Active()
 	if active == "" {
 		return
 	}
-	if sc, ok := stage.Stack().Get(active); ok {
+	if sc, ok := stack.Get(active); ok {
 		sc.HandleEvents(events, e, comp)
 	}
 }

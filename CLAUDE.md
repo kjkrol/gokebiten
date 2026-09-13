@@ -145,8 +145,9 @@ engine concept.
 Within one active `Stage`, `game.Scene` is what `Game.Draw`/`HandleEvents`
 used to be: `Name`, `Layers() []func() render.Renderer`, `HandleEvents`,
 `Focusable`. `Stage.Stack()` is the static, `Name()`-keyed registry of
-every `Scene` it can show (`game.NewStack(scenes...)`); `Stage.Composition()`
-is the live per-tick state over that Stack — which scenes are visible, in
+every `Scene` it can show (`game.NewStack(scenes...)`); `Stack.Composition()`
+(the only way to reach it — `Stage` has no accessor of its own) is the live
+per-tick state over that Stack — which scenes are visible, in
 what z-order, and which one is `Active()` (the topmost with `Focusable()
 == true`, so a non-focusable HUD/minimap can sit on top and still never
 steal input). Every tick, the engine calls `HandleEvents` on **only** the

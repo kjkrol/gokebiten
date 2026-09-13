@@ -10,7 +10,7 @@ import (
 // world.Plugin auto-installed into it, and every Scene's Layers() already
 // resolved into concrete render.Renderer values (built once, at entry —
 // Draw just replays them, keyed by Scene.Name() to match
-// Stage.Composition().Order()).
+// Stage.Stack().Composition().Order()).
 type stageRuntime struct {
 	host        *ecsHost
 	stage       game.Stage

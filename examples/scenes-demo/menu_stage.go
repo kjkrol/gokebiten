@@ -38,8 +38,9 @@ func (m *MenuStage) Init(ctx game.Initializer) error {
 		return err
 	}
 	m.stack = stack
-	m.Composition().Show(main.Name())
-	return ctx.Track(m.Composition())
+	comp := stack.Composition()
+	comp.Show(main.Name())
+	return ctx.Track(comp)
 }
 
 func (m *MenuStage) Restore(game.Persistence) (bool, error) { return false, nil }
@@ -48,8 +49,7 @@ func (m *MenuStage) Spawn() error { return nil }
 
 func (m *MenuStage) Update(goke.RunCtx, time.Duration) {}
 
-func (m *MenuStage) Stack() game.Stack             { return m.stack }
-func (m *MenuStage) Composition() game.Composition { return m.stack.Composition() }
+func (m *MenuStage) Stack() game.Stack { return m.stack }
 
 // =========================== Scene ===========================
 

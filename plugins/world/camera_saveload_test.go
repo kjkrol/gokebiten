@@ -46,7 +46,6 @@ func (g *cameraSaveLoadTestGame) Stack() game.Stack {
 	}
 	return g.stack
 }
-func (g *cameraSaveLoadTestGame) Composition() game.Composition { return g.Stack().Composition() }
 
 // oneStageGame is a minimal game.Game wrapping a single Stage.
 type oneStageGame struct {

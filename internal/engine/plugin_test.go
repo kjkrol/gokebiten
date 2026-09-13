@@ -70,7 +70,6 @@ func (s *stubStage) Stack() game.Stack {
 	}
 	return s.stack
 }
-func (s *stubStage) Composition() game.Composition { return s.Stack().Composition() }
 
 // oneStageGame is a minimal game.Game wrapping a single Stage — enough for
 // tests that only care about Engine/Initializer behavior within one Stage.

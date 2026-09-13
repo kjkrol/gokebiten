@@ -69,9 +69,10 @@ func (g *GameplayStage) Init(ctx game.Initializer) error {
 		return err
 	}
 	g.stack = stack
-	g.Composition().Show(worldScn.Name())
-	g.Composition().Show(hud.Name())
-	return ctx.Track(g.Composition())
+	comp := stack.Composition()
+	comp.Show(worldScn.Name())
+	comp.Show(hud.Name())
+	return ctx.Track(comp)
 }
 
 func (g *GameplayStage) Restore(p game.Persistence) (bool, error) {
@@ -103,8 +104,7 @@ func (g *GameplayStage) Update(ctx goke.RunCtx, d time.Duration) {
 	ctx.Sync()
 }
 
-func (g *GameplayStage) Stack() game.Stack             { return g.stack }
-func (g *GameplayStage) Composition() game.Composition { return g.stack.Composition() }
+func (g *GameplayStage) Stack() game.Stack { return g.stack }
 
 // handleGlobalKeys handles quit/pause/save — shared by worldScene and panelScene.
 func handleGlobalKeys(events *control.InputEvents, runtime game.Runtime, basePath string) {
@@ -228,6 +228,6 @@ type hudRenderer struct{ stage *GameplayStage }
 func (r *hudRenderer) Init(*goke.SysInit) {}
 
 func (r *hudRenderer) Draw(screen *ebiten.Image) {
-	active := r.stage.Composition().Active()
+	active := r.stage.stack.Composition().Active()
 	ebitenutil.DebugPrintAt(screen, fmt.Sprintf("active scene: %s  (P: toggle panel, F5: save)", active), 8, ScreenHeight-20)
 }

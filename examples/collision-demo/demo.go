@@ -91,8 +91,7 @@ var _ game.Stage = (*mainStage)(nil)
 
 func (s *mainStage) Name() string { return "collision-demo" }
 
-func (s *mainStage) Stack() game.Stack             { return s.stack }
-func (s *mainStage) Composition() game.Composition { return s.stack.Composition() }
+func (s *mainStage) Stack() game.Stack { return s.stack }
 
 func (s *mainStage) Init(ctx game.Initializer) error {
 	s.world = ctx.World()
@@ -121,8 +120,9 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 		return err
 	}
 	s.stack = stack
-	s.Composition().Show(main.Name())
-	return ctx.Track(s.Composition())
+	comp := stack.Composition()
+	comp.Show(main.Name())
+	return ctx.Track(comp)
 }
 
 func (s *mainStage) Restore(p game.Persistence) (bool, error) {
