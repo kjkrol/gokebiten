@@ -99,8 +99,14 @@ func (w *module) PostLoad() goke.System {
 // RegisterSpeedModifier adds m to the set VelocitySystem folds into every entity's Velocity.Value each tick.
 func (w *module) RegisterSpeedModifier(m SpeedModifier) { w.modifiers = append(w.modifiers, m) }
 
-// Populate queues a spawn of count entities — see ExamplePlugin_Populate.
-func (w *module) Populate(count int, spawner *Spawner) *module {
+// populate queues a spawn of one entity of kind per element of data, each element feeding kind's Load templates.
+func (w *module) populate(kind EntKind, data []any) {
+	count := len(data)
+	extras := []entityExtras{Const(Appearance{SpriteID: kind.SpriteID}).adder()}
+	for _, c := range kind.Components {
+		extras = append(extras, c.adder())
+	}
+
 	w.seeds = append(w.seeds, goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		w.reserve(count)
 		w.telemetry.Count += count
@@ -108,7 +114,7 @@ func (w *module) Populate(count int, spawner *Spawner) *module {
 		var posComp goke.Comp[Position]
 		var velComp goke.Comp[Velocity]
 		comps := []goke.Addable{&posComp, &velComp}
-		for _, e := range spawner.extras {
+		for _, e := range extras {
 			comps = append(comps, e.Components()...)
 		}
 		factory := si.NewFactory(comps...)
@@ -119,21 +125,20 @@ func (w *module) Populate(count int, spawner *Spawner) *module {
 			positions := posComp.Slice(&factory.Cursor)
 			velocities := velComp.Slice(&factory.Cursor)
 			for i, id := range factory.IDs {
-				pos := spawner.position(index, count)
-				vel := spawner.velocity(index)
+				d := data[index]
+				pos := kind.Position.resolve(d, id)
 				w.validateSize(id, pos)
 				positions[i] = pos
-				velocities[i] = vel
+				velocities[i] = kind.Velocity.resolve(d, id)
 				w.space.Insert(id, pos.AABB)
-				for _, e := range spawner.extras {
-					e.Init(&factory.Cursor, i, index, id)
+				for _, e := range extras {
+					e.Init(&factory.Cursor, i, d, id)
 				}
 				index++
 			}
 		}
 		w.space.Flush(nil)
 	}})
-	return w
 }
 
 func (w *module) validateSize(id uid.UID64, pos Position) {

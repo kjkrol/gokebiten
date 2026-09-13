@@ -5,15 +5,13 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/game"
 	"github.com/kjkrol/gokebiten/internal/engine"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/render"
 )
 
-func testEngineProps() *engine.Props {
-	return &engine.Props{World: world.Config{
+func testEngineProps() game.Props {
+	return game.Props{World: world.Config{
 		Space:    world.SpaceCfg{Width: 1000, Height: 1000},
 		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
 	}}
@@ -22,8 +20,11 @@ func testEngineProps() *engine.Props {
 type cameraSaveLoadTestGame struct {
 	world    *world.Plugin
 	loadFrom string
+
+	stack game.Stack
 }
 
+func (g *cameraSaveLoadTestGame) Name() string { return "stage" }
 func (g *cameraSaveLoadTestGame) Init(ctx game.Initializer) error {
 	g.world = ctx.World()
 	return nil
@@ -37,10 +38,27 @@ func (g *cameraSaveLoadTestGame) Restore(p game.Persistence) (bool, error) {
 	}
 	return true, nil
 }
-func (g *cameraSaveLoadTestGame) Spawn() ([]world.Batch, error)                   { return nil, nil }
-func (g *cameraSaveLoadTestGame) Update(goke.RunCtx, time.Duration)               {}
-func (g *cameraSaveLoadTestGame) Draw(game.Runtime) []func() render.Renderer      { return nil }
-func (g *cameraSaveLoadTestGame) HandleEvents(*control.InputEvents, game.Runtime) {}
+func (g *cameraSaveLoadTestGame) Spawn() error                      { return nil }
+func (g *cameraSaveLoadTestGame) Update(goke.RunCtx, time.Duration) {}
+func (g *cameraSaveLoadTestGame) Stack() game.Stack {
+	if g.stack == nil {
+		g.stack, _ = game.NewStack()
+	}
+	return g.stack
+}
+func (g *cameraSaveLoadTestGame) Composition() game.Composition { return g.Stack().Composition() }
+
+// oneStageGame is a minimal game.Game wrapping a single Stage.
+type oneStageGame struct {
+	stage game.Stage
+	props game.Props
+}
+
+func (g oneStageGame) Props() game.Props { return g.props }
+
+func (g oneStageGame) Stages() (map[string]game.Stage, string) {
+	return map[string]game.Stage{g.stage.Name(): g.stage}, g.stage.Name()
+}
 
 // TestPlugin_SaveLoad_CameraRoundTrip guards that the shared Camera's
 // Viewport/Zoom is saved/restored automatically via world's Serializable,
@@ -49,7 +67,7 @@ func TestPlugin_SaveLoad_CameraRoundTrip(t *testing.T) {
 	basePath := t.TempDir() + "/save"
 
 	g := &cameraSaveLoadTestGame{}
-	eng := engine.NewEngine(testEngineProps(), g)
+	eng := engine.NewEngine(oneStageGame{stage: g, props: testEngineProps()})
 	if err := eng.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
@@ -65,7 +83,7 @@ func TestPlugin_SaveLoad_CameraRoundTrip(t *testing.T) {
 	}
 
 	g2 := &cameraSaveLoadTestGame{loadFrom: basePath}
-	eng2 := engine.NewEngine(testEngineProps(), g2)
+	eng2 := engine.NewEngine(oneStageGame{stage: g2, props: testEngineProps()})
 	if err := eng2.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}

@@ -41,7 +41,7 @@ func TestPlugin_Install_WiresBoardForEventHandler(t *testing.T) {
 		Space:    world.SpaceCfg{Width: 50, Height: 50},
 		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
 	})
-	boardPlugin := board.NewPlugin(grid, &board.SingleOccupancy{}, nil, worldPlugin)
+	boardPlugin := board.NewPlugin(grid, &board.SingleOccupancy{}, worldPlugin)
 	boardPlugin.Res.Logic.Board.SetAll(board.CellKind{Cost: 1, Passable: true})
 
 	navPlugin := NewPlugin(10, boardPlugin, worldPlugin)

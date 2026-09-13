@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/kjkrol/goke/v3"
@@ -47,15 +48,21 @@ func TestSaveLoadCycle(t *testing.T) {
 	wp := world.NewPlugin(cfg)
 	placement := world.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize)
 	motion := newRandomVelocity(200, 50, 10)
-	spawner := world.NewSpawner(
-		func(index, count int) world.Position { return placement.Place(index, count) },
-		func(index int) world.Velocity { return motion.initialVelocity(index) },
-	).
-		With(func(index int) world.Appearance {
-			return world.Appearance{SpriteID: render.SpriteID(index)}
-		}).
-		With(func(index int) collisions.Collision { return collisions.Collision{} })
-	wp.Populate(count, spawner)
+	var roster world.Roster
+	for i := range count {
+		name := fmt.Sprintf("k%d", i)
+		wp.EntKindDict().Create(world.EntKind{
+			Name:       name,
+			Position:   world.Load(func(b body) world.Position { return b.pos }),
+			Velocity:   world.Load(func(b body) world.Velocity { return b.vel }),
+			Components: []world.ComponentTemplate{world.Const(collisions.Collision{})},
+		})
+		roster = append(roster, world.Entry{Kind: name, Data: body{pos: placement.Place(i, count), vel: motion.initialVelocity(i)}})
+	}
+	wp.Seed(roster)
+	if err := wp.Populate(); err != nil {
+		t.Fatalf("Populate: %v", err)
+	}
 	cm := collisions.New(wp.Space(), ecs, 0)
 
 	ctx := &testInstallCtx{ecs: ecs}

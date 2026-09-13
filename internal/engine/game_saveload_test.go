@@ -13,8 +13,8 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 )
 
-func testProps() *engine.Props {
-	return &engine.Props{World: world.Config{
+func testProps() game.Props {
+	return game.Props{World: world.Config{
 		Space:    world.SpaceCfg{Width: 1000, Height: 1000},
 		Entities: world.EntitiesCfg{MaxCount: 10, MinSize: 1, MaxSize: 100},
 	}}
@@ -54,8 +54,11 @@ type saveLoadTestGame struct {
 	setup    func(*goke.SysInit)
 	loadFrom string
 	loadArgs []any
+
+	stack game.Stack
 }
 
+func (g *saveLoadTestGame) Name() string { return "stage" }
 func (g *saveLoadTestGame) Init(ctx game.Initializer) error {
 	g.acc = &ecsAccessor{setup: g.setup}
 	return ctx.Use(g.acc)
@@ -69,10 +72,27 @@ func (g *saveLoadTestGame) Restore(p game.Persistence) (bool, error) {
 	}
 	return true, nil
 }
-func (g *saveLoadTestGame) Spawn() ([]world.Batch, error)                   { return nil, nil }
-func (g *saveLoadTestGame) Update(goke.RunCtx, time.Duration)               {}
-func (g *saveLoadTestGame) Draw(game.Runtime) []func() render.Renderer      { return nil }
-func (g *saveLoadTestGame) HandleEvents(*control.InputEvents, game.Runtime) {}
+func (g *saveLoadTestGame) Spawn() error                      { return nil }
+func (g *saveLoadTestGame) Update(goke.RunCtx, time.Duration) {}
+func (g *saveLoadTestGame) Stack() game.Stack {
+	if g.stack == nil {
+		g.stack, _ = game.NewStack()
+	}
+	return g.stack
+}
+func (g *saveLoadTestGame) Composition() game.Composition { return g.Stack().Composition() }
+
+// oneStageGame is a minimal game.Game wrapping a single Stage.
+type oneStageGame struct {
+	stage game.Stage
+	props game.Props
+}
+
+func (g oneStageGame) Props() game.Props { return g.props }
+
+func (g oneStageGame) Stages() (map[string]game.Stage, string) {
+	return map[string]game.Stage{g.stage.Name(): g.stage}, g.stage.Name()
+}
 
 // TestGame_SaveLoad_RoundTrip guards that Engine.Persistence.Save/Load correctly delegate to the engine's own ECS and resources.
 func TestGame_SaveLoad_RoundTrip(t *testing.T) {
@@ -85,7 +105,7 @@ func TestGame_SaveLoad_RoundTrip(t *testing.T) {
 		f.Next()
 		appearance.Slice(&f.Cursor)[0] = world.Appearance{SpriteID: 7}
 	}}
-	eng := engine.NewEngine(testProps(), g)
+	eng := engine.NewEngine(oneStageGame{stage: g, props: testProps()})
 	if err := eng.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
@@ -107,7 +127,7 @@ func TestGame_SaveLoad_RoundTrip(t *testing.T) {
 		loadFrom: basePath,
 		loadArgs: []any{state2, extra2},
 	}
-	eng2 := engine.NewEngine(testProps(), game2)
+	eng2 := engine.NewEngine(oneStageGame{stage: game2, props: testProps()})
 	if err := eng2.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}

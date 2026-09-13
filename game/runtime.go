@@ -5,16 +5,18 @@ import "github.com/kjkrol/gokebiten/camera"
 // TPS is the built-in measured-ticks-per-second counter.
 type TPS struct{ Ticks int }
 
-// Runtime is what a Game may keep from Init for later use (e.g. in
-// HandleEvents) — pause control, Persistence, the measured TPS counter,
-// the shared Camera, and Quit.
+// Runtime gives a Stage or Scene engine-level control: pause, stage switching, save/load.
 type Runtime interface {
 	Paused() bool
 	Pause()
 	Resume()
 	TogglePause()
+	Quit()
+
+	// SwitchStage transitions to the Stage with the given Name().
+	SwitchStage(name string) error
+
 	Persistence() Persistence
 	TPS() *TPS
 	Camera() camera.Camera
-	Quit()
 }

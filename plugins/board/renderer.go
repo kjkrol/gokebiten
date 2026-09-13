@@ -13,12 +13,13 @@ import (
 
 var colorGridLine = color.RGBA{R: 20, G: 20, B: 20, A: 120}
 
-// RenderState is the board renderer's live display toggles — published to
-// Resources by Plugin.WithRenderer, so a game can flip them directly (e.g.
-// bind a key to renderState.ShowGridLines = !renderState.ShowGridLines).
+// RenderState is the board renderer's live display toggles.
 type RenderState struct {
 	ShowGridLines bool
 }
+
+// ToggleShowGridLines flips whether grid lines are drawn.
+func (r *RenderState) ToggleShowGridLines() { r.ShowGridLines = !r.ShowGridLines }
 
 // Renderer draws Board's cells — register it before the entities layer in
 // Game.Layers so terrain sits underneath.
