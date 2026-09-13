@@ -8,13 +8,7 @@ import (
 	"github.com/kjkrol/gokebiten/internal/engine"
 )
 
-// Engine drives a user-implemented game.Game through the Ebitengine loop.
-type Engine = engine.Engine
-
-// Props configures Engine's window and target tick rate.
-type Props = engine.Props
-
-// Louch a game
-func Run(props *Props, g game.Game) {
-	engine.NewEngine(props, g).Run()
+// Run launches a Game
+func Run(g game.Game) {
+	engine.NewEngine(g).Run()
 }

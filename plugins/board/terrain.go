@@ -19,17 +19,43 @@ type CellKind struct {
 	SpriteID render.SpriteID
 }
 
-// CellKindDict is a board's registered set of CellKinds, keyed by Name —
-// published to Resources so board-modifying code can pick a kind by name.
-type CellKindDict map[string]CellKind
+// CellKindDict is a Plugin's registered set of CellKinds, keyed by Name —
+// reached via Plugin.CellKindDict, never built directly by the game.
+type CellKindDict interface {
+	// Create registers kinds, assigning each one's SpriteID by call order.
+	Create(kinds ...CellKind)
+	// Get resolves name to the CellKind registered under it.
+	Get(name string) (CellKind, bool)
+	// All returns every registered CellKind.
+	All() []CellKind
+}
 
-// NewCellKindDict builds a CellKindDict from kinds, keyed by each one's Name.
-func NewCellKindDict(kinds ...CellKind) CellKindDict {
-	dict := make(CellKindDict, len(kinds))
+type cellKindDict struct {
+	entries map[string]CellKind
+	next    render.SpriteID
+}
+
+func newCellKindDict() *cellKindDict { return &cellKindDict{entries: make(map[string]CellKind)} }
+
+func (d *cellKindDict) Create(kinds ...CellKind) {
 	for _, k := range kinds {
-		dict[k.Name] = k
+		k.SpriteID = d.next
+		d.next++
+		d.entries[k.Name] = k
 	}
-	return dict
+}
+
+func (d *cellKindDict) Get(name string) (CellKind, bool) {
+	k, ok := d.entries[name]
+	return k, ok
+}
+
+func (d *cellKindDict) All() []CellKind {
+	all := make([]CellKind, 0, len(d.entries))
+	for _, k := range d.entries {
+		all = append(all, k)
+	}
+	return all
 }
 
 // TerrainMap is a Terrain backed by a plain, gob-encodable map — mutate it

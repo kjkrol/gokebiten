@@ -1,6 +1,7 @@
 package world
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/kjkrol/goke/v3"
@@ -10,12 +11,6 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 	"github.com/kjkrol/gokg"
 )
-
-// Batch pairs a spawn count with the Spawner producing its entities — see game.Game.Spawn.
-type Batch struct {
-	Count   int
-	Spawner *Spawner
-}
 
 // Resources is world's single published Resources.
 type Resources struct {
@@ -37,6 +32,8 @@ type Plugin struct {
 	Res      Resources
 	module   *module
 	renderer *Renderer
+	entKinds *entKindDict
+	seeded   Roster
 
 	cameraControls bool
 	scrollSpeed    int32
@@ -45,16 +42,17 @@ type Plugin struct {
 var _ plugin.Plugin = (*Plugin)(nil)
 var _ plugin.Builtin = (*Plugin)(nil)
 var _ plugin.Restorer = (*Plugin)(nil)
+var _ plugin.Populator = (*Plugin)(nil)
 
 // Builtin marks Plugin as installed automatically by Engine — see ctx.World().
 func (*Plugin) Builtin() {}
 
-// NewPlugin builds Plugin around a fresh world — Populate/Space are usable
-// immediately, before Install (e.g. in tests).
+// NewPlugin builds Plugin around a fresh world — Seed/Populate/Space are
+// usable immediately, before Install (e.g. in tests).
 func NewPlugin(cfg Config) *Plugin {
 	m := newModule(cfg)
 	cam := camera.NewFromSpaceWithConfig(cfg.Space.Width, cfg.Space.Height, cfg.Space.Toroidal, cfg.Camera)
-	return &Plugin{Res: Resources{Config: cfg, Telemetry: &m.telemetry, Camera: cam}, module: m}
+	return &Plugin{Res: Resources{Config: cfg, Telemetry: &m.telemetry, Camera: cam}, module: m, entKinds: newEntKindDict()}
 }
 
 // WithCameraControls enables the default wheel-zoom/middle-drag-pan/edge-scroll EventHandler.
@@ -118,10 +116,32 @@ func (p *Plugin) Serializable() plugin.Serializable { return &p.Res }
 // world-specific
 // =================================================================
 
-// Populate queues a spawn of count entities — see ExamplePlugin_Populate.
-func (p *Plugin) Populate(count int, spawner *Spawner) *Plugin {
-	p.module.Populate(count, spawner)
-	return p
+// Seed adds roster to the entities spawned when this Stage starts fresh — see Populate.
+func (p *Plugin) Seed(roster Roster) { p.seeded = append(p.seeded, roster...) }
+
+// Populate spawns every seeded entity, erroring (and spawning nothing) on an unknown kind or Data a kind's templates reject.
+func (p *Plugin) Populate() error {
+	var order []string
+	groups := make(map[string][]any)
+	for _, e := range p.seeded {
+		kind, ok := p.entKinds.Get(e.Kind)
+		if !ok {
+			return fmt.Errorf("world: unknown EntKind %q", e.Kind)
+		}
+		if err := kind.validate(e.Data); err != nil {
+			return err
+		}
+		if _, seen := groups[e.Kind]; !seen {
+			order = append(order, e.Kind)
+		}
+		groups[e.Kind] = append(groups[e.Kind], e.Data)
+	}
+	for _, name := range order {
+		kind, _ := p.entKinds.Get(name)
+		p.module.populate(kind, groups[name])
+	}
+	p.seeded = nil
+	return nil
 }
 
 // Space returns world's shared spatial index — every Populate entity is kept in sync with it.
@@ -132,3 +152,7 @@ func (p *Plugin) EntityRenderer() *Renderer { return p.renderer }
 
 // RegisterSpeedModifier adds m to the set VelocitySystem folds into every entity's Velocity.Value each tick.
 func (p *Plugin) RegisterSpeedModifier(m SpeedModifier) { p.module.RegisterSpeedModifier(m) }
+
+// EntKindDict returns this Plugin's registered set of EntKinds — call
+// Create to register kinds, Get/All to read them back.
+func (p *Plugin) EntKindDict() EntKindDict { return p.entKinds }

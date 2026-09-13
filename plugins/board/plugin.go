@@ -1,6 +1,7 @@
 package board
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/kjkrol/goke/v3"
@@ -15,7 +16,6 @@ import (
 type Resources struct {
 	Logic struct {
 		Board *Board
-		Kinds CellKindDict
 	}
 	Render *RenderState
 }
@@ -34,24 +34,27 @@ type Plugin struct {
 	terrainSpeed *TerrainSpeedModifier
 	occupancy    Occupancy
 	renderer     *Renderer
+	kinds        *cellKindDict
+	seeded       *Layout
 
 	worldPlugin *world.Plugin
 }
 
 var _ plugin.Plugin = (*Plugin)(nil)
+var _ plugin.Populator = (*Plugin)(nil)
 
-// NewPlugin builds a board over grid, capping cell occupancy per occupancy
-// and publishing kinds via Resources for board-modifying code to pick from.
+// NewPlugin builds a board over grid, capping cell occupancy per occupancy.
 // worldPlugin is where the board's TerrainSpeedModifier registers itself.
-func NewPlugin(grid Grid, occupancy Occupancy, kinds CellKindDict, worldPlugin *world.Plugin) *Plugin {
+// Register terrain kinds afterward via CellKindDict().Create.
+func NewPlugin(grid Grid, occupancy Occupancy, worldPlugin *world.Plugin) *Plugin {
 	terrain := NewTerrainMap()
 	p := &Plugin{
 		terrainSpeed: NewTerrainSpeedModifier(grid, terrain),
 		occupancy:    occupancy,
 		worldPlugin:  worldPlugin,
+		kinds:        newCellKindDict(),
 	}
 	p.Res.Logic.Board = NewBoard(grid, terrain)
-	p.Res.Logic.Kinds = kinds
 	if ts, ok := p.Res.Logic.Board.Grid.(toroidalSetter); ok {
 		ts.SetToroidal(worldPlugin.Res.Config.Space.Toroidal)
 	}
@@ -97,3 +100,51 @@ func (p *Plugin) Serializable() plugin.Serializable { return &p.Res }
 
 // Occupancy returns the occupancy tracker this plugin was built with.
 func (p *Plugin) Occupancy() Occupancy { return p.occupancy }
+
+// CellKindDict returns this Plugin's registered set of CellKinds — call
+// Create to register kinds, Get/All to read them back.
+func (p *Plugin) CellKindDict() CellKindDict { return p.kinds }
+
+// Seed sets the terrain applied when this Stage starts fresh — see Populate.
+func (p *Plugin) Seed(layout Layout) { p.seeded = &layout }
+
+// Populate applies the seeded Layout, erroring (and changing nothing) on a kind name CellKindDict doesn't know.
+func (p *Plugin) Populate() error {
+	if p.seeded == nil {
+		return nil
+	}
+	resolve := func(name string) (CellKind, error) {
+		kind, ok := p.kinds.Get(name)
+		if !ok {
+			return CellKind{}, fmt.Errorf("board: unknown CellKind %q", name)
+		}
+		return kind, nil
+	}
+
+	var def CellKind
+	if p.seeded.Default != "" {
+		kind, err := resolve(p.seeded.Default)
+		if err != nil {
+			return err
+		}
+		def = kind
+	}
+	cells := make([]CellKind, len(p.seeded.Cells))
+	for i, e := range p.seeded.Cells {
+		kind, err := resolve(e.Kind)
+		if err != nil {
+			return err
+		}
+		cells[i] = kind
+	}
+
+	brd := p.Res.Logic.Board
+	if p.seeded.Default != "" {
+		brd.SetAll(def)
+	}
+	for i, e := range p.seeded.Cells {
+		brd.Set(e.Cell, cells[i])
+	}
+	p.seeded = nil
+	return nil
+}

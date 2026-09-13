@@ -26,10 +26,8 @@ type Plugin struct {
 
 	res *Resources
 
-	rendererEnabled bool
-	pathAtlas       render.AtlasSource
-	pathSprites     PathSprites
-	pathRenderer    *PathRenderer
+	pathSprites  PathSprites
+	pathRenderer *PathRenderer
 
 	camera camera.Camera
 }
@@ -58,10 +56,6 @@ func (p *Plugin) Install(ctx plugin.Installer) error {
 	navSys := newNavigationSystem(finder, brd, brd, occupancy, p.speed)
 	navSys.BindSpace(p.worldPlugin.Space())
 
-	if p.rendererEnabled {
-		p.pathRenderer = NewPathRenderer(p.camera, brd, p.pathAtlas, p.pathSprites)
-		p.pathRenderer.BindSpace(p.worldPlugin.Space())
-	}
 	p.res = &Resources{}
 	moveCommandSystem := newMoveCommandSystem(finder, p.res)
 
@@ -77,8 +71,8 @@ func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
 
 // WithRenderer builds this plugin's own PathRenderer, drawing the remaining route for every selected, en-route entity — call SetPathSprites first.
 func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
-	p.rendererEnabled = true
-	p.pathAtlas = atlas
+	p.pathRenderer = NewPathRenderer(p.camera, p.board, atlas, p.pathSprites)
+	p.pathRenderer.BindSpace(p.worldPlugin.Space())
 }
 
 // Renderer returns this plugin's own render.Renderer, or nil unless WithRenderer was called.

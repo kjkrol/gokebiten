@@ -37,7 +37,7 @@ func (c *testInstallCtx) flush() {
 	c.ecs.Setup(systems...)
 }
 
-func TestValueExtras_WithEffect_EntersOccupancyOnSpawn(t *testing.T) {
+func TestEntKind_LoadWithEffect_EntersOccupancyOnSpawn(t *testing.T) {
 	sqGrid := board.DefaultGrids{}.Square(5, 5, 10)
 	occupancy := &board.SingleOccupancy{}
 	target, _ := sqGrid.CellIndex(2, 2)
@@ -48,15 +48,19 @@ func TestValueExtras_WithEffect_EntersOccupancyOnSpawn(t *testing.T) {
 	}
 	plugin := world.NewPlugin(cfg)
 	placement := world.NewGridPlacement(50, 50, 8)
-	spawner := world.NewSpawner(
-		func(index, count int) world.Position { return placement.Place(index, count) },
-		func(index int) world.Velocity { return world.Velocity{} },
-	).WithEffect(func(index int) board.Cell {
-		return board.Cell{ID: target}
-	}, func(c board.Cell, id uid.UID64) {
-		occupancy.Enter(c.ID, id)
+	plugin.EntKindDict().Create(world.EntKind{
+		Name:     "unit",
+		Position: world.Const(placement.Place(0, 1)),
+		Velocity: world.Const(world.Velocity{}),
+		Components: []world.ComponentTemplate{
+			world.Load(func(c board.CellID) board.Cell { return board.Cell{ID: c} }).
+				WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
+		},
 	})
-	plugin.Populate(1, spawner)
+	plugin.Seed(world.Roster{{Kind: "unit", Data: target}})
+	if err := plugin.Populate(); err != nil {
+		t.Fatalf("Populate: %v", err)
+	}
 
 	ctx := &testInstallCtx{ecs: goke.New()}
 	if err := plugin.Install(ctx); err != nil {

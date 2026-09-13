@@ -9,11 +9,7 @@ import (
 func TestWorld_Populate_EndToEnd(t *testing.T) {
 	wm := testWorld()
 
-	spawner := NewSpawner(
-		func(index, count int) Position { return spawnerTestPos() },
-		func(index int) Velocity { return Velocity{} },
-	)
-	wm.Populate(3, spawner)
+	wm.populate(EntKind{Name: "dot", Position: Const(spawnerTestPos()), Velocity: Const(Velocity{})}, []any{nil, nil, nil})
 
 	ecs := goke.New()
 	var pos goke.Comp[Position]

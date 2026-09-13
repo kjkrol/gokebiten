@@ -14,8 +14,8 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 )
 
-func testProps() *Props {
-	return &Props{World: world.Config{
+func testProps() game.Props {
+	return game.Props{World: world.Config{
 		Space:    world.SpaceCfg{Width: 100, Height: 100},
 		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
 	}}
@@ -42,25 +42,51 @@ func (p *stubPlugin) Renderer() render.Renderer          { return nil }
 func (p *stubPlugin) EventHandler() control.EventHandler { return nil }
 func (p *stubPlugin) Serializable() plugin.Serializable  { return p.serializable }
 
-// stubGame is a minimal Game for testing Engine/Initializer.
-type stubGame struct {
+// stubStage is a minimal game.Stage for testing Engine/Initializer.
+type stubStage struct {
+	name   string
 	initFn func(ctx game.Initializer) error
+	stack  game.Stack
 }
 
-func (g *stubGame) Init(ctx game.Initializer) error {
-	if g.initFn != nil {
-		return g.initFn(ctx)
+func (s *stubStage) Name() string {
+	if s.name == "" {
+		return "stage"
+	}
+	return s.name
+}
+func (s *stubStage) Init(ctx game.Initializer) error {
+	if s.initFn != nil {
+		return s.initFn(ctx)
 	}
 	return nil
 }
-func (g *stubGame) Restore(game.Persistence) (bool, error)          { return false, nil }
-func (g *stubGame) Spawn() ([]world.Batch, error)                   { return nil, nil }
-func (g *stubGame) Update(goke.RunCtx, time.Duration)               {}
-func (g *stubGame) Draw(game.Runtime) []func() render.Renderer      { return nil }
-func (g *stubGame) HandleEvents(*control.InputEvents, game.Runtime) {}
+func (s *stubStage) Restore(game.Persistence) (bool, error) { return false, nil }
+func (s *stubStage) Spawn() error                           { return nil }
+func (s *stubStage) Update(goke.RunCtx, time.Duration)      {}
+func (s *stubStage) Stack() game.Stack {
+	if s.stack == nil {
+		s.stack, _ = game.NewStack()
+	}
+	return s.stack
+}
+func (s *stubStage) Composition() game.Composition { return s.Stack().Composition() }
+
+// oneStageGame is a minimal game.Game wrapping a single Stage — enough for
+// tests that only care about Engine/Initializer behavior within one Stage.
+type oneStageGame struct {
+	stage game.Stage
+	props game.Props
+}
+
+func (g oneStageGame) Props() game.Props { return g.props }
+
+func (g oneStageGame) Stages() (map[string]game.Stage, string) {
+	return map[string]game.Stage{g.stage.Name(): g.stage}, g.stage.Name()
+}
 
 func newTestEngine(initFn func(ctx game.Initializer) error) *Engine {
-	return NewEngine(testProps(), &stubGame{initFn: initFn})
+	return NewEngine(oneStageGame{stage: &stubStage{initFn: initFn}, props: testProps()})
 }
 
 func TestInitializer_Use_InstallsOnce(t *testing.T) {
@@ -120,7 +146,7 @@ func TestEngine_Init_EvaluatesSetupSystemsLazily(t *testing.T) {
 		t.Fatalf("Init: %v", err)
 	}
 	if duringInit != 0 {
-		t.Fatalf("SetupSystems called %d times during Game.Init, want 0 (must stay lazy)", duringInit)
+		t.Fatalf("SetupSystems called %d times during Stage.Init, want 0 (must stay lazy)", duringInit)
 	}
 	if stub.callCount != 1 {
 		t.Errorf("SetupSystems called %d times after engine.Init(), want 1", stub.callCount)
@@ -134,7 +160,7 @@ func TestInitializer_Use_RegistersSerializableByName(t *testing.T) {
 	if err := eng.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-	targets, ok := eng.resources.persisted()["test.resource"]
+	targets, ok := eng.current.host.resources.persisted()["test.resource"]
 	if !ok || len(targets) != 1 || *(targets[0].(*int)) != 7 {
 		t.Errorf("expected stubPlugin's Serializable() registered under its Name(), got %+v, ok=%v", targets, ok)
 	}
@@ -167,15 +193,16 @@ func TestInitializer_Use_RejectsBuiltinPlugin(t *testing.T) {
 // camera's pannable window defaults to the world's own size, leaving
 // zero room to pan or zoom out regardless of screen size.
 func TestEngine_Init_WorldViewportDefaultsToScreenSize(t *testing.T) {
-	props := &Props{ScreenWidth: 200, ScreenHeight: 150, World: world.Config{
+	props := game.Props{ScreenWidth: 200, ScreenHeight: 150, World: world.Config{
 		Space:    world.SpaceCfg{Width: 1000, Height: 1000},
 		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
 	}}
 	var got camera.Camera
-	eng := NewEngine(props, &stubGame{initFn: func(ctx game.Initializer) error {
+	stage := &stubStage{initFn: func(ctx game.Initializer) error {
 		got = ctx.World().Camera()
 		return nil
-	}})
+	}}
+	eng := NewEngine(oneStageGame{stage: stage, props: props})
 	if err := eng.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}

@@ -62,6 +62,25 @@ func (a *Atlas) Register(draw SpriteDrawer) SpriteID {
 	return id
 }
 
+// RegisterAt bakes draw's output into slot id (pre-issued, e.g. an EntKind's SpriteID) instead
+// of the next free slot — panics if Close was already called or id is out of range.
+func (a *Atlas) RegisterAt(id SpriteID, draw SpriteDrawer) {
+	if a.closed {
+		panic("gokebiten: Atlas.RegisterAt after Close")
+	}
+	if int(id) >= a.capacity {
+		panic(fmt.Sprintf("gokebiten: Atlas capacity %d exhausted", a.capacity))
+	}
+	sprite := ebiten.NewImage(a.spriteSize, a.spriteSize)
+	draw(sprite, a.spriteSize)
+	opts := &ebiten.DrawImageOptions{}
+	opts.GeoM.Translate(float64(int(id)*a.spriteSize), 0)
+	a.image.DrawImage(sprite, opts)
+	if int(id) >= a.count {
+		a.count = int(id) + 1
+	}
+}
+
 // Close freezes the atlas — call once, after every Register, before the game loop starts.
 func (a *Atlas) Close() { a.closed = true }
 

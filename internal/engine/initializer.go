@@ -9,29 +9,26 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/world"
 )
 
-// initializer is the only concrete implementation of game.Initializer.
-type initializer struct{ engine *Engine }
+// initializer is the only concrete implementation of game.Initializer. It
+// binds to one Stage's ecsHost — a fresh initializer is built each time
+// Engine enters a Stage.
+type initializer struct {
+	host  *ecsHost
+	world *world.Plugin
+	tps   *game.TPS
+}
 
 var _ game.Initializer = (*initializer)(nil)
 
-func (c *initializer) UseModule(m goke.Module) {
-	regSys := goke.SystemFn{OnInit: func(si *goke.SysInit) { m.RegSystems(c.engine.ecs) }}
-	c.engine.track(m)
-	c.engine.addPendingSetup(func() []goke.System { return append(m.SetupSystems(), regSys) })
-}
+func (c *initializer) UseModule(m goke.Module) { c.host.useModule(m) }
 
-func (c *initializer) Setup(providers ...goke.SetupProvider) {
-	for _, p := range providers {
-		c.engine.track(p)
-		c.engine.addPendingSetup(p.SetupSystems)
-	}
-}
+func (c *initializer) Setup(providers ...goke.SetupProvider) { c.host.setup(providers...) }
 
 func (c *initializer) RegSys(factory func() goke.System) goke.Runnable {
-	return c.engine.ecs.RegSys(factory())
+	return c.host.regSys(factory)
 }
 
-func (c *initializer) ECS() *goke.ECS { return c.engine.ecs }
+func (c *initializer) ECS() *goke.ECS { return c.host.ecs }
 
 // Use registers p's Serializable (if any) and runs its Install — rejects
 // a duplicate Name and any Plugin the engine already installs itself.
@@ -43,24 +40,34 @@ func (c *initializer) Use(p plugin.Plugin) error {
 }
 
 // useBuiltin installs an engine-managed Plugin, bypassing the Builtin
-// check above — called only by Engine's own bootstrap, before Game.Init runs.
+// check above — called only by Engine's own bootstrap, before Stage.Init runs.
 func (c *initializer) useBuiltin(p plugin.Plugin) error { return c.use(p) }
 
 // use is the shared install path: duplicate-Name check, Serializable
 // registration, tracking, Install.
 func (c *initializer) use(p plugin.Plugin) error {
-	if c.engine.names == nil {
-		c.engine.names = make(map[string]bool)
+	if c.host.names == nil {
+		c.host.names = make(map[string]bool)
 	}
-	if c.engine.names[p.Name()] {
+	if c.host.names[p.Name()] {
 		return fmt.Errorf("gokebiten: plugin %q already used", p.Name())
 	}
-	c.engine.names[p.Name()] = true
+	c.host.names[p.Name()] = true
 	if s := p.Serializable(); s != nil {
-		c.engine.resources.register(p.Name(), s)
+		c.host.resources.register(p.Name(), s)
 	}
-	c.engine.track(p)
+	c.host.track(p)
 	return p.Install(c)
 }
 
-func (c *initializer) World() *world.Plugin { return c.engine.world }
+// Track registers s into the same name-keyed Save/Load machinery as a
+// Plugin's own persisted state (by its Go type name — see
+// ecsHost.saveTargets), without requiring a full plugin.Plugin.
+func (c *initializer) Track(s plugin.Serializable) error {
+	c.host.track(s)
+	return nil
+}
+
+func (c *initializer) World() *world.Plugin { return c.world }
+
+func (c *initializer) TPS() *game.TPS { return c.tps }
