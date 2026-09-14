@@ -18,7 +18,7 @@ func ExamplePlugin_Seed() {
 	kinds.Define("dot", func(k world.Kind[world.Position]) world.EntKind {
 		return world.EntKind{
 			Position: k.Load(func(p world.Position) world.Position { return p }),
-			Velocity: world.Const(world.Velocity{}),
+			Velocity: k.Const(world.Velocity{}),
 		}
 	})
 

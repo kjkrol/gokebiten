@@ -138,13 +138,13 @@ func (s *mainStage) registerUnitKinds() {
 	unitKind := func(k world.Kind[unit]) world.EntKind {
 		return world.EntKind{
 			Position: k.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(brd, u.start, EntitySize)} }),
-			Velocity: world.Const(world.Velocity{}),
+			Velocity: k.Const(world.Velocity{}),
 			Components: []world.ComponentTemplate{
 				k.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
 				k.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }).
 					WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
-				world.Const(selection.Selected{}),
-				world.Const(collisions.Collision{}),
+				k.Const(selection.Selected{}),
+				k.Const(collisions.Collision{}),
 			},
 		}
 	}

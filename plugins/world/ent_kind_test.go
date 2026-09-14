@@ -22,8 +22,8 @@ func spawnerTestPos() Position {
 // statKind defines a kind at a fixed Position whose spawnerStat is read from int roster data.
 func statKind(k Kind[int]) EntKind {
 	return EntKind{
-		Position:   Const(spawnerTestPos()),
-		Velocity:   Const(Velocity{}),
+		Position:   k.Const(spawnerTestPos()),
+		Velocity:   k.Const(Velocity{}),
 		Components: []ComponentTemplate{k.Load(func(hp int) spawnerStat { return spawnerStat{HP: hp} })},
 	}
 }
@@ -166,8 +166,8 @@ func TestPopulate_KindsWithDifferentDataAndComponents(t *testing.T) {
 			Position: k.Load(func(d propData) Position {
 				return Position{AABB: plane.NewAABB(geom.NewVec(d.x, 0), 10, 10)}
 			}),
-			Velocity:   Const(Velocity{}),
-			Components: []ComponentTemplate{Const(spawnerTag{})},
+			Velocity:   k.Const(Velocity{}),
+			Components: []ComponentTemplate{k.Const(spawnerTag{})},
 		}
 	})
 	p.Seed(kinds.Entry("unit", 5), kinds.Entry("prop", propData{x: 40}), kinds.Entry("unit", 6))
@@ -210,5 +210,20 @@ func TestPlugin_Populate_ZeroEntryErrorsWithoutSpawning(t *testing.T) {
 	}
 	if n := len(p.module.SetupSystems()); n != 0 {
 		t.Errorf("queued %d spawns, want 0", n)
+	}
+}
+
+// Kind.Const is the in-builder spelling of Const; both must yield the same
+// template, since one delegates to the other.
+func TestKind_Const_MatchesPackageConst(t *testing.T) {
+	var k Kind[int]
+	viaKind, viaPkg := k.Const(spawnerStat{HP: 3}), Const(spawnerStat{HP: 3})
+
+	if got := viaKind.resolve(nil, 0); got != viaPkg.resolve(nil, 0) {
+		t.Errorf("k.Const resolved to %+v, Const to %+v", got, viaPkg.resolve(nil, 0))
+	}
+	// The roster entry is ignored either way — that is what makes it constant.
+	if got := viaKind.resolve(99, 0); got.HP != 3 {
+		t.Errorf("k.Const read the roster entry: HP = %d, want 3", got.HP)
 	}
 }

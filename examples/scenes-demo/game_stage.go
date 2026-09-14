@@ -60,7 +60,7 @@ func (g *GameplayStage) Init(ctx game.Initializer) error {
 	g.world.EntKindDict().Define(moverKind, func(k world.Kind[world.Position]) world.EntKind {
 		return world.EntKind{
 			Position: k.Load(func(p world.Position) world.Position { return p }),
-			Velocity: world.Const(velocity),
+			Velocity: k.Const(velocity),
 		}
 	})
 

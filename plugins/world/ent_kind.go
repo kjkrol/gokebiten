@@ -21,7 +21,8 @@ type Template[T any] struct {
 
 var _ ComponentTemplate = Template[struct{}]{}
 
-// Const is a Template whose value comes straight from the EntKind.
+// Const is a Template whose value comes straight from the EntKind — inside a
+// kind's builder prefer the equivalent Kind.Const, which reads alongside Load.
 func Const[T any](v T) Template[T] {
 	return Template[T]{value: func(any) T { return v }}
 }
@@ -33,6 +34,9 @@ type Kind[P any] struct{}
 func (Kind[P]) Load[T any](load func(data P) T) Template[T] {
 	return Template[T]{value: func(data any) T { return load(data.(P)) }}
 }
+
+// Const is a Template whose value is the same for every entity of this kind.
+func (Kind[P]) Const[T any](v T) Template[T] { return Const[T](v) }
 
 // WithEffect sets a callback run right after this template's value is written for each spawned entity.
 func (t Template[T]) WithEffect(effect func(v T, id uid.UID64)) Template[T] {

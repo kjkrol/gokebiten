@@ -56,7 +56,7 @@ func TestSaveLoadCycle(t *testing.T) {
 			return world.EntKind{
 				Position:   k.Load(func(b body) world.Position { return b.pos }),
 				Velocity:   k.Load(func(b body) world.Velocity { return b.vel }),
-				Components: []world.ComponentTemplate{world.Const(collisions.Collision{})},
+				Components: []world.ComponentTemplate{k.Const(collisions.Collision{})},
 			}
 		})
 		entries = append(entries, kinds.Entry(name, body{pos: placement.Place(i, count), vel: motion.initialVelocity(i)}))
