@@ -57,17 +57,25 @@ func (m *module) LoadComps() []goke.CompToken {
 // plugin.PostLoader contract
 // =================================================================
 
-// PostLoad rebuilds board.Occupancy from every loaded entity's Cell component.
+// PostLoad rebuilds board.Occupancy from every loaded entity's Cell, plus every cell its in-progress Leg holds.
 func (m *module) PostLoad() goke.System {
 	return goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		var cell goke.Comp[board.Cell]
-		query := si.NewQueryBuilder(&cell).Build()
+		var order goke.OptComp[MoveOrder]
+		query := si.NewQueryBuilder(&cell).Optional(&order).Build()
+		occupancy := m.navigationSystem.occupancy
 		query.All()
 		for query.Next() {
 			cursor := query.Cursor()
 			cells := cell.Slice(cursor)
+			orders := order.Slice(cursor)
 			for i, id := range cursor.IDs {
-				m.navigationSystem.occupancy.Enter(cells[i].ID, id)
+				occupancy.Enter(cells[i].ID, id)
+				if orders != nil && orders[i].Leg.Active {
+					for _, c := range orders[i].Leg.cells() {
+						occupancy.Enter(c, id)
+					}
+				}
 			}
 		}
 	}}

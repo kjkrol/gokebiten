@@ -11,6 +11,7 @@ import (
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/game"
 	"github.com/kjkrol/gokebiten/plugins/board"
+	"github.com/kjkrol/gokebiten/plugins/collisions"
 	"github.com/kjkrol/gokebiten/plugins/navigation"
 	"github.com/kjkrol/gokebiten/plugins/selection"
 	"github.com/kjkrol/gokebiten/plugins/world"
@@ -28,6 +29,7 @@ const (
 	EntitySize   = 22
 	UnitSpeed    = CellSize * 2
 	MaxEntCount  = 10
+	hitExpires   = 50 * time.Millisecond
 
 	saveBasePath = "board-navigation-demo"
 )
@@ -66,12 +68,13 @@ func (d *Demo) Stages() (map[string]game.Stage, string) {
 
 // mainStage wires the board/navigation/selection demo — its plugins are its own fields, built in Init.
 type mainStage struct {
-	world     *world.Plugin
-	board     *board.Plugin
-	nav       *navigation.Plugin
-	selection *selection.Plugin
-	stack     game.Stack
-	state     *State
+	world      *world.Plugin
+	board      *board.Plugin
+	nav        *navigation.Plugin
+	collisions *collisions.Plugin
+	selection  *selection.Plugin
+	stack      game.Stack
+	state      *State
 }
 
 var _ game.Stage = (*mainStage)(nil)
@@ -93,6 +96,11 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 
 	s.nav = navigation.NewPlugin(UnitSpeed, s.board, s.world)
 	if err := ctx.Use(s.nav); err != nil {
+		return err
+	}
+
+	s.collisions = collisions.NewPlugin(hitExpires, s.world)
+	if err := ctx.Use(s.collisions); err != nil {
 		return err
 	}
 
@@ -138,6 +146,7 @@ func (s *mainStage) registerUnitKinds() {
 				world.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }).
 					WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
 				world.Const(selection.Selected{}),
+				world.Const(collisions.Collision{}),
 			},
 		}
 	}
@@ -178,6 +187,7 @@ func (s *mainStage) Spawn() error {
 
 func (s *mainStage) Update(ctx goke.RunCtx, d time.Duration) {
 	s.world.RunPlan(ctx, d)
+	s.collisions.RunPlan(ctx, d)
 	s.nav.RunPlan(ctx, d)
 	s.selection.RunPlan(ctx, d)
 	ctx.Sync()

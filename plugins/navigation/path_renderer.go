@@ -14,6 +14,13 @@ import (
 
 func pathCells(cell board.Cell, mt MoveOrder) []board.CellID {
 	cells := []board.CellID{cell.ID}
+	next := mt.Target
+	if mt.Path.Index < mt.Path.Length {
+		next = mt.Path.Steps[mt.Path.Index]
+	}
+	if mt.Leg.Active && mt.Leg.To != cell.ID && mt.Leg.To != next {
+		cells = append(cells, mt.Leg.To)
+	}
 	for s := mt.Path.Index; s < mt.Path.Length; s++ {
 		if step := mt.Path.Steps[s]; step != cells[len(cells)-1] {
 			cells = append(cells, step)

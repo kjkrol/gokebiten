@@ -2,6 +2,7 @@ package navigation
 
 import (
 	"math"
+	"slices"
 	"time"
 
 	"github.com/kjkrol/goke/v3"
@@ -17,6 +18,25 @@ import (
 type MoveOrder struct {
 	Target board.CellID
 	Path   Path
+	Leg    Leg
+	Waited time.Duration
+}
+
+// Leg is the single step an entity is travelling: every cell it holds in
+// Occupancy until it reaches To's center.
+type Leg struct {
+	From, To board.CellID
+	C1, C2   board.CellID
+	Diagonal bool
+	Active   bool
+}
+
+// cells lists every cell leg holds: From, To, and both corners of a diagonal step.
+func (l Leg) cells() []board.CellID {
+	if l.Diagonal {
+		return []board.CellID{l.From, l.To, l.C1, l.C2}
+	}
+	return []board.CellID{l.From, l.To}
 }
 
 // CellEntered is a one-tick tag added the tick an entity's Cell changes —
@@ -50,6 +70,9 @@ type navigationSystem struct {
 
 var _ goke.System = (*navigationSystem)(nil)
 
+// targetWaitTimeout is how long an entity waits for an occupied target before settling for the nearest free cell.
+const targetWaitTimeout = 500 * time.Millisecond
+
 // arrivalEpsilon is how close (world-units) counts as "reached" a waypoint — small enough that the final snap is imperceptible.
 const arrivalEpsilon = 2.0
 
@@ -75,7 +98,7 @@ func (s *navigationSystem) Init(si *goke.SysInit) {
 	s.clearEditor = s.enteredQuery.NewEditorBuilder().Remove(goke.Remove[CellEntered]()).Build()
 }
 
-func (s *navigationSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
+func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 	s.clearEnteredTags(cb)
 
 	snapped := false
@@ -99,52 +122,74 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 		for i, id := range cursor.IDs {
 			target := orders[i].Target
 			p := &orders[i].Path
-			previous := cells[i].ID
+			leg := &orders[i].Leg
+			current := cells[i].ID
 			actual, ok := s.grid.CellAt(board.Center(positions[i]))
 			if !ok {
-				actual = previous
+				actual = current
 			}
 
-			if actual != previous {
-				expected := target
-				if p.Length > 0 && p.Index < p.Length {
-					expected = p.Steps[p.Index]
+			moveTo := func(c board.CellID) {
+				if c == cells[i].ID {
+					return
 				}
-				if actual != expected {
-					c1, c2, diag := s.grid.DiagonalNeighbors(previous, expected)
-					if diag && (actual == c1 || actual == c2) {
-						actual = previous
-					} else {
-						p.Length = 0
-					}
-				}
-			}
-
-			if actual != previous {
-				s.occupancy.Leave(previous, id)
-				s.occupancy.Enter(actual, id)
-				cells[i].ID = actual
+				cells[i].ID = c
 				enteredIDs = append(enteredIDs, id)
-				enteredVals = append(enteredVals, CellEntered{ID: actual})
+				enteredVals = append(enteredVals, CellEntered{ID: c})
 			}
 
-			if (p.Length == 0 || p.Index >= p.Length) && actual != target {
-				newPath, found := s.pathFinder.findPath(id, actual, target)
+			switch {
+			case leg.Active && !slices.Contains(leg.cells(), actual):
+				s.releaseLeg(*leg, id)
+				s.occupancy.Enter(actual, id)
+				moveTo(actual)
+				*leg = Leg{}
+				p.Length = 0
+			case leg.Active && (actual == leg.From || actual == leg.To):
+				moveTo(actual)
+			case !leg.Active && actual != current:
+				s.occupancy.Leave(current, id)
+				s.occupancy.Enter(actual, id)
+				moveTo(actual)
+				p.Length = 0
+			}
+
+			if !leg.Active && (p.Length == 0 || p.Index >= p.Length) && cells[i].ID != target {
+				newPath, found := s.pathFinder.findPath(id, cells[i].ID, target)
 				if !found {
-					continue
+					velocities[i].Value = 0
+					orders[i].Waited += d
+					if orders[i].Waited < targetWaitTimeout {
+						continue
+					}
+					dest, destPath, ok := s.pathFinder.nearestFree(id, cells[i].ID, target, nil)
+					if !ok {
+						arrivedIDs = append(arrivedIDs, id)
+						continue
+					}
+					orders[i].Target, target = dest, dest
+					newPath = destPath
 				}
+				orders[i].Waited = 0
 				*p = newPath
 			}
 
 			waypoint := target
-			if p.Length > 0 && p.Index < p.Length {
+			switch {
+			case leg.Active:
+				waypoint = leg.To
+			case p.Length > 0 && p.Index < p.Length:
 				waypoint = p.Steps[p.Index]
 			}
 
-			if actual != waypoint {
-				if !s.terrain.Kind(waypoint).Passable || !s.occupancy.CanEnter(waypoint, id) {
+			if !leg.Active && waypoint != cells[i].ID {
+				reserved, ok := s.reserveLeg(cells[i].ID, waypoint, id)
+				if !ok {
+					velocities[i].Value = 0
+					p.Length = 0
 					continue
 				}
+				*leg = reserved
 			}
 
 			want := s.grid.CellCenter(waypoint)
@@ -171,12 +216,20 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 				}
 			}
 
-			if waypoint == target {
-				arrivedIDs = append(arrivedIDs, id)
-				continue
+			if leg.Active {
+				s.releaseLeg(*leg, id)
+				s.occupancy.Enter(leg.To, id)
+				moveTo(leg.To)
+				*leg = Leg{}
 			}
 
-			p.Index++
+			if p.Index < p.Length && p.Steps[p.Index] == waypoint {
+				p.Index++
+			}
+
+			if waypoint == target {
+				arrivedIDs = append(arrivedIDs, id)
+			}
 		}
 
 		if len(enteredIDs) > 0 {
@@ -194,6 +247,30 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 
 	if snapped {
 		s.space.Flush(nil)
+	}
+}
+
+// reserveLeg claims every cell a step from→to can touch, reporting false (and claiming nothing) if any is impassable or held by another entity.
+func (s *navigationSystem) reserveLeg(from, to board.CellID, id uid.UID64) (Leg, bool) {
+	leg := Leg{From: from, To: to, Active: true}
+	if c1, c2, diag := s.grid.DiagonalNeighbors(from, to); diag {
+		leg.C1, leg.C2, leg.Diagonal = c1, c2, true
+	}
+	for _, c := range leg.cells()[1:] {
+		if !s.terrain.Kind(c).Passable || !s.occupancy.CanEnter(c, id) {
+			return Leg{}, false
+		}
+	}
+	for _, c := range leg.cells() {
+		s.occupancy.Enter(c, id)
+	}
+	return leg, true
+}
+
+// releaseLeg gives up every cell leg holds.
+func (s *navigationSystem) releaseLeg(leg Leg, id uid.UID64) {
+	for _, c := range leg.cells() {
+		s.occupancy.Leave(c, id)
 	}
 }
 

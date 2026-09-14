@@ -153,15 +153,19 @@ func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *te
 		f.Next()
 		id := f.Cursor.IDs[0]
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: previous}
-		// Position already sits inside the flanker cell — a normal artifact
-		// of sampling a diagonal move at discrete ticks, not a deviation.
+		// Mid diagonal step: position already sits inside a flanker cell — a
+		// normal artifact of sampling the move at discrete ticks, not a deviation.
 		pos.Slice(&f.Cursor)[0] = world.Position{AABB: plane.NewAABB(geom.NewVec[uint32](11, 11), 8, 8)}
 		var mt MoveOrder
 		mt.Target = expected
 		mt.Path.Steps[0] = expected
 		mt.Path.Length = 1
+		c1, c2, _ := grid.DiagonalNeighbors(previous, expected)
+		mt.Leg = Leg{From: previous, To: expected, C1: c1, C2: c2, Diagonal: true, Active: true}
 		order.Slice(&f.Cursor)[0] = mt
-		occupancy.Enter(previous, id)
+		for _, c := range mt.Leg.cells() {
+			occupancy.Enter(c, id)
+		}
 
 		q = si.NewQueryBuilder(&cell, &order).Build()
 	}})

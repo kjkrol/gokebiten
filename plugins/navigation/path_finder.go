@@ -50,7 +50,7 @@ func (p *pathFinder) transitionsFor(entity uid.UID64) astar.Transitions[board.Ce
 				continue
 			}
 			if c1, c2, ok := p.grid.DiagonalNeighbors(from, n); ok {
-				if !p.terrain.Kind(c1).Passable || !p.terrain.Kind(c2).Passable {
+				if !p.enterable(c1, entity) || !p.enterable(c2, entity) {
 					continue
 				}
 			}
@@ -58,4 +58,33 @@ func (p *pathFinder) transitionsFor(entity uid.UID64) astar.Transitions[board.Ce
 		}
 		return buf
 	}
+}
+
+// enterable reports whether entity may hold c: passable terrain nobody else occupies — the same test a diagonal step's corners must pass to be reserved.
+func (p *pathFinder) enterable(c board.CellID, entity uid.UID64) bool {
+	return p.terrain.Kind(c).Passable && p.occupancy.CanEnter(c, entity)
+}
+
+// maxVisitedCells bounds how many cells nearestFree inspects around its target.
+const maxVisitedCells = 64
+
+// nearestFree returns the cell nearest target that entity can hold and reach
+// from from, skipping taken, together with the route to it.
+func (p *pathFinder) nearestFree(entity uid.UID64, from, target board.CellID, taken map[board.CellID]bool) (board.CellID, Path, bool) {
+	var path Path
+	passable := func(c board.CellID) bool { return p.terrain.Kind(c).Passable }
+	reachableFree := func(c board.CellID) bool {
+		if taken[c] || !p.enterable(c, entity) {
+			return false
+		}
+		if c == from {
+			path = Path{}
+			return true
+		}
+		found, ok := p.findPath(entity, from, c)
+		path = found
+		return ok
+	}
+	dest, ok := breadthFirst(target, p.grid.Neighbors, passable, reachableFree, maxVisitedCells)
+	return dest, path, ok
 }
