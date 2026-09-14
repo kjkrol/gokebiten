@@ -48,16 +48,18 @@ func TestEntKind_LoadWithEffect_EntersOccupancyOnSpawn(t *testing.T) {
 	}
 	plugin := world.NewPlugin(cfg)
 	placement := world.NewGridPlacement(50, 50, 8)
-	plugin.EntKindDict().Create(world.EntKind{
-		Name:     "unit",
-		Position: world.Const(placement.Place(0, 1)),
-		Velocity: world.Const(world.Velocity{}),
-		Components: []world.ComponentTemplate{
-			world.Load(func(c board.CellID) board.Cell { return board.Cell{ID: c} }).
-				WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
-		},
+	plugin.EntKindDict().Define(func(k world.Kind[board.CellID]) world.EntKind {
+		return world.EntKind{
+			Name:     "unit",
+			Position: world.Const(placement.Place(0, 1)),
+			Velocity: world.Const(world.Velocity{}),
+			Components: []world.ComponentTemplate{
+				k.Load(func(c board.CellID) board.Cell { return board.Cell{ID: c} }).
+					WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
+			},
+		}
 	})
-	plugin.Seed(world.Roster{{Kind: "unit", Data: target}})
+	plugin.Seed(plugin.EntKindDict().Entry("unit", target))
 	if err := plugin.Populate(); err != nil {
 		t.Fatalf("Populate: %v", err)
 	}

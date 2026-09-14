@@ -4,9 +4,9 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/world"
 )
 
-// ExamplePlugin_Seed shows the shape of a spawn: an EntKind lists every
-// component, each fixed (Const) or read from a Roster Entry's Data (Load);
-// Seed declares the entities and Populate spawns them.
+// ExamplePlugin_Seed shows the shape of a spawn: Define declares a kind whose
+// components are fixed (Const) or read from its roster data (k.Load), Entry
+// builds roster entries through the dictionary, Seed and Populate spawn them.
 func ExamplePlugin_Seed() {
 	plugin := world.NewPlugin(world.Config{
 		Space:    world.SpaceCfg{Width: 800, Height: 600},
@@ -14,17 +14,18 @@ func ExamplePlugin_Seed() {
 	})
 	placement := world.NewGridPlacement(800, 600, 8)
 
-	plugin.EntKindDict().Create(world.EntKind{
-		Name:     "dot",
-		Position: world.Load(func(p world.Position) world.Position { return p }),
-		Velocity: world.Const(world.Velocity{}),
+	kinds := plugin.EntKindDict()
+	kinds.Define(func(k world.Kind[world.Position]) world.EntKind {
+		return world.EntKind{
+			Name:     "dot",
+			Position: k.Load(func(p world.Position) world.Position { return p }),
+			Velocity: world.Const(world.Velocity{}),
+		}
 	})
 
-	var roster world.Roster
 	for i := range 10 {
-		roster = append(roster, world.Entry{Kind: "dot", Data: placement.Place(i, 10)})
+		plugin.Seed(kinds.Entry("dot", placement.Place(i, 10)))
 	}
-	plugin.Seed(roster)
 
 	if err := plugin.Populate(); err != nil {
 		panic(err)

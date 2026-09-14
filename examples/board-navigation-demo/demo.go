@@ -36,9 +36,6 @@ const (
 
 type State struct{ Saves int }
 
-// unit is a roster entry's Data for the "red"/"blue" kinds: where the unit spawns and where it heads.
-type unit struct{ start, target board.CellID }
-
 // =========================== Game ===========================
 
 // Demo is the board/navigation/selection demo — exactly one Stage (mainStage below).
@@ -132,24 +129,31 @@ func (s *mainStage) registerCellKinds() {
 }
 
 // registerUnitKinds defines the "red"/"blue" unit kinds, each spawned from a unit roster entry.
+// unit is the roster data the "red"/"blue" kinds spawn from: where the unit starts and where it heads.
+type unit struct{ start, target board.CellID }
+
 func (s *mainStage) registerUnitKinds() {
 	brd := s.board.Res.Logic.Board
 	occupancy := s.board.Occupancy()
-	unitKind := func(name string) world.EntKind {
-		return world.EntKind{
-			Name:     name,
-			Position: world.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(brd, u.start, EntitySize)} }),
-			Velocity: world.Const(world.Velocity{}),
-			Components: []world.ComponentTemplate{
-				world.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
-				world.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }).
-					WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
-				world.Const(selection.Selected{}),
-				world.Const(collisions.Collision{}),
-			},
+	unitKind := func(name string) func(world.Kind[unit]) world.EntKind {
+		return func(k world.Kind[unit]) world.EntKind {
+			return world.EntKind{
+				Name:     name,
+				Position: k.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(brd, u.start, EntitySize)} }),
+				Velocity: world.Const(world.Velocity{}),
+				Components: []world.ComponentTemplate{
+					k.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
+					k.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }).
+						WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
+					world.Const(selection.Selected{}),
+					world.Const(collisions.Collision{}),
+				},
+			}
 		}
 	}
-	s.world.EntKindDict().Create(unitKind("red"), unitKind("blue"))
+	units := s.world.EntKindDict()
+	units.Define(unitKind("red"))
+	units.Define(unitKind("blue"))
 }
 
 func (s *mainStage) Restore(p game.Persistence) (bool, error) {
@@ -177,10 +181,11 @@ func (s *mainStage) Spawn() error {
 	}
 	s.board.Seed(board.Layout{Default: "grass", Cells: walls})
 
-	s.world.Seed(world.Roster{
-		{Kind: "red", Data: unit{start: cell(2, 4), target: cell(GridWidth-3, 4)}},
-		{Kind: "blue", Data: unit{start: cell(2, 12), target: cell(GridWidth-3, 12)}},
-	})
+	units := s.world.EntKindDict()
+	s.world.Seed(
+		units.Entry("red", unit{start: cell(2, 4), target: cell(GridWidth-3, 4)}),
+		units.Entry("blue", unit{start: cell(2, 12), target: cell(GridWidth-3, 12)}),
+	)
 	return nil
 }
 

@@ -48,18 +48,21 @@ func TestSaveLoadCycle(t *testing.T) {
 	wp := world.NewPlugin(cfg)
 	placement := world.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize)
 	motion := newRandomVelocity(200, 50, 10)
-	var roster world.Roster
+	kinds := wp.EntKindDict()
+	var entries []world.Entry
 	for i := range count {
 		name := fmt.Sprintf("k%d", i)
-		wp.EntKindDict().Create(world.EntKind{
-			Name:       name,
-			Position:   world.Load(func(b body) world.Position { return b.pos }),
-			Velocity:   world.Load(func(b body) world.Velocity { return b.vel }),
-			Components: []world.ComponentTemplate{world.Const(collisions.Collision{})},
+		kinds.Define(func(k world.Kind[body]) world.EntKind {
+			return world.EntKind{
+				Name:       name,
+				Position:   k.Load(func(b body) world.Position { return b.pos }),
+				Velocity:   k.Load(func(b body) world.Velocity { return b.vel }),
+				Components: []world.ComponentTemplate{world.Const(collisions.Collision{})},
+			}
 		})
-		roster = append(roster, world.Entry{Kind: name, Data: body{pos: placement.Place(i, count), vel: motion.initialVelocity(i)}})
+		entries = append(entries, kinds.Entry(name, body{pos: placement.Place(i, count), vel: motion.initialVelocity(i)}))
 	}
-	wp.Seed(roster)
+	wp.Seed(entries...)
 	if err := wp.Populate(); err != nil {
 		t.Fatalf("Populate: %v", err)
 	}

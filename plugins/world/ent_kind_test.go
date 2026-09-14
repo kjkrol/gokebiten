@@ -13,17 +13,21 @@ type spawnerTag struct{}
 
 type spawnerStat struct{ HP int }
 
+type propData struct{ x uint32 }
+
 func spawnerTestPos() Position {
 	return Position{AABB: plane.NewAABB(geom.NewVec[uint32](0, 0), 10, 10)}
 }
 
-// statKind is an EntKind whose Position is fixed and whose spawnerStat is read from int Data.
-func statKind(name string) EntKind {
-	return EntKind{
-		Name:       name,
-		Position:   Const(spawnerTestPos()),
-		Velocity:   Const(Velocity{}),
-		Components: []ComponentTemplate{Load(func(hp int) spawnerStat { return spawnerStat{HP: hp} })},
+// statKind defines a kind at a fixed Position whose spawnerStat is read from int roster data.
+func statKind(name string) func(Kind[int]) EntKind {
+	return func(k Kind[int]) EntKind {
+		return EntKind{
+			Name:       name,
+			Position:   Const(spawnerTestPos()),
+			Velocity:   Const(Velocity{}),
+			Components: []ComponentTemplate{k.Load(func(hp int) spawnerStat { return spawnerStat{HP: hp} })},
+		}
 	}
 }
 
@@ -32,17 +36,20 @@ func setupWorld(wm *module, onInit func(si *goke.SysInit)) {
 	goke.New().Setup(append(wm.SetupSystems(), goke.SystemFn{OnInit: onInit})...)
 }
 
-func TestEntKindDict_Create_AssignsSpriteIDsByOrder(t *testing.T) {
+func testPlugin() *Plugin { return NewPlugin(testWorld().config) }
+
+func TestEntKindDict_Define_AssignsSpriteIDsByOrder(t *testing.T) {
 	dict := newEntKindDict()
-	dict.Create(EntKind{Name: "red"}, EntKind{Name: "blue"})
+	dict.Define(statKind("red"))
+	dict.Define(statKind("blue"))
 
 	red, ok := dict.Get("red")
 	if !ok || red.SpriteID != 0 {
-		t.Errorf("Get(%q) = %+v, %v, want SpriteID 0", "red", red, ok)
+		t.Errorf("Get(%q) SpriteID = %v (found %v), want 0", "red", red.SpriteID, ok)
 	}
 	blue, ok := dict.Get("blue")
 	if !ok || blue.SpriteID != 1 {
-		t.Errorf("Get(%q) = %+v, %v, want SpriteID 1", "blue", blue, ok)
+		t.Errorf("Get(%q) SpriteID = %v (found %v), want 1", "blue", blue.SpriteID, ok)
 	}
 	if got := len(dict.All()); got != 2 {
 		t.Errorf("len(All()) = %d, want 2", got)
@@ -55,9 +62,35 @@ func TestEntKindDict_Get_UnknownName(t *testing.T) {
 	}
 }
 
+func TestEntKindDict_Entry_PanicsOnBadEntry(t *testing.T) {
+	bare := func(k EntKind) func(Kind[int]) EntKind { return func(Kind[int]) EntKind { return k } }
+	cases := map[string]struct {
+		kind func(Kind[int]) EntKind
+		name string
+		data any
+	}{
+		"unknown kind": {kind: statKind("unit"), name: "ghost", data: 1},
+		"wrong data":   {kind: statKind("unit"), name: "unit", data: "x"},
+		"no Position":  {kind: bare(EntKind{Name: "unit", Velocity: Const(Velocity{})}), name: "unit", data: 1},
+		"no Velocity":  {kind: bare(EntKind{Name: "unit", Position: Const(spawnerTestPos())}), name: "unit", data: 1},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			dict := newEntKindDict()
+			dict.Define(tc.kind)
+			defer func() {
+				if recover() == nil {
+					t.Error("expected Entry to panic")
+				}
+			}()
+			dict.Entry(tc.name, tc.data)
+		})
+	}
+}
+
 func TestPopulate_ConstAndLoadComponents(t *testing.T) {
 	wm := testWorld()
-	kind := statKind("red")
+	kind := statKind("red")(Kind[int]{})
 	kind.SpriteID = 7
 	kind.Components = append(kind.Components, Const(spawnerTag{}))
 	wm.populate(kind, []any{9, 4})
@@ -82,7 +115,7 @@ func TestPopulate_ConstAndLoadComponents(t *testing.T) {
 		}
 	}
 	if len(hps) != 2 || hps[0] != 9 || hps[1] != 4 {
-		t.Errorf("HP per entity = %v, want [9 4] (read from each entry's Data)", hps)
+		t.Errorf("HP per entity = %v, want [9 4] (read from each entry's data)", hps)
 	}
 }
 
@@ -90,9 +123,10 @@ func TestPopulate_WithEffect_RunsAfterWriteWithValueAndID(t *testing.T) {
 	wm := testWorld()
 	var gotHP, calls int
 	var gotID uid.UID64
-	kind := statKind("red")
+	var k Kind[int]
+	kind := statKind("red")(k)
 	kind.Components = []ComponentTemplate{
-		Load(func(hp int) spawnerStat { return spawnerStat{HP: hp} }).
+		k.Load(func(hp int) spawnerStat { return spawnerStat{HP: hp} }).
 			WithEffect(func(v spawnerStat, id uid.UID64) {
 				calls++
 				gotHP, gotID = v.HP, id
@@ -117,58 +151,59 @@ func TestPopulate_WithEffect_RunsAfterWriteWithValueAndID(t *testing.T) {
 	}
 }
 
-func TestPopulate_KindsWithDifferentComponentSets(t *testing.T) {
-	p := NewPlugin(testWorld().config)
-	p.EntKindDict().Create(
-		statKind("unit"),
-		EntKind{Name: "prop", Position: Const(spawnerTestPos()), Velocity: Const(Velocity{}),
-			Components: []ComponentTemplate{Const(spawnerTag{})}},
-	)
-	p.Seed(Roster{{Kind: "unit", Data: 5}, {Kind: "prop"}, {Kind: "unit", Data: 6}})
+func TestPopulate_KindsWithDifferentDataAndComponents(t *testing.T) {
+	p := testPlugin()
+	kinds := p.EntKindDict()
+	kinds.Define(statKind("unit"))
+	kinds.Define(func(k Kind[propData]) EntKind {
+		return EntKind{
+			Name: "prop",
+			Position: k.Load(func(d propData) Position {
+				return Position{AABB: plane.NewAABB(geom.NewVec(d.x, 0), 10, 10)}
+			}),
+			Velocity:   Const(Velocity{}),
+			Components: []ComponentTemplate{Const(spawnerTag{})},
+		}
+	})
+	p.Seed(kinds.Entry("unit", 5), kinds.Entry("prop", propData{x: 40}), kinds.Entry("unit", 6))
 	if err := p.Populate(); err != nil {
 		t.Fatalf("Populate: %v", err)
 	}
 
 	var stat goke.Comp[spawnerStat]
-	var units, props int
+	var tagPos goke.Comp[Position]
+	var units int
+	var propX []uint32
 	setupWorld(p.module, func(si *goke.SysInit) {
 		uq := si.NewQueryBuilder(&stat).Build()
 		for uq.All(); uq.Next(); {
 			units += len(uq.Cursor().IDs)
 		}
-		pq := si.NewQueryBuilder().Include(goke.Include[spawnerTag]()).Build()
+		pq := si.NewQueryBuilder(&tagPos).Include(goke.Include[spawnerTag]()).Build()
 		for pq.All(); pq.Next(); {
-			props += len(pq.Cursor().IDs)
+			for _, pos := range tagPos.Slice(pq.Cursor()) {
+				propX = append(propX, pos.TopLeft.X)
+			}
 		}
 	})
 
-	if units != 2 || props != 1 {
-		t.Errorf("units=%d props=%d, want 2 and 1", units, props)
+	if units != 2 {
+		t.Errorf("units = %d, want 2", units)
+	}
+	if len(propX) != 1 || propX[0] != 40 {
+		t.Errorf("prop positions X = %v, want [40] (read from its own data type)", propX)
 	}
 }
 
-func TestPlugin_Populate_RejectsBadRosterWithoutSpawning(t *testing.T) {
-	cases := map[string]struct {
-		kinds  []EntKind
-		roster Roster
-	}{
-		"unknown kind": {kinds: []EntKind{statKind("unit")}, roster: Roster{{Kind: "unit", Data: 1}, {Kind: "ghost", Data: 1}}},
-		"wrong Data":   {kinds: []EntKind{statKind("unit")}, roster: Roster{{Kind: "unit", Data: 1}, {Kind: "unit", Data: "x"}}},
-		"no Position":  {kinds: []EntKind{{Name: "bare", Velocity: Const(Velocity{})}}, roster: Roster{{Kind: "bare"}}},
-		"no Velocity":  {kinds: []EntKind{{Name: "bare", Position: Const(spawnerTestPos())}}, roster: Roster{{Kind: "bare"}}},
-	}
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			p := NewPlugin(testWorld().config)
-			p.EntKindDict().Create(tc.kinds...)
-			p.Seed(tc.roster)
+func TestPlugin_Populate_ZeroEntryErrorsWithoutSpawning(t *testing.T) {
+	p := testPlugin()
+	p.EntKindDict().Define(statKind("unit"))
+	p.Seed(p.EntKindDict().Entry("unit", 1), Entry{})
 
-			if err := p.Populate(); err == nil {
-				t.Fatal("Populate: expected an error, got nil")
-			}
-			if n := len(p.module.SetupSystems()); n != 0 {
-				t.Errorf("queued %d spawns, want 0", n)
-			}
-		})
+	if err := p.Populate(); err == nil {
+		t.Fatal("Populate: expected an error for an Entry not built by EntKindDict.Entry")
+	}
+	if n := len(p.module.SetupSystems()); n != 0 {
+		t.Errorf("queued %d spawns, want 0", n)
 	}
 }

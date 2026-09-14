@@ -30,8 +30,8 @@ type Plugin struct {
 	Res      Resources
 	module   *module
 	renderer *Renderer
-	entKinds *entKindDict
-	seeded   Roster
+	entKinds *EntKindDict
+	seeded   []Entry
 
 	cameraControls bool
 	scrollSpeed    int32
@@ -114,25 +114,25 @@ func (p *Plugin) Serializable() plugin.Serializable { return &p.Res }
 // world-specific
 // =================================================================
 
-// Seed adds roster to the entities spawned when this Stage starts fresh — see Populate.
-func (p *Plugin) Seed(roster Roster) { p.seeded = append(p.seeded, roster...) }
+// Seed adds entries to the entities spawned when this Stage starts fresh — see Populate.
+func (p *Plugin) Seed(entries ...Entry) { p.seeded = append(p.seeded, entries...) }
 
 // Populate spawns every seeded entity, erroring (and spawning nothing) on an unknown kind or Data a kind's templates reject.
 func (p *Plugin) Populate() error {
 	var order []string
 	groups := make(map[string][]any)
 	for _, e := range p.seeded {
-		kind, ok := p.entKinds.Get(e.Kind)
+		kind, ok := p.entKinds.Get(e.kind)
 		if !ok {
-			return fmt.Errorf("world: unknown EntKind %q", e.Kind)
+			return fmt.Errorf("world: unknown EntKind %q", e.kind)
 		}
-		if err := kind.validate(e.Data); err != nil {
+		if err := kind.validate(e.data); err != nil {
 			return err
 		}
-		if _, seen := groups[e.Kind]; !seen {
-			order = append(order, e.Kind)
+		if _, seen := groups[e.kind]; !seen {
+			order = append(order, e.kind)
 		}
-		groups[e.Kind] = append(groups[e.Kind], e.Data)
+		groups[e.kind] = append(groups[e.kind], e.data)
 	}
 	for _, name := range order {
 		kind, _ := p.entKinds.Get(name)
@@ -152,5 +152,5 @@ func (p *Plugin) EntityRenderer() *Renderer { return p.renderer }
 func (p *Plugin) RegisterSpeedModifier(m SpeedModifier) { p.module.RegisterSpeedModifier(m) }
 
 // EntKindDict returns this Plugin's registered set of EntKinds — call
-// Create to register kinds, Get/All to read them back.
-func (p *Plugin) EntKindDict() EntKindDict { return p.entKinds }
+// Define to register kinds, Entry to build Seed's roster entries.
+func (p *Plugin) EntKindDict() *EntKindDict { return p.entKinds }

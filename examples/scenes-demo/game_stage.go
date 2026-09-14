@@ -57,10 +57,12 @@ func (g *GameplayStage) Init(ctx game.Initializer) error {
 	})
 	velocity := world.Velocity{}
 	velocity.SetDelta(geom.NewVec[int32](30, 20))
-	g.world.EntKindDict().Create(world.EntKind{
-		Name:     moverKind,
-		Position: world.Load(func(p world.Position) world.Position { return p }),
-		Velocity: world.Const(velocity),
+	g.world.EntKindDict().Define(func(k world.Kind[world.Position]) world.EntKind {
+		return world.EntKind{
+			Name:     moverKind,
+			Position: k.Load(func(p world.Position) world.Position { return p }),
+			Velocity: world.Const(velocity),
+		}
 	})
 
 	worldScn := &worldScene{stage: g}
@@ -94,11 +96,12 @@ func (g *GameplayStage) Restore(p game.Persistence) (bool, error) {
 
 func (g *GameplayStage) Spawn() error {
 	placement := world.NewGridPlacement(ScreenWidth, ScreenHeight, EntitySize)
-	roster := make(world.Roster, EntityCount)
-	for i := range roster {
-		roster[i] = world.Entry{Kind: moverKind, Data: placement.Place(i, EntityCount)}
+	kinds := g.world.EntKindDict()
+	entries := make([]world.Entry, EntityCount)
+	for i := range entries {
+		entries[i] = kinds.Entry(moverKind, placement.Place(i, EntityCount))
 	}
-	g.world.Seed(roster)
+	g.world.Seed(entries...)
 	return nil
 }
 

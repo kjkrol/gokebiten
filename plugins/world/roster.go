@@ -1,10 +1,7 @@
 package world
 
-// Entry is one entity to spawn: the EntKind named Kind, with Data feeding that kind's Load templates.
+// Entry is one entity to spawn — built only by EntKindDict.Entry, passed to Plugin.Seed.
 type Entry struct {
-	Kind string
-	Data any
+	kind string
+	data any
 }
-
-// Roster lists entities for Plugin.Seed.
-type Roster []Entry

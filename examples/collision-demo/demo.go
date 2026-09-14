@@ -94,17 +94,20 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
 		Entities: world.EntitiesCfg{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize},
 	})
+	kinds := s.world.EntKindDict()
 	for ci := range entityColors {
 		for si := range entityShapes {
-			s.world.EntKindDict().Create(world.EntKind{
-				Name:       entityKind(ci, si),
-				Position:   world.Load(func(b body) world.Position { return b.pos }),
-				Velocity:   world.Load(func(b body) world.Velocity { return b.vel }),
-				Components: []world.ComponentTemplate{world.Const(collisions.Collision{})},
+			kinds.Define(func(k world.Kind[body]) world.EntKind {
+				return world.EntKind{
+					Name:       entityKind(ci, si),
+					Position:   k.Load(func(b body) world.Position { return b.pos }),
+					Velocity:   k.Load(func(b body) world.Velocity { return b.vel }),
+					Components: []world.ComponentTemplate{world.Const(collisions.Collision{})},
+				}
 			})
 		}
 	}
-	s.world.EntKindDict().Create(world.EntKind{Name: hitKind})
+	kinds.Define(func(world.Kind[struct{}]) world.EntKind { return world.EntKind{Name: hitKind} })
 
 	s.collisions = collisions.NewPlugin(100*time.Millisecond, s.world).
 		SetCollisionHandlers(elastic.NewHandler(), stats.NewHandler(&s.collisionStats))
@@ -142,14 +145,13 @@ func (s *mainStage) Restore(p game.Persistence) (bool, error) {
 func (s *mainStage) Spawn() error {
 	placement := world.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize)
 	motion := newRandomVelocity(200, 50, 10)
-	roster := make(world.Roster, EntityCount)
-	for i := range roster {
-		roster[i] = world.Entry{
-			Kind: entityKind(rand.IntN(entityColors), rand.IntN(entityShapes)),
-			Data: body{pos: placement.Place(i, EntityCount), vel: motion.initialVelocity(i)},
-		}
+	kinds := s.world.EntKindDict()
+	entries := make([]world.Entry, EntityCount)
+	for i := range entries {
+		entries[i] = kinds.Entry(entityKind(rand.IntN(entityColors), rand.IntN(entityShapes)),
+			body{pos: placement.Place(i, EntityCount), vel: motion.initialVelocity(i)})
 	}
-	s.world.Seed(roster)
+	s.world.Seed(entries...)
 	return nil
 }
 

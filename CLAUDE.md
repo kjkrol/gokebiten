@@ -71,9 +71,12 @@ Initial state follows the same optional-interface pattern as
 each plugin's own typed `Seed` (`world.Plugin.Seed(roster)`,
 `board.Plugin.Seed(layout)`), and the engine then calls `Populate()` on every
 tracked `plugin.Populator` — only when `Restore` loaded nothing. Entity kinds
-(`world.EntKind`: every component as `Const` or `Load` from a roster entry's
-`Data`) and cell kinds are registered in `Stage.Init` via
-`EntKindDict()`/`CellKindDict()`, which also issue their `SpriteID`s.
+are registered in `Stage.Init` via `EntKindDict().Define(func(k world.Kind[P])
+world.EntKind {...})` — `P` is the kind's roster data type, every component is
+`Const` or `k.Load` from that data — and roster entries are built only through
+the dictionary, `EntKindDict().Entry(name, data)` (panics on an unknown kind or
+data that isn't its `P`), then passed to `world.Plugin.Seed`. Cell kinds go
+through `board.Plugin.CellKindDict().Create`; both dictionaries issue `SpriteID`s.
 
 Package layout: `render` (root) — `Renderer`/`AtlasSource`/`Atlas`/
 `CachedRenderer`/`QuadBatch`/`SolidBackground`/`TelemetryRenderer`, pure
