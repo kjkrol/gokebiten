@@ -10,8 +10,8 @@ type Initializer interface {
 	plugin.Installer
 	Use(p plugin.Plugin) error
 
-	// World returns the engine's built-in world.Plugin.
-	World() *world.Plugin
+	// UseWorld builds and installs this Stage's world.Plugin from cfg — call at most once per Stage, it panics otherwise.
+	UseWorld(cfg world.Config) *world.Plugin
 
 	// Track saves and loads s alongside the game's Plugins.
 	Track(s plugin.Serializable) error

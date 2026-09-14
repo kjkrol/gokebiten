@@ -53,10 +53,6 @@ func (d *Demo) Props() game.Props {
 		Title:       "gokebiten board & navigation plugins demo",
 		ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight,
 		TargetTPS: TPS,
-		World: world.Config{
-			Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: false},
-			Entities: world.EntitiesCfg{MaxCount: MaxEntCount, MinSize: EntitySize, MaxSize: EntitySize},
-		},
 	}
 }
 
@@ -84,7 +80,10 @@ func (s *mainStage) Name() string { return "board-navigation-demo" }
 func (s *mainStage) Stack() game.Stack { return s.stack }
 
 func (s *mainStage) Init(ctx game.Initializer) error {
-	s.world = ctx.World()
+	s.world = ctx.UseWorld(world.Config{
+		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: false},
+		Entities: world.EntitiesCfg{MaxCount: MaxEntCount, MinSize: EntitySize, MaxSize: EntitySize},
+	})
 	s.world.WithCameraControls()
 
 	grid := board.DefaultGrids{}.Square(GridWidth, GridHeight, CellSize)

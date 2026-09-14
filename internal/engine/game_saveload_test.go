@@ -13,11 +13,11 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 )
 
-func testProps() game.Props {
-	return game.Props{World: world.Config{
+func testWorldConfig() world.Config {
+	return world.Config{
 		Space:    world.SpaceCfg{Width: 1000, Height: 1000},
 		Entities: world.EntitiesCfg{MaxCount: 10, MinSize: 1, MaxSize: 100},
-	}}
+	}
 }
 
 type saveTestState struct{ N int }
@@ -60,6 +60,7 @@ type saveLoadTestGame struct {
 
 func (g *saveLoadTestGame) Name() string { return "stage" }
 func (g *saveLoadTestGame) Init(ctx game.Initializer) error {
+	ctx.UseWorld(testWorldConfig())
 	g.acc = &ecsAccessor{setup: g.setup}
 	return ctx.Use(g.acc)
 }
@@ -104,7 +105,7 @@ func TestGame_SaveLoad_RoundTrip(t *testing.T) {
 		f.Next()
 		appearance.Slice(&f.Cursor)[0] = world.Appearance{SpriteID: 7}
 	}}
-	eng := engine.NewEngine(oneStageGame{stage: g, props: testProps()})
+	eng := engine.NewEngine(oneStageGame{stage: g, props: game.Props{}})
 	if err := eng.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
@@ -126,7 +127,7 @@ func TestGame_SaveLoad_RoundTrip(t *testing.T) {
 		loadFrom: basePath,
 		loadArgs: []any{state2, extra2},
 	}
-	eng2 := engine.NewEngine(oneStageGame{stage: game2, props: testProps()})
+	eng2 := engine.NewEngine(oneStageGame{stage: game2, props: game.Props{}})
 	if err := eng2.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}

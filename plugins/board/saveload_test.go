@@ -12,11 +12,11 @@ import (
 	"github.com/kjkrol/gokg/geom"
 )
 
-func testProps() game.Props {
-	return game.Props{World: world.Config{
+func testWorldConfig() world.Config {
+	return world.Config{
 		Space:    world.SpaceCfg{Width: 100, Height: 100},
 		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
-	}}
+	}
 }
 
 type boardSaveLoadTestGame struct {
@@ -30,7 +30,7 @@ type boardSaveLoadTestGame struct {
 
 func (g *boardSaveLoadTestGame) Name() string { return "stage" }
 func (g *boardSaveLoadTestGame) Init(ctx game.Initializer) error {
-	g.worldPlugin = ctx.World()
+	g.worldPlugin = ctx.UseWorld(testWorldConfig())
 	g.boardPlugin = board.NewPlugin(g.grid, &board.SingleOccupancy{}, g.worldPlugin)
 	return ctx.Use(g.boardPlugin)
 }
@@ -77,7 +77,7 @@ func TestPlugin_SaveLoad_TerrainRoundTrip(t *testing.T) {
 	}
 
 	stage := &boardSaveLoadTestGame{grid: grid}
-	eng := engine.NewEngine(oneStageGame{stage: stage, props: testProps()})
+	eng := engine.NewEngine(oneStageGame{stage: stage, props: game.Props{}})
 	if err := eng.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestPlugin_SaveLoad_TerrainRoundTrip(t *testing.T) {
 	}
 
 	game2 := &boardSaveLoadTestGame{grid: grid, loadFrom: basePath}
-	eng2 := engine.NewEngine(oneStageGame{stage: game2, props: testProps()})
+	eng2 := engine.NewEngine(oneStageGame{stage: game2, props: game.Props{}})
 	if err := eng2.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}

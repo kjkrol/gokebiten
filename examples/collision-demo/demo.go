@@ -46,10 +46,6 @@ func (d *Demo) Props() game.Props {
 		Title:       "GOKe + GOKg + Ebiten Integration",
 		ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight,
 		TargetTPS: TPS,
-		World: world.Config{
-			Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
-			Entities: world.EntitiesCfg{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize},
-		},
 	}
 }
 
@@ -94,7 +90,10 @@ func (s *mainStage) Name() string { return "collision-demo" }
 func (s *mainStage) Stack() game.Stack { return s.stack }
 
 func (s *mainStage) Init(ctx game.Initializer) error {
-	s.world = ctx.World()
+	s.world = ctx.UseWorld(world.Config{
+		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
+		Entities: world.EntitiesCfg{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize},
+	})
 	for ci := range entityColors {
 		for si := range entityShapes {
 			s.world.EntKindDict().Create(world.EntKind{

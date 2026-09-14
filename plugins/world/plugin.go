@@ -24,10 +24,8 @@ var _ plugin.Serializable = (*Resources)(nil)
 // Persisted returns the camera's Viewport/Zoom for Persistence.Save/Load to include automatically.
 func (r *Resources) Persisted() []any { return r.Camera.Persisted() }
 
-// Plugin builds a world - the mandatory foundation for any game with
-// moving, drawable entities - and publishes Resources as a resource.
-// Engine installs this automatically — do not construct/Use your own; get
-// the running instance via ctx.World().
+// Plugin is the world a Stage installs via ctx.UseWorld — never construct
+// and Use your own.
 type Plugin struct {
 	Res      Resources
 	module   *module
@@ -44,7 +42,7 @@ var _ plugin.Builtin = (*Plugin)(nil)
 var _ plugin.Restorer = (*Plugin)(nil)
 var _ plugin.Populator = (*Plugin)(nil)
 
-// Builtin marks Plugin as installed automatically by Engine — see ctx.World().
+// Builtin marks Plugin as installed by the engine itself — see ctx.UseWorld.
 func (*Plugin) Builtin() {}
 
 // NewPlugin builds Plugin around a fresh world — Seed/Populate/Space are

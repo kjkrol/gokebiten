@@ -16,6 +16,8 @@ type initializer struct {
 	host  *ecsHost
 	world *world.Plugin
 	tps   *game.TPS
+
+	screenWidth, screenHeight int
 }
 
 var _ game.Initializer = (*initializer)(nil)
@@ -34,7 +36,7 @@ func (c *initializer) ECS() *goke.ECS { return c.host.ecs }
 // a duplicate Name and any Plugin the engine already installs itself.
 func (c *initializer) Use(p plugin.Plugin) error {
 	if _, ok := p.(plugin.Builtin); ok {
-		return fmt.Errorf("gokebiten: %q is installed automatically by the engine — do not Use it yourself", p.Name())
+		return fmt.Errorf("gokebiten: %q is installed by the engine itself — do not Use it yourself", p.Name())
 	}
 	return c.use(p)
 }
@@ -68,6 +70,19 @@ func (c *initializer) Track(s plugin.Serializable) error {
 	return nil
 }
 
-func (c *initializer) World() *world.Plugin { return c.world }
+func (c *initializer) UseWorld(cfg world.Config) *world.Plugin {
+	if c.world != nil {
+		panic("gokebiten: UseWorld called more than once in the same Stage")
+	}
+	if cfg.Camera.ViewportWidth == 0 && cfg.Camera.ViewportHeight == 0 {
+		cfg.Camera.ViewportWidth = uint32(c.screenWidth)
+		cfg.Camera.ViewportHeight = uint32(c.screenHeight)
+	}
+	c.world = world.NewPlugin(cfg)
+	if err := c.useBuiltin(c.world); err != nil {
+		panic(err)
+	}
+	return c.world
+}
 
 func (c *initializer) TPS() *game.TPS { return c.tps }

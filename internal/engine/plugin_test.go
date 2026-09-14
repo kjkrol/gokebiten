@@ -14,11 +14,11 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 )
 
-func testProps() game.Props {
-	return game.Props{World: world.Config{
+func testWorldConfig() world.Config {
+	return world.Config{
 		Space:    world.SpaceCfg{Width: 100, Height: 100},
 		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
-	}}
+	}
 }
 
 type stubPlugin struct {
@@ -85,7 +85,7 @@ func (g oneStageGame) Stages() (map[string]game.Stage, string) {
 }
 
 func newTestEngine(initFn func(ctx game.Initializer) error) *Engine {
-	return NewEngine(oneStageGame{stage: &stubStage{initFn: initFn}, props: testProps()})
+	return NewEngine(oneStageGame{stage: &stubStage{initFn: initFn}})
 }
 
 func TestInitializer_Use_InstallsOnce(t *testing.T) {
@@ -188,17 +188,17 @@ func TestInitializer_Use_RejectsBuiltinPlugin(t *testing.T) {
 
 // TestEngine_Init_WorldViewportDefaultsToScreenSize guards that Engine
 // fills in the built-in world's camera viewport from Props.ScreenWidth/
-// ScreenHeight when the game leaves World.Camera.Viewport* unset — otherwise the
+// ScreenHeight when UseWorld's config leaves Camera.Viewport* unset — otherwise the
 // camera's pannable window defaults to the world's own size, leaving
 // zero room to pan or zoom out regardless of screen size.
 func TestEngine_Init_WorldViewportDefaultsToScreenSize(t *testing.T) {
-	props := game.Props{ScreenWidth: 200, ScreenHeight: 150, World: world.Config{
-		Space:    world.SpaceCfg{Width: 1000, Height: 1000},
-		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
-	}}
+	props := game.Props{ScreenWidth: 200, ScreenHeight: 150}
 	var got camera.Camera
 	stage := &stubStage{initFn: func(ctx game.Initializer) error {
-		got = ctx.World().Camera()
+		got = ctx.UseWorld(world.Config{
+			Space:    world.SpaceCfg{Width: 1000, Height: 1000},
+			Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
+		}).Camera()
 		return nil
 	}}
 	eng := NewEngine(oneStageGame{stage: stage, props: props})
@@ -211,17 +211,48 @@ func TestEngine_Init_WorldViewportDefaultsToScreenSize(t *testing.T) {
 	}
 }
 
-func TestInitializer_World_ReturnsInstalledInstance(t *testing.T) {
+func TestInitializer_UseWorld_ReturnsInstalledInstance(t *testing.T) {
 	var got *world.Plugin
 	eng := newTestEngine(func(ctx game.Initializer) error {
-		got = ctx.World()
+		got = ctx.UseWorld(testWorldConfig())
 		return nil
 	})
 
 	if err := eng.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
-	if got == nil {
-		t.Fatal("expected ctx.World() to return the engine's built-in world.Plugin, got nil")
+	if got == nil || eng.current.world != got {
+		t.Fatalf("UseWorld() = %v, want the world.Plugin the engine installed for the Stage (%v)", got, eng.current.world)
+	}
+}
+
+func TestInitializer_UseWorld_SecondCallPanics(t *testing.T) {
+	eng := newTestEngine(func(ctx game.Initializer) error {
+		ctx.UseWorld(testWorldConfig())
+		defer func() {
+			if recover() == nil {
+				t.Error("expected a second UseWorld in the same Stage to panic")
+			}
+		}()
+		ctx.UseWorld(testWorldConfig())
+		return nil
+	})
+
+	if err := eng.Init(); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+}
+
+func TestEngine_Init_StageWithoutUseWorldGetsNoWorld(t *testing.T) {
+	eng := newTestEngine(func(game.Initializer) error { return nil })
+
+	if err := eng.Init(); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	if eng.current.world != nil {
+		t.Errorf("Stage world = %v, want nil when the Stage never calls UseWorld", eng.current.world)
+	}
+	if cam := eng.Camera(); cam != nil {
+		t.Errorf("Engine.Camera() = %v, want nil without a world", cam)
 	}
 }

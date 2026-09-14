@@ -47,8 +47,8 @@ type Engine struct {
 var _ ebiten.Game = (*Engine)(nil)
 var _ game.Runtime = (*Engine)(nil)
 
-// NewEngine builds an Engine driving g — g.Props() supplies the window/
-// tick-rate/world config.
+// NewEngine builds an Engine driving g — g.Props() supplies the window and
+// tick-rate config.
 func NewEngine(g game.Game) *Engine {
 	props := g.Props()
 	inputs := &control.InputEvents{}
@@ -93,8 +93,13 @@ func (e *Engine) TogglePause() {
 	}
 }
 
-// Camera returns the active Stage's built-in world's shared Camera.
-func (e *Engine) Camera() camera.Camera { return e.current.world.Camera() }
+// Camera returns the active Stage's built-in world's shared Camera, or nil if the Stage has no world.
+func (e *Engine) Camera() camera.Camera {
+	if e.current.world == nil {
+		return nil
+	}
+	return e.current.world.Camera()
+}
 
 // Quit ends the Ebitengine loop after this tick.
 func (e *Engine) Quit() { e.quit = true }

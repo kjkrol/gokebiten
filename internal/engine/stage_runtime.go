@@ -6,8 +6,8 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 )
 
-// stageRuntime is one active Stage: its own ecsHost, the mandatory
-// world.Plugin auto-installed into it, and every Scene's Layers() already
+// stageRuntime is one active Stage: its own ecsHost, the world.Plugin the
+// Stage installed via UseWorld (nil if it didn't), and every Scene's Layers() already
 // resolved into concrete render.Renderer values (built once, at entry —
 // Draw just replays them, keyed by Scene.Name() to match
 // Stage.Stack().Composition().Order()).
@@ -18,24 +18,14 @@ type stageRuntime struct {
 	sceneLayers map[string][]render.Renderer
 }
 
-// enterStage builds a Stage's world from scratch: a fresh *goke.ECS, the
-// mandatory world.Plugin, Stage.Init/Restore/Spawn, every Scene's
+// enterStage builds a Stage's world from scratch: a fresh *goke.ECS,
+// Stage.Init (which may install a world.Plugin via UseWorld), Restore/Spawn, every Scene's
 // renderers, and the single ecs.Setup flush — mirroring what Engine.Init
 // used to do once for the whole game, now repeatable per Stage.
 func (e *Engine) enterStage(stage game.Stage) (*stageRuntime, error) {
 	host := newECSHost()
 
-	cfg := e.props.World
-	if cfg.Camera.ViewportWidth == 0 && cfg.Camera.ViewportHeight == 0 {
-		cfg.Camera.ViewportWidth = uint32(e.props.ScreenWidth)
-		cfg.Camera.ViewportHeight = uint32(e.props.ScreenHeight)
-	}
-	worldPlugin := world.NewPlugin(cfg)
-
-	ctx := &initializer{host: host, world: worldPlugin, tps: e.tps}
-	if err := ctx.useBuiltin(worldPlugin); err != nil {
-		return nil, err
-	}
+	ctx := &initializer{host: host, tps: e.tps, screenWidth: e.props.ScreenWidth, screenHeight: e.props.ScreenHeight}
 	if err := stage.Init(ctx); err != nil {
 		return nil, err
 	}
@@ -66,5 +56,5 @@ func (e *Engine) enterStage(stage game.Stage) (*stageRuntime, error) {
 
 	host.flushPendingSetup()
 
-	return &stageRuntime{host: host, stage: stage, world: worldPlugin, sceneLayers: sceneLayers}, nil
+	return &stageRuntime{host: host, stage: stage, world: ctx.world, sceneLayers: sceneLayers}, nil
 }

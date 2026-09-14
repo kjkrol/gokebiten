@@ -51,7 +51,10 @@ var _ game.Stage = (*GameplayStage)(nil)
 func (g *GameplayStage) Name() string { return "gameplay" }
 
 func (g *GameplayStage) Init(ctx game.Initializer) error {
-	g.world = ctx.World()
+	g.world = ctx.UseWorld(world.Config{
+		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
+		Entities: world.EntitiesCfg{MaxCount: EntityCount, MinSize: EntitySize, MaxSize: EntitySize},
+	})
 	velocity := world.Velocity{}
 	velocity.SetDelta(geom.NewVec[int32](30, 20))
 	g.world.EntKindDict().Create(world.EntKind{

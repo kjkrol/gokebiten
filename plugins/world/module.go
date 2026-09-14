@@ -12,8 +12,8 @@ import (
 // SpeedModifier contributes a multiplicative factor to an entity's Velocity.Value each tick — see VelocitySystem.
 type SpeedModifier = Modifier[float64]
 
-// module owns the world's topology, entities, and movement — the mandatory
-// foundation any game with moving, drawable entities builds on.
+// module owns the world's topology, entities, and movement — the foundation
+// any Stage with moving, drawable entities builds on.
 type module struct {
 	config Config
 	space  *gokg.Space

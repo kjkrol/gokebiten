@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/kjkrol/gokebiten/game"
-	"github.com/kjkrol/gokebiten/plugins/world"
 )
 
 const (
@@ -35,10 +34,6 @@ func (d *Demo) Props() game.Props {
 		Title:       "gokebiten Stage/Scene demo",
 		ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight,
 		TargetTPS: TPS,
-		World: world.Config{
-			Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
-			Entities: world.EntitiesCfg{MaxCount: EntityCount, MinSize: EntitySize, MaxSize: EntitySize},
-		},
 	}
 }
 

@@ -5,17 +5,10 @@ import (
 
 	"github.com/kjkrol/gokebiten/game"
 	"github.com/kjkrol/gokebiten/internal/engine"
-	"github.com/kjkrol/gokebiten/plugins/world"
 )
 
 func testProps() game.Props {
-	return game.Props{
-		ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight,
-		World: world.Config{
-			Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
-			Entities: world.EntitiesCfg{MaxCount: EntityCount, MinSize: EntitySize, MaxSize: EntitySize},
-		},
-	}
+	return game.Props{ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight}
 }
 
 // oneStageGame is a minimal game.Game wrapping a single Stage.

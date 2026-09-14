@@ -107,10 +107,13 @@ shows how much of it is boilerplate vs. real behavior.
 
 ### Built-in plugins (`plugins/`)
 
-- **`world`** — mandatory foundation: Position/Velocity/Appearance, entity
-  spawning, the shared `*gokg.Space` index, per-tick movement, and the
-  shared `camera.Camera` (a root package, not a plugin of its own) exposed
-  via `world.Plugin.Camera()`.
+- **`world`** — foundation a Stage installs by calling
+  `ctx.UseWorld(cfg)` in `Init`, once (a second call panics); `cfg` sizes
+  the space, toroidality, entity bounds and camera, and a Stage that never
+  calls it gets no world:
+  Position/Velocity/Appearance, entity spawning, the shared `*gokg.Space`
+  index, per-tick movement, and the shared `camera.Camera` (a root package,
+  not a plugin of its own) exposed via `world.Plugin.Camera()`.
 - **`board`** — optional grid + terrain over `world`; depends on `world`.
 - **`collisions`** — optional broad/narrow-phase physics over `world`'s
   space; handler strategies live under `collisions/strategies/*`. Depends
@@ -124,14 +127,15 @@ Each package has a `doc.go` describing the gameplay capability it adds.
 
 ### Stage / Scene
 
-A `game.Game` also supplies `Props()` (window/tick-rate/world config, read
+A `game.Game` also supplies `Props()` (window/tick-rate config, read
 once at startup by `gokebiten.Run(g)`) alongside a named collection of
 `game.Stage`s plus which one starts active (`Stages() (map[string]Stage,
 string)`) — every game writes its own small `Game` implementation, even
 for a single Stage, since only a concrete type can supply its own `Props`.
 A `Stage` is what `Game` itself used to be:
 `Init`/`Restore`/`Spawn`/`Update`, each with its **own** `*goke.ECS`, built
-fresh (mandatory `world.Plugin` included) the moment `Runtime.SwitchStage`
+fresh (plus a fresh `world.Plugin` if its `Init` calls `ctx.UseWorld`; the
+engine only fills an unset camera viewport from the screen size) the moment `Runtime.SwitchStage`
 enters it — so a menu Stage can sit idle with zero gameplay entities until
 the player actually starts the game, at which point the gameplay Stage's
 `Init`/`Restore`/`Spawn`/`ecs.Setup` run for the first time. A `Stage` is

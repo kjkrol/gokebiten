@@ -10,11 +10,11 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/world"
 )
 
-func testEngineProps() game.Props {
-	return game.Props{World: world.Config{
+func testWorldConfig() world.Config {
+	return world.Config{
 		Space:    world.SpaceCfg{Width: 1000, Height: 1000},
 		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
-	}}
+	}
 }
 
 type cameraSaveLoadTestGame struct {
@@ -26,7 +26,7 @@ type cameraSaveLoadTestGame struct {
 
 func (g *cameraSaveLoadTestGame) Name() string { return "stage" }
 func (g *cameraSaveLoadTestGame) Init(ctx game.Initializer) error {
-	g.world = ctx.World()
+	g.world = ctx.UseWorld(testWorldConfig())
 	return nil
 }
 func (g *cameraSaveLoadTestGame) Restore(p game.Persistence) (bool, error) {
@@ -66,7 +66,7 @@ func TestPlugin_SaveLoad_CameraRoundTrip(t *testing.T) {
 	basePath := t.TempDir() + "/save"
 
 	g := &cameraSaveLoadTestGame{}
-	eng := engine.NewEngine(oneStageGame{stage: g, props: testEngineProps()})
+	eng := engine.NewEngine(oneStageGame{stage: g, props: game.Props{}})
 	if err := eng.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestPlugin_SaveLoad_CameraRoundTrip(t *testing.T) {
 	}
 
 	g2 := &cameraSaveLoadTestGame{loadFrom: basePath}
-	eng2 := engine.NewEngine(oneStageGame{stage: g2, props: testEngineProps()})
+	eng2 := engine.NewEngine(oneStageGame{stage: g2, props: game.Props{}})
 	if err := eng2.Init(); err != nil {
 		t.Fatalf("Init: %v", err)
 	}

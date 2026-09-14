@@ -18,5 +18,7 @@ type Runtime interface {
 
 	Persistence() Persistence
 	TPS() *TPS
+
+	// Camera returns the active Stage's world camera, or nil if the Stage has no world.
 	Camera() camera.Camera
 }
