@@ -20,14 +20,11 @@ func spawnerTestPos() Position {
 }
 
 // statKind defines a kind at a fixed Position whose spawnerStat is read from int roster data.
-func statKind(name string) func(Kind[int]) EntKind {
-	return func(k Kind[int]) EntKind {
-		return EntKind{
-			Name:       name,
-			Position:   Const(spawnerTestPos()),
-			Velocity:   Const(Velocity{}),
-			Components: []ComponentTemplate{k.Load(func(hp int) spawnerStat { return spawnerStat{HP: hp} })},
-		}
+func statKind(k Kind[int]) EntKind {
+	return EntKind{
+		Position:   Const(spawnerTestPos()),
+		Velocity:   Const(Velocity{}),
+		Components: []ComponentTemplate{k.Load(func(hp int) spawnerStat { return spawnerStat{HP: hp} })},
 	}
 }
 
@@ -40,8 +37,8 @@ func testPlugin() *Plugin { return NewPlugin(testWorld().config) }
 
 func TestEntKindDict_Define_AssignsSpriteIDsByOrder(t *testing.T) {
 	dict := newEntKindDict()
-	dict.Define(statKind("red"))
-	dict.Define(statKind("blue"))
+	dict.Define("red", statKind)
+	dict.Define("blue", statKind)
 
 	red, ok := dict.Get("red")
 	if !ok || red.SpriteID != 0 {
@@ -62,35 +59,44 @@ func TestEntKindDict_Get_UnknownName(t *testing.T) {
 	}
 }
 
+func TestEntKindDict_Entry_PanicsOnUnknownKind(t *testing.T) {
+	dict := newEntKindDict()
+	dict.Define("unit", statKind)
+	defer func() {
+		if recover() == nil {
+			t.Error("expected Entry to panic")
+		}
+	}()
+	dict.Entry("ghost", 1)
+}
+
 func TestEntKindDict_Entry_PanicsOnBadEntry(t *testing.T) {
 	bare := func(k EntKind) func(Kind[int]) EntKind { return func(Kind[int]) EntKind { return k } }
 	cases := map[string]struct {
 		kind func(Kind[int]) EntKind
-		name string
 		data any
 	}{
-		"unknown kind": {kind: statKind("unit"), name: "ghost", data: 1},
-		"wrong data":   {kind: statKind("unit"), name: "unit", data: "x"},
-		"no Position":  {kind: bare(EntKind{Name: "unit", Velocity: Const(Velocity{})}), name: "unit", data: 1},
-		"no Velocity":  {kind: bare(EntKind{Name: "unit", Position: Const(spawnerTestPos())}), name: "unit", data: 1},
+		"wrong data":  {kind: statKind, data: "x"},
+		"no Position": {kind: bare(EntKind{Velocity: Const(Velocity{})}), data: 1},
+		"no Velocity": {kind: bare(EntKind{Position: Const(spawnerTestPos())}), data: 1},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			dict := newEntKindDict()
-			dict.Define(tc.kind)
+			dict.Define("unit", tc.kind)
 			defer func() {
 				if recover() == nil {
 					t.Error("expected Entry to panic")
 				}
 			}()
-			dict.Entry(tc.name, tc.data)
+			dict.Entry("unit", tc.data)
 		})
 	}
 }
 
 func TestPopulate_ConstAndLoadComponents(t *testing.T) {
 	wm := testWorld()
-	kind := statKind("red")(Kind[int]{})
+	kind := statKind(Kind[int]{})
 	kind.SpriteID = 7
 	kind.Components = append(kind.Components, Const(spawnerTag{}))
 	wm.populate(kind, []any{9, 4})
@@ -124,7 +130,7 @@ func TestPopulate_WithEffect_RunsAfterWriteWithValueAndID(t *testing.T) {
 	var gotHP, calls int
 	var gotID uid.UID64
 	var k Kind[int]
-	kind := statKind("red")(k)
+	kind := statKind(k)
 	kind.Components = []ComponentTemplate{
 		k.Load(func(hp int) spawnerStat { return spawnerStat{HP: hp} }).
 			WithEffect(func(v spawnerStat, id uid.UID64) {
@@ -154,10 +160,9 @@ func TestPopulate_WithEffect_RunsAfterWriteWithValueAndID(t *testing.T) {
 func TestPopulate_KindsWithDifferentDataAndComponents(t *testing.T) {
 	p := testPlugin()
 	kinds := p.EntKindDict()
-	kinds.Define(statKind("unit"))
-	kinds.Define(func(k Kind[propData]) EntKind {
+	kinds.Define("unit", statKind)
+	kinds.Define("prop", func(k Kind[propData]) EntKind {
 		return EntKind{
-			Name: "prop",
 			Position: k.Load(func(d propData) Position {
 				return Position{AABB: plane.NewAABB(geom.NewVec(d.x, 0), 10, 10)}
 			}),
@@ -197,7 +202,7 @@ func TestPopulate_KindsWithDifferentDataAndComponents(t *testing.T) {
 
 func TestPlugin_Populate_ZeroEntryErrorsWithoutSpawning(t *testing.T) {
 	p := testPlugin()
-	p.EntKindDict().Define(statKind("unit"))
+	p.EntKindDict().Define("unit", statKind)
 	p.Seed(p.EntKindDict().Entry("unit", 1), Entry{})
 
 	if err := p.Populate(); err == nil {

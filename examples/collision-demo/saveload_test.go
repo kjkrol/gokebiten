@@ -52,9 +52,8 @@ func TestSaveLoadCycle(t *testing.T) {
 	var entries []world.Entry
 	for i := range count {
 		name := fmt.Sprintf("k%d", i)
-		kinds.Define(func(k world.Kind[body]) world.EntKind {
+		kinds.Define(name, func(k world.Kind[body]) world.EntKind {
 			return world.EntKind{
-				Name:       name,
 				Position:   k.Load(func(b body) world.Position { return b.pos }),
 				Velocity:   k.Load(func(b body) world.Velocity { return b.vel }),
 				Components: []world.ComponentTemplate{world.Const(collisions.Collision{})},

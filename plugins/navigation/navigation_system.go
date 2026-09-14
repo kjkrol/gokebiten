@@ -62,6 +62,7 @@ type navigationSystem struct {
 	cellEnteredAdd goke.Comp[CellEntered]
 	enterVM        *goke.ValueEditor
 	arrivedEditor  *goke.Editor
+	arrivedVM      *goke.ValueEditor
 
 	enteredQuery     *goke.Query
 	cellEnteredClear goke.Comp[CellEntered]
@@ -93,6 +94,8 @@ func (s *navigationSystem) Init(si *goke.SysInit) {
 		Build()
 	s.arrivedEditor = s.query.NewEditorBuilder().Remove(goke.Remove[MoveOrder]()).Build()
 	s.enterVM = s.query.NewValueEditorBuilder(&s.cellEnteredAdd).Build()
+	s.arrivedVM = s.query.NewValueEditorBuilder(&s.cellEnteredAdd).
+		Remove(goke.Remove[MoveOrder]()).Build()
 
 	s.enteredQuery = si.NewQueryBuilder(&s.cellEnteredClear).Build()
 	s.clearEditor = s.enteredQuery.NewEditorBuilder().Remove(goke.Remove[CellEntered]()).Build()
@@ -118,6 +121,9 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 		var enteredIDs []uid.UID64
 		var enteredVals []CellEntered
 		var arrivedIDs []uid.UID64
+		// Entities doing both on one tick migrate once, via arrivedVM.
+		var bothIDs []uid.UID64
+		var bothVals []CellEntered
 
 		for i, id := range cursor.IDs {
 			target := orders[i].Target
@@ -129,11 +135,21 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 				actual = current
 			}
 
+			// entered guards against staging this entity twice: moveTo can fire
+			// both from the reconcile switch and again on leg completion, and a
+			// duplicate id in one AddCompValue batch would resolve to the same
+			// slot twice.
+			entered := false
 			moveTo := func(c board.CellID) {
 				if c == cells[i].ID {
 					return
 				}
 				cells[i].ID = c
+				if entered {
+					enteredVals[len(enteredVals)-1] = CellEntered{ID: c}
+					return
+				}
+				entered = true
 				enteredIDs = append(enteredIDs, id)
 				enteredVals = append(enteredVals, CellEntered{ID: c})
 			}
@@ -228,10 +244,23 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 			}
 
 			if waypoint == target {
-				arrivedIDs = append(arrivedIDs, id)
+				if entered {
+					// Its entry is necessarily the last one appended — only this
+					// entity's moveTo ran since. Move it to the combined batch.
+					n := len(enteredIDs) - 1
+					bothIDs = append(bothIDs, enteredIDs[n])
+					bothVals = append(bothVals, enteredVals[n])
+					enteredIDs, enteredVals = enteredIDs[:n], enteredVals[:n]
+				} else {
+					arrivedIDs = append(arrivedIDs, id)
+				}
 			}
 		}
 
+		if len(bothIDs) > 0 {
+			vals := cb.AddCompValue(s.arrivedVM, &s.cellEnteredAdd, snap, bothIDs)
+			copy(vals, bothVals)
+		}
 		if len(enteredIDs) > 0 {
 			vals := cb.AddCompValue(s.enterVM, &s.cellEnteredAdd, snap, enteredIDs)
 			copy(vals, enteredVals)

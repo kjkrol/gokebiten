@@ -57,9 +57,8 @@ func (g *GameplayStage) Init(ctx game.Initializer) error {
 	})
 	velocity := world.Velocity{}
 	velocity.SetDelta(geom.NewVec[int32](30, 20))
-	g.world.EntKindDict().Define(func(k world.Kind[world.Position]) world.EntKind {
+	g.world.EntKindDict().Define(moverKind, func(k world.Kind[world.Position]) world.EntKind {
 		return world.EntKind{
-			Name:     moverKind,
 			Position: k.Load(func(p world.Position) world.Position { return p }),
 			Velocity: world.Const(velocity),
 		}

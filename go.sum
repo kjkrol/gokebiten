@@ -10,8 +10,8 @@ github.com/hajimehoshi/ebiten/v2 v2.10.1 h1:OniNNrTOaDqEU584eIkkWEkJzmSnqKaKT9BV
 github.com/hajimehoshi/ebiten/v2 v2.10.1/go.mod h1:47QNgyS/y2ZRkjVUvlGLx8a+F7MSjcn8/GsjcCZ9Rc8=
 github.com/kjkrol/astar v1.1.1 h1:gsPGclCd6BTGbsZkpMgbqBA/VgVg/pgtKAsHZIiL0Yc=
 github.com/kjkrol/astar v1.1.1/go.mod h1:hBjF0fn4Bznw+o8H3VqJ9Gm9Pdd+7or+pgOAYPznuuc=
-github.com/kjkrol/goke/v3 v3.2.2 h1:yvunkEVAI9/WYS9jFzGheC+j0D+UIRjGxznF1xUI6hM=
-github.com/kjkrol/goke/v3 v3.2.2/go.mod h1:58uVZD5rzMFkDp7kOxpwobjcwDV04SYZ58eQzxLeusU=
+github.com/kjkrol/goke/v3 v3.2.3 h1:p28eWZhx54GU2/YCbM3drwSDswGwzsZLYUDt+9rL4lo=
+github.com/kjkrol/goke/v3 v3.2.3/go.mod h1:58uVZD5rzMFkDp7kOxpwobjcwDV04SYZ58eQzxLeusU=
 github.com/kjkrol/gokg v1.3.2 h1:Ha6Ki6uqaf0TimcERPtkVVM8fN0/gItYzMguLhKv7Ec=
 github.com/kjkrol/gokg v1.3.2/go.mod h1:yVnw+aqE6kXBvU0X7AbRI+wq5qbrvK+0FFzKkI5sSV0=
 github.com/kjkrol/uid v0.3.0 h1:awbHtzOA6tUF/aICp6M/TOMPh6yldNZrzhQd0cvFOjs=

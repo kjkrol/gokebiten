@@ -70,8 +70,8 @@ type body struct {
 	vel world.Velocity
 }
 
-// entityKind names the EntKind drawn with color ci and shape si; hitKind only supplies the overlay sprite.
-func entityKind(ci, si int) string { return fmt.Sprintf("entity-%d-%d", ci, si) }
+// entityKindName names the EntKind drawn with color ci and shape si; hitKind only supplies the overlay sprite.
+func entityKindName(ci, si int) string { return fmt.Sprintf("entity-%d-%d", ci, si) }
 
 type mainStage struct {
 	world      *world.Plugin
@@ -97,9 +97,8 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	kinds := s.world.EntKindDict()
 	for ci := range entityColors {
 		for si := range entityShapes {
-			kinds.Define(func(k world.Kind[body]) world.EntKind {
+			kinds.Define(entityKindName(ci, si), func(k world.Kind[body]) world.EntKind {
 				return world.EntKind{
-					Name:       entityKind(ci, si),
 					Position:   k.Load(func(b body) world.Position { return b.pos }),
 					Velocity:   k.Load(func(b body) world.Velocity { return b.vel }),
 					Components: []world.ComponentTemplate{world.Const(collisions.Collision{})},
@@ -107,7 +106,7 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 			})
 		}
 	}
-	kinds.Define(func(world.Kind[struct{}]) world.EntKind { return world.EntKind{Name: hitKind} })
+	kinds.Define(hitKind, func(world.Kind[struct{}]) world.EntKind { return world.EntKind{} })
 
 	s.collisions = collisions.NewPlugin(100*time.Millisecond, s.world).
 		SetCollisionHandlers(elastic.NewHandler(), stats.NewHandler(&s.collisionStats))
@@ -148,7 +147,7 @@ func (s *mainStage) Spawn() error {
 	kinds := s.world.EntKindDict()
 	entries := make([]world.Entry, EntityCount)
 	for i := range entries {
-		entries[i] = kinds.Entry(entityKind(rand.IntN(entityColors), rand.IntN(entityShapes)),
+		entries[i] = kinds.Entry(entityKindName(rand.IntN(entityColors), rand.IntN(entityShapes)),
 			body{pos: placement.Place(i, EntityCount), vel: motion.initialVelocity(i)})
 	}
 	s.world.Seed(entries...)
@@ -190,7 +189,7 @@ func (m *mainScene) Layers() []func() render.Renderer {
 	shapes := [entityShapes]func(color.RGBA) render.SpriteDrawer{render.Solid, render.Border, render.Diamond, render.Cross}
 	for ci, c := range palette[:entityColors] {
 		for si, shape := range shapes {
-			kind, _ := kinds.Get(entityKind(ci, si))
+			kind, _ := kinds.Get(entityKindName(ci, si))
 			atlas.RegisterAt(kind.SpriteID, shape(c))
 		}
 	}

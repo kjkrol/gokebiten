@@ -15,9 +15,8 @@ func ExamplePlugin_Seed() {
 	placement := world.NewGridPlacement(800, 600, 8)
 
 	kinds := plugin.EntKindDict()
-	kinds.Define(func(k world.Kind[world.Position]) world.EntKind {
+	kinds.Define("dot", func(k world.Kind[world.Position]) world.EntKind {
 		return world.EntKind{
-			Name:     "dot",
 			Position: k.Load(func(p world.Position) world.Position { return p }),
 			Velocity: world.Const(world.Velocity{}),
 		}

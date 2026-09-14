@@ -48,9 +48,8 @@ func TestEntKind_LoadWithEffect_EntersOccupancyOnSpawn(t *testing.T) {
 	}
 	plugin := world.NewPlugin(cfg)
 	placement := world.NewGridPlacement(50, 50, 8)
-	plugin.EntKindDict().Define(func(k world.Kind[board.CellID]) world.EntKind {
+	plugin.EntKindDict().Define("unit", func(k world.Kind[board.CellID]) world.EntKind {
 		return world.EntKind{
-			Name:     "unit",
 			Position: world.Const(placement.Place(0, 1)),
 			Velocity: world.Const(world.Velocity{}),
 			Components: []world.ComponentTemplate{

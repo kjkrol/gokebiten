@@ -135,25 +135,22 @@ type unit struct{ start, target board.CellID }
 func (s *mainStage) registerUnitKinds() {
 	brd := s.board.Res.Logic.Board
 	occupancy := s.board.Occupancy()
-	unitKind := func(name string) func(world.Kind[unit]) world.EntKind {
-		return func(k world.Kind[unit]) world.EntKind {
-			return world.EntKind{
-				Name:     name,
-				Position: k.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(brd, u.start, EntitySize)} }),
-				Velocity: world.Const(world.Velocity{}),
-				Components: []world.ComponentTemplate{
-					k.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
-					k.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }).
-						WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
-					world.Const(selection.Selected{}),
-					world.Const(collisions.Collision{}),
-				},
-			}
+	unitKind := func(k world.Kind[unit]) world.EntKind {
+		return world.EntKind{
+			Position: k.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(brd, u.start, EntitySize)} }),
+			Velocity: world.Const(world.Velocity{}),
+			Components: []world.ComponentTemplate{
+				k.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
+				k.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }).
+					WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
+				world.Const(selection.Selected{}),
+				world.Const(collisions.Collision{}),
+			},
 		}
 	}
 	units := s.world.EntKindDict()
-	units.Define(unitKind("red"))
-	units.Define(unitKind("blue"))
+	units.Define("red", unitKind)
+	units.Define("blue", unitKind)
 }
 
 func (s *mainStage) Restore(p game.Persistence) (bool, error) {

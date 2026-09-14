@@ -84,8 +84,9 @@ type EntKindDict struct {
 func newEntKindDict() *EntKindDict { return &EntKindDict{entries: make(map[string]EntKind)} }
 
 // Define registers the EntKind define builds, whose roster entries carry a P, assigning its SpriteID by call order.
-func (d *EntKindDict) Define[P any](define func(k Kind[P]) EntKind) {
+func (d *EntKindDict) Define[P any](name string, define func(k Kind[P]) EntKind) {
 	k := define(Kind[P]{})
+	k.Name = name
 	k.SpriteID = d.next
 	k.accepts = func(data any) bool { _, ok := data.(P); return ok }
 	d.next++
