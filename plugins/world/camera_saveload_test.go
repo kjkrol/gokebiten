@@ -21,7 +21,7 @@ type cameraSaveLoadTestGame struct {
 	world    *world.Plugin
 	loadFrom string
 
-	stack game.Stack
+	stack game.Scenes
 }
 
 func (g *cameraSaveLoadTestGame) Name() string { return "stage" }
@@ -40,7 +40,7 @@ func (g *cameraSaveLoadTestGame) Restore(p game.Persistence) (bool, error) {
 }
 func (g *cameraSaveLoadTestGame) Spawn() error                      { return nil }
 func (g *cameraSaveLoadTestGame) Update(goke.RunCtx, time.Duration) {}
-func (g *cameraSaveLoadTestGame) Stack() game.Stack {
+func (g *cameraSaveLoadTestGame) Stack() game.Scenes {
 	if g.stack == nil {
 		g.stack, _ = game.NewStack()
 	}

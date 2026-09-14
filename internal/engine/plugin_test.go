@@ -46,7 +46,7 @@ func (p *stubPlugin) Serializable() plugin.Serializable  { return p.serializable
 type stubStage struct {
 	name   string
 	initFn func(ctx game.Initializer) error
-	stack  game.Stack
+	stack  game.Scenes
 }
 
 func (s *stubStage) Name() string {
@@ -64,7 +64,7 @@ func (s *stubStage) Init(ctx game.Initializer) error {
 func (s *stubStage) Restore(game.Persistence) (bool, error) { return false, nil }
 func (s *stubStage) Spawn() error                           { return nil }
 func (s *stubStage) Update(goke.RunCtx, time.Duration)      {}
-func (s *stubStage) Stack() game.Stack {
+func (s *stubStage) Stack() game.Scenes {
 	if s.stack == nil {
 		s.stack, _ = game.NewStack()
 	}

@@ -2,8 +2,8 @@ package game
 
 import "fmt"
 
-// Stack is the immutable registry of every Scene a Stage can show, keyed by Name().
-type Stack interface {
+// Scenes is the immutable registry of every Scene a Stage can show, keyed by Name().
+type Scenes interface {
 	// Get resolves name to the Scene registered under it.
 	Get(name string) (Scene, bool)
 
@@ -20,10 +20,10 @@ type stack struct {
 	composition Composition
 }
 
-var _ Stack = (*stack)(nil)
+var _ Scenes = (*stack)(nil)
 
 // NewStack builds a Stack from scenes, erroring if two share a Name().
-func NewStack(scenes ...Scene) (Stack, error) {
+func NewStack(scenes ...Scene) (Scenes, error) {
 	s := &stack{scenes: make(map[string]Scene, len(scenes)), all: scenes}
 	for _, sc := range scenes {
 		if _, exists := s.scenes[sc.Name()]; exists {

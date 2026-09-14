@@ -19,7 +19,7 @@ import (
 type MenuStage struct {
 	gameplayName string
 
-	stack game.Stack
+	stack game.Scenes
 }
 
 // NewMenuStage builds a MenuStage that switches to the Stage named gameplayName on start.
@@ -49,7 +49,7 @@ func (m *MenuStage) Spawn() error { return nil }
 
 func (m *MenuStage) Update(goke.RunCtx, time.Duration) {}
 
-func (m *MenuStage) Stack() game.Stack { return m.stack }
+func (m *MenuStage) Stack() game.Scenes { return m.stack }
 
 // =========================== Scene ===========================
 

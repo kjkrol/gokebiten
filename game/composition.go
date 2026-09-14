@@ -23,7 +23,7 @@ type Composition interface {
 }
 
 type composition struct {
-	stack  Stack
+	stack  Scenes
 	order  []string
 	active string
 }
@@ -32,7 +32,7 @@ var _ Composition = (*composition)(nil)
 var _ plugin.Restorer = (*composition)(nil)
 
 // newComposition builds a Composition resolving names against stack — called only from NewStack.
-func newComposition(stack Stack) Composition {
+func newComposition(stack Scenes) Composition {
 	return &composition{stack: stack}
 }
 

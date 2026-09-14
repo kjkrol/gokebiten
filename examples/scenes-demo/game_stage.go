@@ -32,7 +32,7 @@ const (
 type GameplayStage struct {
 	world *world.Plugin
 
-	stack game.Stack
+	stack game.Scenes
 	panel *panelScene
 
 	// SaveBasePath overrides where saves are read/written; tests set this to a temp path.
@@ -110,7 +110,7 @@ func (g *GameplayStage) Update(ctx goke.RunCtx, d time.Duration) {
 	ctx.Sync()
 }
 
-func (g *GameplayStage) Stack() game.Stack { return g.stack }
+func (g *GameplayStage) Stack() game.Scenes { return g.stack }
 
 // handleGlobalKeys handles quit/pause/save — shared by worldScene and panelScene.
 func handleGlobalKeys(events *control.InputEvents, runtime game.Runtime, basePath string) {

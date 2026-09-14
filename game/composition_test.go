@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func mustStack(t *testing.T, scenes ...Scene) Stack {
+func mustStack(t *testing.T, scenes ...Scene) Scenes {
 	t.Helper()
 	s, err := NewStack(scenes...)
 	if err != nil {

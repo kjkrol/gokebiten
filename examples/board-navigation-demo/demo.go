@@ -66,7 +66,7 @@ type mainStage struct {
 	nav        *navigation.Plugin
 	collisions *collisions.Plugin
 	selection  *selection.Plugin
-	stack      game.Stack
+	stack      game.Scenes
 	state      *State
 }
 
@@ -74,7 +74,7 @@ var _ game.Stage = (*mainStage)(nil)
 
 func (s *mainStage) Name() string { return "board-navigation-demo" }
 
-func (s *mainStage) Stack() game.Stack { return s.stack }
+func (s *mainStage) Stack() game.Scenes { return s.stack }
 
 func (s *mainStage) Init(ctx game.Initializer) error {
 	s.world = ctx.UseWorld(world.Config{

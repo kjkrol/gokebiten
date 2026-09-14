@@ -55,7 +55,7 @@ type saveLoadTestGame struct {
 	loadFrom string
 	loadArgs []any
 
-	stack game.Stack
+	stack game.Scenes
 }
 
 func (g *saveLoadTestGame) Name() string { return "stage" }
@@ -75,7 +75,7 @@ func (g *saveLoadTestGame) Restore(p game.Persistence) (bool, error) {
 }
 func (g *saveLoadTestGame) Spawn() error                      { return nil }
 func (g *saveLoadTestGame) Update(goke.RunCtx, time.Duration) {}
-func (g *saveLoadTestGame) Stack() game.Stack {
+func (g *saveLoadTestGame) Stack() game.Scenes {
 	if g.stack == nil {
 		g.stack, _ = game.NewStack()
 	}

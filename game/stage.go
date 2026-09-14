@@ -24,5 +24,5 @@ type Stage interface {
 	Update(ctx goke.RunCtx, d time.Duration)
 
 	// Stack lists every Scene this stage can show, and owns their live Composition.
-	Stack() Stack
+	Stack() Scenes
 }

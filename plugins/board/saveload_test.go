@@ -25,7 +25,7 @@ type boardSaveLoadTestGame struct {
 	grid        board.Grid
 	loadFrom    string
 
-	stack game.Stack
+	stack game.Scenes
 }
 
 func (g *boardSaveLoadTestGame) Name() string { return "stage" }
@@ -45,7 +45,7 @@ func (g *boardSaveLoadTestGame) Restore(p game.Persistence) (bool, error) {
 }
 func (g *boardSaveLoadTestGame) Spawn() error                      { return nil }
 func (g *boardSaveLoadTestGame) Update(goke.RunCtx, time.Duration) {}
-func (g *boardSaveLoadTestGame) Stack() game.Stack {
+func (g *boardSaveLoadTestGame) Stack() game.Scenes {
 	if g.stack == nil {
 		g.stack, _ = game.NewStack()
 	}
