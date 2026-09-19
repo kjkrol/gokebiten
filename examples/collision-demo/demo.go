@@ -24,13 +24,28 @@ const (
 	TPS          = 60 * 2
 	ScreenWidth  = 1024
 	ScreenHeight = 1024
-	RectSize     = 20
-	FillPercent  = 20
 
 	saveBasePath = "collision-demo"
 )
 
-var EntityCount = int(math.Floor(FillPercent / 100.0 * float64(ScreenWidth*ScreenHeight) / float64(RectSize*RectSize)))
+// rng is where every random choice in this demo comes from. It is a variable
+// so a benchmark can pin the seed: comparing two builds is meaningless if they
+// start from different velocities.
+var rng = rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
+
+// RectSize, FillPercent and the EntityCount they imply are variables rather
+// than constants so a benchmark can tick this same Stage at another scale —
+// the defaults are what the demo runs with.
+var (
+	RectSize    uint32 = 10
+	FillPercent        = 20.0
+	EntityCount        = countFor(RectSize, FillPercent)
+)
+
+// countFor is how many entities of side rect fill percent of the screen.
+func countFor(rect uint32, percent float64) int {
+	return int(math.Floor(percent / 100.0 * float64(ScreenWidth*ScreenHeight) / float64(rect*rect)))
+}
 
 // =========================== Game ===========================
 
@@ -101,7 +116,7 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 				return world.EntKind{
 					Position:   k.Load(func(b body) world.Position { return b.pos }),
 					Velocity:   k.Load(func(b body) world.Velocity { return b.vel }),
-					Components: []world.ComponentTemplate{k.Const(collisions.Collision{})},
+					Components: []world.ComponentTemplate{collisions.Collidable(s.world.Space())},
 				}
 			})
 		}
@@ -147,7 +162,7 @@ func (s *mainStage) Spawn() error {
 	kinds := s.world.EntKindDict()
 	entries := make([]world.Entry, EntityCount)
 	for i := range entries {
-		entries[i] = kinds.Entry(entityKindName(rand.IntN(entityColors), rand.IntN(entityShapes)),
+		entries[i] = kinds.Entry(entityKindName(rng.IntN(entityColors), rng.IntN(entityShapes)),
 			body{pos: placement.Place(i, EntityCount), vel: motion.initialVelocity(i)})
 	}
 	s.world.Seed(entries...)
@@ -185,7 +200,7 @@ func (m *mainScene) Layers() []func() render.Renderer {
 		{R: 220, G: 40, B: 40, A: 255},   // red — reserved for the hit sprite, not an entity color
 	}
 	kinds := s.world.EntKindDict()
-	atlas := render.NewAtlas(RectSize, len(kinds.All()))
+	atlas := render.NewAtlas(int(RectSize), len(kinds.All()))
 	shapes := [entityShapes]func(color.RGBA) render.SpriteDrawer{render.Solid, render.Border, render.Diamond, render.Cross}
 	for ci, c := range palette[:entityColors] {
 		for si, shape := range shapes {

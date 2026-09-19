@@ -135,6 +135,7 @@ type unit struct{ start, target board.CellID }
 func (s *mainStage) registerUnitKinds() {
 	brd := s.board.Res.Logic.Board
 	occupancy := s.board.Occupancy()
+	space := s.world.Space()
 	unitKind := func(k world.Kind[unit]) world.EntKind {
 		return world.EntKind{
 			Position: k.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(brd, u.start, EntitySize)} }),
@@ -144,7 +145,7 @@ func (s *mainStage) registerUnitKinds() {
 				k.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }).
 					WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
 				k.Const(selection.Selected{}),
-				k.Const(collisions.Collision{}),
+				collisions.Collidable(space),
 			},
 		}
 	}

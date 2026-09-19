@@ -42,7 +42,7 @@ func newLegWorld(t *testing.T, w, h uint32, units ...legUnit) *legWorld {
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	lw.terrain = terrain
-	steer := newNavigationSystem(newPathFinder(lw.grid, terrain, lw.occupancy), lw.grid, terrain, lw.occupancy, int32(legCellSize*2))
+	steer := newNavigationSystem(newPathFinder(lw.grid, terrain, lw.occupancy), lw.grid, terrain, lw.occupancy, float64(legCellSize*2))
 	space := testSpace(t)
 	steer.BindSpace(space)
 

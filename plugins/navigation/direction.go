@@ -17,7 +17,7 @@ const (
 
 const directionEpsilon = 1e-6
 
-func directionBetween(have, want geom.Vec[float64], width, height uint32, toroidal bool) Direction {
+func directionBetween(have, want geom.Vec, width, height uint32, toroidal bool) Direction {
 	dx := shortestAxisDelta(have.X, want.X, width, toroidal)
 	dy := shortestAxisDelta(have.Y, want.Y, height, toroidal)
 

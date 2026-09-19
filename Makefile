@@ -1,25 +1,30 @@
 GO = go
 
-.PHONY: all demo run deps tidy test clean
+.PHONY: all demo-collision deps tidy test clean
 
-all: demo
+all: demo-collision
 
 ## demo: Alias for run — fetches dependencies and launches the collision-demo example
-demo: run
+demo-collision: run-collision
 
-demo-nav: run-board-nav
+demo-navigation: run-navigation
 
 demo-scenes: run-scenes
 
+demo-vision: run-vision
+
 ## run: Fetches dependencies and launches the collision-demo example
-run: deps
+run-collision: deps
 	$(GO) run ./examples/collision-demo
 
-run-board-nav: deps
-	$(GO) run ./examples/board-navigation-demo
+run-navigation: deps
+	$(GO) run ./examples/navigation-demo
 
 run-scenes: deps
 	$(GO) run ./examples/scenes-demo
+
+run-vision: deps
+	$(GO) run ./examples/vision-demo
 
 deps:
 	$(GO) mod tidy

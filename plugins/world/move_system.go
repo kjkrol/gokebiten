@@ -15,7 +15,7 @@ var _ goke.System = (*MoveSystem)(nil)
 // Position, translating through space (which keeps its spatial index in sync).
 type MoveSystem struct {
 	space     *gokg.Space
-	maxDelta  uint32
+	maxDelta  float64
 	moveQuery *goke.Query
 	pos       goke.Comp[Position]
 	vel       goke.Comp[Velocity]
@@ -23,7 +23,7 @@ type MoveSystem struct {
 
 // NewMoveSystem builds world's movement system, capping per-tick displacement
 // to maxDelta (0 for no limit) so nothing can tunnel through another entity.
-func NewMoveSystem(space *gokg.Space, maxDelta uint32) *MoveSystem {
+func NewMoveSystem(space *gokg.Space, maxDelta float64) *MoveSystem {
 	return &MoveSystem{space: space, maxDelta: maxDelta}
 }
 
@@ -41,28 +41,17 @@ func (s *MoveSystem) Update(_ *goke.CmdBuf, d time.Duration) {
 		vel := s.vel.Slice(cursor)
 		for i, id := range cursor.IDs {
 			rate := vel[i].Delta()
-			vel[i].AccX += float64(rate.X) * dt
-			vel[i].AccY += float64(rate.Y) * dt
+			step := geom.NewVec(rate.X*dt, rate.Y*dt)
 
 			if s.maxDelta > 0 {
-				clampAcc(&vel[i].AccX, &vel[i].AccY, s.maxDelta)
+				step = clampStep(step, s.maxDelta)
+			}
+			if step.X == 0 && step.Y == 0 {
+				continue
 			}
 
-			dx := int32(vel[i].AccX)
-			dy := int32(vel[i].AccY)
-
-			if dx != 0 {
-				vel[i].AccX -= float64(dx)
-			}
-			if dy != 0 {
-				vel[i].AccY -= float64(dy)
-			}
-
-			if dx != 0 || dy != 0 {
-				delta := geom.NewVec(uint32(dx), uint32(dy))
-				s.space.Translate(id, &pos[i].AABB, delta)
-				moved = true
-			}
+			s.space.Translate(id, &pos[i].AABB, step)
+			moved = true
 		}
 	}
 	if moved {
@@ -70,13 +59,13 @@ func (s *MoveSystem) Update(_ *goke.CmdBuf, d time.Duration) {
 	}
 }
 
-// clampAcc scales (accX,accY) down to magnitude max if it exceeds it.
-func clampAcc(accX, accY *float64, max uint32) {
-	mag := math.Hypot(*accX, *accY)
-	if mag <= float64(max) {
-		return
+// clampStep scales a step down to magnitude max if it exceeds it, so nothing
+// can cross another entity in one tick without ever overlapping it.
+func clampStep(step geom.Vec, max float64) geom.Vec {
+	mag := math.Hypot(step.X, step.Y)
+	if mag <= max || mag == 0 {
+		return step
 	}
-	scale := float64(max) / mag
-	*accX *= scale
-	*accY *= scale
+	scale := max / mag
+	return geom.NewVec(step.X*scale, step.Y*scale)
 }

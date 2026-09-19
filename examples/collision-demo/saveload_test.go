@@ -9,6 +9,10 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/collisions"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gokg"
+	"github.com/kjkrol/gokg/geom"
+	"github.com/kjkrol/gokg/plane"
+	"github.com/kjkrol/uid"
 )
 
 // testInstallCtx is a minimal plugin.Installer for tests that call Install directly.
@@ -34,6 +38,18 @@ func (c *testInstallCtx) RegSys(factory func() goke.System) goke.Runnable {
 }
 func (c *testInstallCtx) ECS() *goke.ECS { return c.ecs }
 
+// countCollidable reports how many entities the space will offer as collision
+// candidates — the only way to observe, from outside, that something actually
+// carries CanCollide.
+func countCollidable(space *gokg.Space) int {
+	box := plane.NewAABB(geom.NewVec(0, 0), ScreenWidth-1, ScreenHeight-1)
+	seen := map[uid.UID64]struct{}{}
+	space.Neighbours(&box, 0, collisions.CanCollide, func(id uid.UID64, _ plane.FragPosition) {
+		seen[id] = struct{}{}
+	})
+	return len(seen)
+}
+
 // TestSaveLoadCycle exercises the same mechanics Persistence.Save/Load use, below the level of Engine (no Ebiten window).
 func TestSaveLoadCycle(t *testing.T) {
 	path := t.TempDir() + "/save.bin"
@@ -56,7 +72,7 @@ func TestSaveLoadCycle(t *testing.T) {
 			return world.EntKind{
 				Position:   k.Load(func(b body) world.Position { return b.pos }),
 				Velocity:   k.Load(func(b body) world.Velocity { return b.vel }),
-				Components: []world.ComponentTemplate{k.Const(collisions.Collision{})},
+				Components: []world.ComponentTemplate{collisions.Collidable(wp.Space())},
 			}
 		})
 		entries = append(entries, kinds.Entry(name, body{pos: placement.Place(i, count), vel: motion.initialVelocity(i)}))
@@ -65,7 +81,7 @@ func TestSaveLoadCycle(t *testing.T) {
 	if err := wp.Populate(); err != nil {
 		t.Fatalf("Populate: %v", err)
 	}
-	cm := collisions.New(wp.Space(), ecs, 0)
+	cm := collisions.New(wp.Space(), ecs, 0, 2*wp.MaxStep())
 
 	ctx := &testInstallCtx{ecs: ecs}
 	if err := wp.Install(ctx); err != nil {
@@ -102,6 +118,11 @@ func TestSaveLoadCycle(t *testing.T) {
 		t.Fatalf("spawned %d entities, want %d", len(origIDs), count)
 	}
 
+	// Half one: collisions.Collidable ran as each entity was spawned.
+	if got := countCollidable(wp.Space()); got != count {
+		t.Errorf("%d of %d spawned entities can collide — the Collidable template did not register them", got, count)
+	}
+
 	ecs.Pause()
 	if err := ecs.Save(path); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -110,25 +131,26 @@ func TestSaveLoadCycle(t *testing.T) {
 
 	ecs2 := goke.New()
 	plugin2 := world.NewPlugin(cfg)
-	cm2 := collisions.New(plugin2.Space(), ecs2, 0)
+	cm2 := collisions.New(plugin2.Space(), ecs2, 0, 2*plugin2.MaxStep())
 
 	ctx2 := &testInstallCtx{ecs: ecs2}
 	if err := plugin2.Install(ctx2); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
 
-	comps := append(goke.ProvidedComps(cm2),
-		goke.LoadComp[world.Position](),
-		goke.LoadComp[world.Appearance](),
-		goke.LoadComp[world.Velocity](),
-	)
+	// Ask every installed module what it owns rather than re-listing it here:
+	// a hand-written list silently rots the moment a plugin gains a component.
+	comps := goke.ProvidedComps(append([]any{cm2}, ctx2.tracked...)...)
 	if err := ecs2.Load(path, comps...); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	cm2.RegSystems(ecs2)
 
+	// cm2 goes in alongside the tracked values for the same reason it does
+	// above: the engine tracks the collisions module through Plugin.Install,
+	// which this test bypasses.
 	var postLoad []goke.System
-	for _, v := range ctx2.tracked {
+	for _, v := range append([]any{cm2}, ctx2.tracked...) {
 		if pl, ok := v.(plugin.PostLoader); ok {
 			postLoad = append(postLoad, pl.PostLoad())
 		}
@@ -158,5 +180,11 @@ func TestSaveLoadCycle(t *testing.T) {
 
 	if loadedCount != count {
 		t.Fatalf("loaded %d entities, want %d", loadedCount, count)
+	}
+
+	// Half two: templates never ran here — a restored world spawns nothing —
+	// so this is entirely collisions.module.PostLoad's doing.
+	if got := countCollidable(plugin2.Space()); got != count {
+		t.Errorf("%d of %d loaded entities can collide — PostLoad did not restore the capability", got, count)
 	}
 }

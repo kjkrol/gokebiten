@@ -16,7 +16,7 @@ import (
 // when terrain along the route changes. WithCommands adds right-click move orders for
 // Selected entities; WithRenderer draws the remaining route.
 type Plugin struct {
-	speed int32
+	speed float64
 
 	boardPlugin *board.Plugin
 	worldPlugin *world.Plugin
@@ -37,7 +37,7 @@ var _ plugin.Plugin = (*Plugin)(nil)
 // NewPlugin builds a navigation plugin over boardPlugin/worldPlugin, moving
 // entities at speed world-units/sec before scaling — screen<->world
 // conversion (right-click targeting and route rendering) uses worldPlugin's Camera.
-func NewPlugin(speed int32, boardPlugin *board.Plugin, worldPlugin *world.Plugin) *Plugin {
+func NewPlugin(speed float64, boardPlugin *board.Plugin, worldPlugin *world.Plugin) *Plugin {
 	return &Plugin{speed: speed, boardPlugin: boardPlugin, worldPlugin: worldPlugin, camera: worldPlugin.Camera()}
 }
 

@@ -56,7 +56,7 @@ func (s *SelectionSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 		hit := make(map[uid.UID64]struct{})
 		collect := func(id uid.UID64, _ plane.FragPosition) { hit[id] = struct{}{} }
 		s.space.Query(box.AABB, collect)
-		box.VisitFragments(func(_ plane.FragPosition, fragBox geom.AABB[uint32]) bool {
+		box.VisitFragments(func(_ plane.FragPosition, fragBox geom.AABB) bool {
 			s.space.Query(fragBox, collect)
 			return true
 		})
@@ -106,7 +106,7 @@ func (s *SelectionSystem) applySelection(cb *goke.CmdBuf, hit map[uid.UID64]stru
 	}
 }
 
-func (s *SelectionSystem) worldBox(start, end geom.Vec[int32]) plane.AABB[uint32] {
+func (s *SelectionSystem) worldBox(start, end geom.Vec) plane.AABB {
 	x0, y0, x1, y1 := camera.FromScreenRect(s.camera, float32(start.X), float32(start.Y), float32(end.X), float32(end.Y))
 	minX, maxX := min(x0, x1), max(x0, x1)
 	minY, maxY := min(y0, y1), max(y0, y1)
@@ -117,6 +117,6 @@ func (s *SelectionSystem) worldBox(start, end geom.Vec[int32]) plane.AABB[uint32
 	if height < 1 {
 		height = 1
 	}
-	raw := plane.NewAABB(geom.NewVec(uint32(int64(minX)), uint32(int64(minY))), uint32(width), uint32(height))
+	raw := plane.NewAABB(geom.NewVec(float64(minX), float64(minY)), float64(width), float64(height))
 	return s.space.WrapAABB(raw.AABB)
 }

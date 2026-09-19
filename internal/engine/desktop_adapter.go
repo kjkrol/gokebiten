@@ -23,7 +23,7 @@ func (a *DesktopAdapter) Capture(e *control.InputEvents) {
 	}
 
 	currX, currY := ebiten.CursorPosition()
-	next := geom.NewVec(int32(currX), int32(currY))
+	next := geom.NewVec(float64(currX), float64(currY))
 	e.CursorDelta = geom.NewVec(next.X-e.MousePos.X, next.Y-e.MousePos.Y)
 	e.MousePos = next
 

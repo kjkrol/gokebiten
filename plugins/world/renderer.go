@@ -20,8 +20,8 @@ type Renderer struct {
 	batch       spriteBatch
 }
 
-func newRenderer(cam camera.Camera, atlas render.AtlasSource) *Renderer {
-	return &Renderer{batch: newSpriteBatch(cam, atlas)}
+func newRenderer(cam camera.Camera, atlas render.AtlasSource, worldW, worldH uint32) *Renderer {
+	return &Renderer{batch: newSpriteBatch(cam, atlas, worldW, worldH)}
 }
 
 func (s *Renderer) Init(si *goke.SysInit) {

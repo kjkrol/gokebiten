@@ -80,7 +80,7 @@ func (r *PathRenderer) Draw(screen *ebiten.Image) {
 	r.batch.Flush(screen)
 }
 
-func (r *PathRenderer) drawPath(entityCenter, travel geom.Vec[float64], cells []board.CellID) {
+func (r *PathRenderer) drawPath(entityCenter, travel geom.Vec, cells []board.CellID) {
 	for i, c := range cells {
 		center := r.grid.CellCenter(c)
 
@@ -109,7 +109,7 @@ func (r *PathRenderer) appendCellSprite(c board.CellID, sprite render.SpriteID) 
 	r.batch.AppendQuad(float32(center.X-half), float32(center.Y-half), float32(center.X+half), float32(center.Y+half), sprite)
 }
 
-func hasPassedCenter(cellCenter, entityCenter, travel geom.Vec[float64], width, height uint32, toroidal bool) bool {
+func hasPassedCenter(cellCenter, entityCenter, travel geom.Vec, width, height uint32, toroidal bool) bool {
 	ex := shortestAxisDelta(cellCenter.X, entityCenter.X, width, toroidal)
 	ey := shortestAxisDelta(cellCenter.Y, entityCenter.Y, height, toroidal)
 	return ex*travel.X+ey*travel.Y > 0

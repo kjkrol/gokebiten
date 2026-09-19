@@ -7,7 +7,8 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/world"
 
 	"github.com/kjkrol/gokg"
-	"github.com/kjkrol/gokg/spatial"
+	"github.com/kjkrol/gokg/collide"
+	"github.com/kjkrol/gokg/geom"
 	"github.com/kjkrol/uid"
 )
 
@@ -37,7 +38,11 @@ type NarrowPhase struct {
 
 	removeEditor *goke.Editor
 
-	contactsBuffer []Contact
+	// solver holds this tick's geometry, sides the identities and components
+	// that go with it. The two are filled in lockstep, so a pair's index in
+	// one names the same pair in the other.
+	solver collide.Solver
+	sides  []pairSides
 
 	dynSeeded, staticSeeded bool
 
@@ -77,9 +82,22 @@ func (n *NarrowPhase) Init(si *goke.SysInit) {
 	}
 }
 
+// pairSides is what the solver deliberately knows nothing about: who the two
+// boxes belong to, what else those entities carry, and whether the contact is
+// only to be reported.
+type pairSides struct {
+	A, B   contactSide
+	sensor bool
+}
+
+type contactSide struct {
+	Entity uid.UID64
+	Pos    *world.Position
+	Vel    *world.Velocity
+}
+
 func (n *NarrowPhase) Update(cb *goke.CmdBuf, _ time.Duration) {
 	const solverIterations = 16
-	n.contactsBuffer = n.contactsBuffer[:0]
 	clear(n.confirmed)
 
 	n.pair()
@@ -99,6 +117,8 @@ func (n *NarrowPhase) isStatic(id uid.UID64) bool {
 
 func (n *NarrowPhase) pair() {
 	n.dynSeeded, n.staticSeeded = false, false
+	n.solver.Reset()
+	n.sides = n.sides[:0]
 
 	n.hitQry.All()
 	for n.hitQry.Next() {
@@ -119,9 +139,15 @@ func (n *NarrowPhase) pair() {
 				if !ok {
 					continue
 				}
-				n.contactsBuffer = append(n.contactsBuffer, Contact{
-					A: contactSide{Entity: entityA, Pos: p, Vel: v, IsSensor: n.isSensor(entityA)},
-					B: contactSide{Entity: entityB, Pos: posB, Vel: velB, IsSensor: n.isSensor(entityB)},
+				n.solver.Add(collide.Pair{
+					A: &p.AABB, B: &posB.AABB,
+					StaticB: velB == nil,
+					Sensor:  n.isSensor(entityA) || n.isSensor(entityB),
+				})
+				n.sides = append(n.sides, pairSides{
+					A:      contactSide{Entity: entityA, Pos: p, Vel: v},
+					B:      contactSide{Entity: entityB, Pos: posB, Vel: velB},
+					sensor: n.isSensor(entityA) || n.isSensor(entityB),
 				})
 			}
 
@@ -163,49 +189,46 @@ func (n *NarrowPhase) resolveB(id uid.UID64) (pos *world.Position, vel *world.Ve
 }
 
 func (n *NarrowPhase) solve(cb *goke.CmdBuf, solverIterations int) {
-	for range solverIterations {
-		for i := range n.contactsBuffer {
-			contact := &n.contactsBuffer[i]
+	n.space.Resolve(&n.solver, solverIterations, func(i int, pen geom.Vec) {
+		sides := &n.sides[i]
 
-			boxA, boxB, penetrationVec := contact.findActiveCollision()
-			if penetrationVec.X == 0 && penetrationVec.Y == 0 {
-				continue
-			}
-
-			isSensorContact := contact.A.IsSensor || contact.B.IsSensor
-
-			if !contact.resolved {
-				if !isSensorContact && n.handler != nil {
-					n.handler.OnCollision(cb, CollisionEvent{
-						EntityA: contact.A.Entity, EntityB: contact.B.Entity,
-						PosA: contact.A.Pos, PosB: contact.B.Pos,
-						VelA: contact.A.Vel, VelB: contact.B.Vel,
-						Penetration: penetrationVec,
-					})
-				}
-				if _, ok := n.confirmed[contact.A.Entity]; ok {
-					n.confirmed[contact.A.Entity] = true
-				}
-				if _, ok := n.confirmed[contact.B.Entity]; ok {
-					n.confirmed[contact.B.Entity] = true
-				}
-				contact.resolved = true
-			}
-
-			if isSensorContact {
-				continue
-			}
-
-			isStaticB := contact.B.Vel == nil
-			if mtv1, mtv2, ok := contact.calculateMtv(boxA, boxB, isStaticB); ok {
-				n.space.Translate(contact.A.Entity, &contact.A.Pos.AABB, mtv1)
-				if !isStaticB {
-					n.space.Translate(contact.B.Entity, &contact.B.Pos.AABB, mtv2)
-				}
-			}
+		// Confirmation is about "something struck me" and holds for a sensor
+		// contact too; only the physical reaction is withheld from one.
+		if _, ok := n.confirmed[sides.A.Entity]; ok {
+			n.confirmed[sides.A.Entity] = true
 		}
-	}
-	n.space.Flush(func(spatial.AABB) {})
+		if _, ok := n.confirmed[sides.B.Entity]; ok {
+			n.confirmed[sides.B.Entity] = true
+		}
+		if sides.sensor || n.handler == nil {
+			return
+		}
+		n.handler.OnCollision(cb, CollisionEvent{
+			EntityA: sides.A.Entity, EntityB: sides.B.Entity,
+			PosA: sides.A.Pos, PosB: sides.B.Pos,
+			VelA: sides.A.Vel, VelB: sides.B.Vel,
+			Penetration: pen,
+		})
+	})
+	n.reindexMoved()
+	n.space.Flush(nil)
+}
+
+// reindexMoved tells the spatial index where the boxes the solver pushed
+// finally came to rest. Only the settled position matters, so one update per
+// moved side replaces the one per side per iteration the solver used to queue
+// — which, at solverIterations times the contact count, could outrun
+// OpsBufferSize and block on the queue with nothing left to drain it.
+func (n *NarrowPhase) reindexMoved() {
+	n.solver.VisitMoved(func(i int, movedA, movedB bool) {
+		sides := &n.sides[i]
+		if movedA {
+			n.space.Reindex(sides.A.Entity, sides.A.Pos.AABB)
+		}
+		if movedB {
+			n.space.Reindex(sides.B.Entity, sides.B.Pos.AABB)
+		}
+	})
 }
 
 func (n *NarrowPhase) finalizeHitTags(cb *goke.CmdBuf) {

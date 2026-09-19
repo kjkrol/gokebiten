@@ -155,7 +155,7 @@ func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *te
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: previous}
 		// Mid diagonal step: position already sits inside a flanker cell — a
 		// normal artifact of sampling the move at discrete ticks, not a deviation.
-		pos.Slice(&f.Cursor)[0] = world.Position{AABB: plane.NewAABB(geom.NewVec[uint32](11, 11), 8, 8)}
+		pos.Slice(&f.Cursor)[0] = world.Position{AABB: plane.NewAABB(geom.NewVec(11, 11), 8, 8)}
 		var mt MoveOrder
 		mt.Target = expected
 		mt.Path.Steps[0] = expected
@@ -215,7 +215,7 @@ func TestNavigationSystem_Update_ArrivalStopsEntity(t *testing.T) {
 		id := f.Cursor.IDs[0]
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: start}
 		pos.Slice(&f.Cursor)[0] = world.Position{AABB: board.CellAABB(grid, start, 8)}
-		vel.Slice(&f.Cursor)[0] = world.Velocity{Dir: geom.NewVec[float64](1, 0), Value: 50} // was already moving in
+		vel.Slice(&f.Cursor)[0] = world.Velocity{Dir: geom.NewVec(1, 0), Value: 50} // was already moving in
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(start, id)
 
@@ -262,7 +262,7 @@ func TestNavigationSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
 
 	target, _ := grid.CellIndex(2, 0)
 	// Within arrivalEpsilon of the target cell's true center (25,5) for a 10px cell at column 2.
-	offCenter := world.Position{AABB: plane.NewAABB(geom.NewVec[uint32](20, 1), 8, 8)}
+	offCenter := world.Position{AABB: plane.NewAABB(geom.NewVec(20, 1), 8, 8)}
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Position]
@@ -331,7 +331,7 @@ func TestNavigationSystem_Update_ArrivalGlidesSmoothlyToCellCenter(t *testing.T)
 
 	target, _ := grid.CellIndex(2, 0)
 	// Off the true center (25,5), within the target cell, well beyond arrivalEpsilon.
-	offCenter := world.Position{AABB: plane.NewAABB(geom.NewVec[uint32](17, 1), 8, 8)}
+	offCenter := world.Position{AABB: plane.NewAABB(geom.NewVec(17, 1), 8, 8)}
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Position]
@@ -410,7 +410,7 @@ func TestNavigationSystem_Update_ReproducesBoardDemoWallScenario(t *testing.T) {
 		gridWidth, gridHeight, cellSize = uint32(24), uint32(16), uint32(32)
 		wallCol                         = uint32(12)
 		entitySize                      = uint32(22)
-		speed                           = int32(cellSize * 2)
+		speed                           = float64(cellSize * 2)
 	)
 	grid := board.DefaultGrids{}.Square(gridWidth, gridHeight, cellSize)
 	terrain := board.NewTerrainMap()
@@ -533,7 +533,7 @@ func TestDirectionBetween(t *testing.T) {
 	center := geom.NewVec(50.0, 50.0)
 	cases := []struct {
 		name string
-		want geom.Vec[float64]
+		want geom.Vec
 		dir  Direction
 	}{
 		{"east", geom.NewVec(60.0, 50.0), DirE},

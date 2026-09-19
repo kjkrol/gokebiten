@@ -9,56 +9,56 @@ import (
 	"github.com/kjkrol/gokg/plane"
 )
 
-func testViewport(x, y, w, h uint32) AABB {
+func testViewport(x, y, w, h float64) AABB {
 	return geom.NewAABBAt(geom.NewVec(x, y), w, h)
 }
 
 // TestBasicCamera_Translate_WrapsOnToroidalWorld guards that a negative delta wraps at the world's size, not 2^32.
 func TestBasicCamera_Translate_WrapsOnToroidalWorld(t *testing.T) {
-	surface := plane.NewToroidal2D[uint32](20, 20)
+	surface := plane.NewToroidal2D(20, 20)
 	c := newBasicCamera(surface, testViewport(2, 2, 4, 4), true)
 
 	c.Translate(-10, 0)
 
 	if c.effective.TopLeft.X != 12 {
-		t.Errorf("Viewport.TopLeft.X = %d, want 12 (wrapped: (2-10) mod 20)", c.effective.TopLeft.X)
+		t.Errorf("Viewport.TopLeft.X = %v, want 12 (wrapped: (2-10) mod 20)", c.effective.TopLeft.X)
 	}
 	if c.effective.TopLeft.Y != 2 {
-		t.Errorf("Viewport.TopLeft.Y = %d, want 2 (unchanged)", c.effective.TopLeft.Y)
+		t.Errorf("Viewport.TopLeft.Y = %v, want 2 (unchanged)", c.effective.TopLeft.Y)
 	}
 }
 
 // TestBasicCamera_Translate_ClampsOnEuclideanWorld guards that a non-toroidal world clamps instead of wrapping.
 func TestBasicCamera_Translate_ClampsOnEuclideanWorld(t *testing.T) {
-	surface := plane.NewEuclidean2D[uint32](20, 20)
+	surface := plane.NewEuclidean2D(20, 20)
 	c := newBasicCamera(surface, testViewport(2, 2, 4, 4), false)
 
 	c.Translate(-10, 0)
 
 	if c.effective.TopLeft.X != 0 {
-		t.Errorf("Viewport.TopLeft.X = %d, want 0 (clamped, not wrapped)", c.effective.TopLeft.X)
+		t.Errorf("Viewport.TopLeft.X = %v, want 0 (clamped, not wrapped)", c.effective.TopLeft.X)
 	}
 }
 
 // TestBasicCamera_MoveTo_WrapsOnToroidalWorld guards that MoveTo's signed-delta computation is correct.
 func TestBasicCamera_MoveTo_WrapsOnToroidalWorld(t *testing.T) {
-	surface := plane.NewToroidal2D[uint32](20, 20)
+	surface := plane.NewToroidal2D(20, 20)
 	c := newBasicCamera(surface, testViewport(2, 2, 4, 4), true)
 
 	c.MoveTo(18, 2)
 	c.Translate(-10, 0)
 	if c.effective.TopLeft.X != 8 {
-		t.Fatalf("sanity check failed: Viewport.TopLeft.X = %d, want 8", c.effective.TopLeft.X)
+		t.Fatalf("sanity check failed: Viewport.TopLeft.X = %v, want 8", c.effective.TopLeft.X)
 	}
 
 	c.Translate(-10, 0)
 	if c.effective.TopLeft.X != 18 {
-		t.Errorf("Viewport.TopLeft.X = %d, want 18 (wrapped: (8-10) mod 20)", c.effective.TopLeft.X)
+		t.Errorf("Viewport.TopLeft.X = %v, want 18 (wrapped: (8-10) mod 20)", c.effective.TopLeft.X)
 	}
 }
 
 func TestBasicCamera_Bounds_MatchesConstructedViewportAtZoom1(t *testing.T) {
-	surface := plane.NewEuclidean2D[uint32](100, 100)
+	surface := plane.NewEuclidean2D(100, 100)
 	viewport := testViewport(10, 10, 30, 20)
 	c := newBasicCamera(surface, viewport, false)
 
@@ -69,7 +69,7 @@ func TestBasicCamera_Bounds_MatchesConstructedViewportAtZoom1(t *testing.T) {
 }
 
 func TestBasicCamera_ToScreen_NoZoomIsPlainOffset(t *testing.T) {
-	surface := plane.NewEuclidean2D[uint32](100, 100)
+	surface := plane.NewEuclidean2D(100, 100)
 	c := newBasicCamera(surface, testViewport(10, 10, 30, 20), false)
 
 	x, y := c.ToScreen(15, 12)
@@ -79,7 +79,7 @@ func TestBasicCamera_ToScreen_NoZoomIsPlainOffset(t *testing.T) {
 }
 
 func TestBasicCamera_ZoomIn_ScalesToScreen(t *testing.T) {
-	surface := plane.NewEuclidean2D[uint32](1000, 1000)
+	surface := plane.NewEuclidean2D(1000, 1000)
 	c := newBasicCamera(surface, testViewport(100, 100, 100, 100), false)
 
 	c.ZoomIn(2, 150, 150)
@@ -99,7 +99,7 @@ func TestBasicCamera_ZoomIn_ScalesToScreen(t *testing.T) {
 }
 
 func TestBasicCamera_ZoomIn_ThenZoomOut_RoundTrips(t *testing.T) {
-	surface := plane.NewEuclidean2D[uint32](1000, 1000)
+	surface := plane.NewEuclidean2D(1000, 1000)
 	c := newBasicCamera(surface, testViewport(100, 100, 100, 100), false)
 
 	c.ZoomIn(2, 150, 150)
@@ -115,7 +115,7 @@ func TestBasicCamera_ZoomIn_ThenZoomOut_RoundTrips(t *testing.T) {
 // own fixed reference size — a viewport already equal to the world
 // still has room to pan once zoomed in.
 func TestBasicCamera_Translate_ClampsEffectiveWhenZoomedIn(t *testing.T) {
-	surface := plane.NewEuclidean2D[uint32](1000, 1000)
+	surface := plane.NewEuclidean2D(1000, 1000)
 	c := newBasicCamera(surface, testViewport(0, 0, 1000, 1000), false)
 	c.ZoomIn(2, 500, 500) // effective = (250,250)-(750,750)
 
@@ -123,17 +123,17 @@ func TestBasicCamera_Translate_ClampsEffectiveWhenZoomedIn(t *testing.T) {
 
 	b := c.Bounds()
 	if b.BottomRight.X != 1000 {
-		t.Errorf("Bounds().BottomRight.X = %d, want 1000 (clamped to world edge)", b.BottomRight.X)
+		t.Errorf("Bounds().BottomRight.X = %v, want 1000 (clamped to world edge)", b.BottomRight.X)
 	}
 	if w := b.BottomRight.X - b.TopLeft.X; w != 500 {
-		t.Errorf("effective width after clamped Translate = %d, want 500 (must not shrink)", w)
+		t.Errorf("effective width after clamped Translate = %v, want 500 (must not shrink)", w)
 	}
 }
 
 // TestBasicCamera_ZoomOut_CappedToWorldFit guards that zooming out never
 // reveals area beyond the world on either axis.
 func TestBasicCamera_ZoomOut_CappedToWorldFit(t *testing.T) {
-	surface := plane.NewEuclidean2D[uint32](1000, 1000)
+	surface := plane.NewEuclidean2D(1000, 1000)
 	c := newBasicCamera(surface, testViewport(0, 0, 1000, 1000), false)
 
 	c.ZoomOut(10, 500, 500)
@@ -151,7 +151,7 @@ func TestBasicCamera_ZoomOut_CappedToWorldFit(t *testing.T) {
 // zooming — a centered anchor can't catch a sign error (delta is 0
 // either way).
 func TestBasicCamera_ZoomIn_AnchorStaysUnderCursor(t *testing.T) {
-	surface := plane.NewEuclidean2D[uint32](1000, 1000)
+	surface := plane.NewEuclidean2D(1000, 1000)
 	c := newBasicCamera(surface, testViewport(0, 0, 1000, 1000), false)
 
 	const anchorX, anchorY = 900, 500
@@ -173,7 +173,7 @@ func TestBasicCamera_ZoomIn_AnchorStaysUnderCursor(t *testing.T) {
 // ZoomIn from magnifying further, even when the requested factor would
 // otherwise exceed it.
 func TestBasicCamera_ZoomIn_CappedByMaxZoom(t *testing.T) {
-	surface := plane.NewEuclidean2D[uint32](1000, 1000)
+	surface := plane.NewEuclidean2D(1000, 1000)
 	c := newBasicCamera(surface, testViewport(0, 0, 100, 100), false)
 	c.SetMaxZoom(2)
 
@@ -188,7 +188,7 @@ func TestBasicCamera_ZoomIn_CappedByMaxZoom(t *testing.T) {
 // SetMinZoom raises the floor above the automatic world-fit one when
 // the world is much larger than the viewport.
 func TestBasicCamera_ZoomOut_CappedByConfiguredMinZoom(t *testing.T) {
-	surface := plane.NewEuclidean2D[uint32](10000, 10000)
+	surface := plane.NewEuclidean2D(10000, 10000)
 	c := newBasicCamera(surface, testViewport(0, 0, 100, 100), false)
 	c.SetMinZoom(0.5)
 
@@ -209,7 +209,7 @@ func TestNewFromSpaceWithConfig_AppliesViewportAndZoomLimits(t *testing.T) {
 	})
 
 	if w := c.Bounds().BottomRight.X - c.Bounds().TopLeft.X; w != 100 {
-		t.Errorf("Bounds() width = %d, want 100 (ViewportWidth applied)", w)
+		t.Errorf("Bounds() width = %v, want 100 (ViewportWidth applied)", w)
 	}
 
 	c.ZoomIn(10, 50, 50)
@@ -228,7 +228,7 @@ func TestBasicCamera_ImplementsCameraInterface(t *testing.T) {
 }
 
 func TestBasicCamera_FromScreen_InvertsToScreen(t *testing.T) {
-	surface := plane.NewEuclidean2D[uint32](1000, 1000)
+	surface := plane.NewEuclidean2D(1000, 1000)
 	c := newBasicCamera(surface, testViewport(100, 100, 200, 200), false)
 
 	cases := []struct {
@@ -266,7 +266,7 @@ func TestBasicCamera_FromScreen_InvertsToScreen(t *testing.T) {
 // just behind the camera's reference must wrap to the far end of the
 // view, not stay just-before-the-start.
 func TestBasicCamera_ToScreen_ToroidalWrapsWhenViewportFillsWorld(t *testing.T) {
-	surface := plane.NewToroidal2D[uint32](1024, 1024)
+	surface := plane.NewToroidal2D(1024, 1024)
 	c := newBasicCamera(surface, testViewport(0, 0, 1024, 1024), true)
 	c.Translate(8, 8) // effective.TopLeft is now (8,8)
 
@@ -282,7 +282,7 @@ func TestBasicCamera_ToScreen_ToroidalWrapsWhenViewportFillsWorld(t *testing.T) 
 // entity on the far side of a toroidal world's wrap seam is placed as a
 // continuation of the current view, not jumped to the opposite side.
 func TestBasicCamera_ToScreen_ToroidalWrapsNearCurrentView(t *testing.T) {
-	surface := plane.NewToroidal2D[uint32](1000, 1000)
+	surface := plane.NewToroidal2D(1000, 1000)
 	c := newBasicCamera(surface, testViewport(0, 0, 200, 200), true)
 	c.MoveTo(900, 900)
 
@@ -300,7 +300,7 @@ func TestBasicCamera_ToScreen_ToroidalWrapsNearCurrentView(t *testing.T) {
 // TestBasicCamera_Visible_ToroidalWrap guards that an entity in the
 // wrapped-into-view portion of a toroidal camera is reported visible.
 func TestBasicCamera_Visible_ToroidalWrap(t *testing.T) {
-	surface := plane.NewToroidal2D[uint32](1000, 1000)
+	surface := plane.NewToroidal2D(1000, 1000)
 	c := newBasicCamera(surface, testViewport(0, 0, 200, 200), true)
 	c.MoveTo(900, 900)
 
@@ -317,7 +317,7 @@ func TestBasicCamera_Visible_ToroidalWrap(t *testing.T) {
 // the reference and making it (wrongly) report as not visible, even
 // though it plainly overlaps the visible window's near edge.
 func TestBasicCamera_Visible_PartialViewportDoesNotWrapAtWorldSize(t *testing.T) {
-	surface := plane.NewToroidal2D[uint32](2000, 2000)
+	surface := plane.NewToroidal2D(2000, 2000)
 	c := newBasicCamera(surface, testViewport(0, 0, 768, 512), true)
 	c.Translate(400, 0) // effective.TopLeft.X is now 400 — nowhere near the world's own edge
 
@@ -331,7 +331,7 @@ func TestBasicCamera_Visible_PartialViewportDoesNotWrapAtWorldSize(t *testing.T)
 // single quad clipped off the screen's near edge, not split into a
 // piece teleported almost a full world-length across the screen.
 func TestToScreenQuads_PartialViewportClipsInsteadOfWrapping(t *testing.T) {
-	surface := plane.NewToroidal2D[uint32](2000, 2000)
+	surface := plane.NewToroidal2D(2000, 2000)
 	c := newBasicCamera(surface, testViewport(0, 0, 768, 512), true)
 	c.Translate(400, 0)
 
@@ -349,7 +349,7 @@ func TestToScreenQuads_PartialViewportClipsInsteadOfWrapping(t *testing.T) {
 // always returns a coordinate in [0, worldSize), matching how entity
 // positions are stored, even near the wrap seam.
 func TestBasicCamera_FromScreen_ToroidalCanonicalRange(t *testing.T) {
-	surface := plane.NewToroidal2D[uint32](1000, 1000)
+	surface := plane.NewToroidal2D(1000, 1000)
 	c := newBasicCamera(surface, testViewport(0, 0, 200, 200), true)
 	c.MoveTo(900, 900)
 
@@ -365,13 +365,13 @@ func TestBasicCamera_FromScreen_ToroidalCanonicalRange(t *testing.T) {
 // consumers like edge-scroll rely on this to reason about the current
 // view without it depending on where the wrap seam currently sits.
 func TestBasicCamera_Bounds_ToroidalReturnsLogicalExtent(t *testing.T) {
-	surface := plane.NewToroidal2D[uint32](1024, 1024)
+	surface := plane.NewToroidal2D(1024, 1024)
 	c := newBasicCamera(surface, testViewport(0, 0, 1024, 1024), true)
 
 	c.Translate(100, 0)
 
 	if got := c.Bounds().BottomRight.X; got != 1124 {
-		t.Errorf("Bounds().BottomRight.X = %d, want 1124 (100+1024, not clamped to 1024)", got)
+		t.Errorf("Bounds().BottomRight.X = %v, want 1124 (100+1024, not clamped to 1024)", got)
 	}
 }
 
@@ -380,7 +380,7 @@ func TestBasicCamera_Bounds_ToroidalReturnsLogicalExtent(t *testing.T) {
 // the renderer only wraps one lap, so zooming out further would show
 // emptiness where a second repeat of the world would be needed.
 func TestBasicCamera_ZoomOut_ToroidalCappedToWorldFit(t *testing.T) {
-	surface := plane.NewToroidal2D[uint32](1000, 1000)
+	surface := plane.NewToroidal2D(1000, 1000)
 	c := newBasicCamera(surface, testViewport(0, 0, 1000, 1000), true)
 
 	c.ZoomOut(10, 500, 500)
@@ -394,7 +394,7 @@ func TestBasicCamera_ZoomOut_ToroidalCappedToWorldFit(t *testing.T) {
 // exist: every basicCamera field is unexported, so gob refuses to encode
 // one directly at all — Persistence.Save must go through State() instead.
 func TestBasicCamera_GobRoundTrip_RefusesToEncode(t *testing.T) {
-	surface := plane.NewEuclidean2D[uint32](1000, 1000)
+	surface := plane.NewEuclidean2D(1000, 1000)
 	c := newBasicCamera(surface, testViewport(10, 10, 100, 100), false)
 	c.ZoomIn(2, 60, 60)
 
@@ -449,15 +449,15 @@ func TestNewFromSpace_DefaultViewportMatchesSize(t *testing.T) {
 		t.Errorf("Bounds().TopLeft = %+v, want (0,0)", bounds.TopLeft)
 	}
 	if w := bounds.BottomRight.X - bounds.TopLeft.X; w != 800 {
-		t.Errorf("Bounds() width = %d, want 800", w)
+		t.Errorf("Bounds() width = %v, want 800", w)
 	}
 	if h := bounds.BottomRight.Y - bounds.TopLeft.Y; h != 600 {
-		t.Errorf("Bounds() height = %d, want 600", h)
+		t.Errorf("Bounds() height = %v, want 600", h)
 	}
 }
 
 func TestNewFromSpace_WithViewportOverride(t *testing.T) {
-	override := geom.NewAABBAt(geom.NewVec[uint32](100, 100), 50, 30)
+	override := geom.NewAABBAt(geom.NewVec(100, 100), 50, 30)
 	c := NewFromSpace(800, 600, false, override)
 
 	if got := c.Bounds(); got != override {
@@ -473,7 +473,7 @@ func TestNewFromSpace_ToroidalWrapsOnTranslate(t *testing.T) {
 
 	got := c.Bounds()
 	if got.TopLeft.X != 12 {
-		t.Errorf("after wrap-around Translate, Bounds().TopLeft.X = %d, want 12 (wrapped, not clamped)", got.TopLeft.X)
+		t.Errorf("after wrap-around Translate, Bounds().TopLeft.X = %v, want 12 (wrapped, not clamped)", got.TopLeft.X)
 	}
 }
 
@@ -485,7 +485,7 @@ func TestNewFromSpace_EuclideanClampsOnTranslate(t *testing.T) {
 
 	got := c.Bounds()
 	if got.TopLeft.X != 0 {
-		t.Errorf("Bounds().TopLeft.X = %d, want 0 (clamped euclidean, not wrapped)", got.TopLeft.X)
+		t.Errorf("Bounds().TopLeft.X = %v, want 0 (clamped euclidean, not wrapped)", got.TopLeft.X)
 	}
 }
 

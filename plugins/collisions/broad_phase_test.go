@@ -27,7 +27,7 @@ func testSpace(t *testing.T) *gokg.Space {
 	return space
 }
 
-func posAt(x, y, w, h uint32) world.Position {
+func posAt(x, y, w, h float64) world.Position {
 	return world.Position{AABB: plane.NewAABB(geom.NewVec(x, y), w, h)}
 }
 
@@ -35,6 +35,10 @@ func posAt(x, y, w, h uint32) world.Position {
 // (must be called from within an ecs.Setup OnInit) and inserts it into
 // space's spatial index — BroadPhase.Update discovers neighbors purely
 // through that index, not through goke's Query.
+//
+// Setting CanCollide by hand is what collisions.Collidable does at a real
+// spawn; these fixtures build entities without going through an EntKind, so
+// they have to do the template's half themselves.
 func seedBroadPhaseEntity(t *testing.T, si *goke.SysInit, space *gokg.Space, pos world.Position) uid.UID64 {
 	t.Helper()
 	var posComp goke.Comp[world.Position]
@@ -46,12 +50,13 @@ func seedBroadPhaseEntity(t *testing.T, si *goke.SysInit, space *gokg.Space, pos
 	posComp.Slice(&f.Cursor)[0] = pos
 	id := f.IDs[0]
 	space.Insert(id, pos.AABB)
+	space.SetCapabilities(id, collisions.CanCollide)
 	return id
 }
 
 // seedNonCollidableEntity is seedBroadPhaseEntity without a Collision
-// component — a world entity present in the shared spatial index that
-// should never be treated as a collision candidate.
+// component and without CanCollide — a world entity present in the shared
+// spatial index that should never be treated as a collision candidate.
 func seedNonCollidableEntity(t *testing.T, si *goke.SysInit, space *gokg.Space, pos world.Position) uid.UID64 {
 	t.Helper()
 	var posComp goke.Comp[world.Position]
@@ -78,6 +83,7 @@ func seedMovingCollidableEntity(t *testing.T, si *goke.SysInit, space *gokg.Spac
 	velComp.Slice(&f.Cursor)[0] = vel
 	id := f.IDs[0]
 	space.Insert(id, pos.AABB)
+	space.SetCapabilities(id, collisions.CanCollide)
 	return id
 }
 
@@ -91,6 +97,10 @@ func hasHit(q *goke.Query) map[uid.UID64]bool {
 	}
 	return found
 }
+
+// testProbeMargin is what world would hand the broad phase for the 10-unit
+// entities these tests use: 2*MaxStep, MaxStep being MinSize/2.
+const testProbeMargin = 10
 
 func TestBroadPhase_Update_DetectsOverlappingNeighbors(t *testing.T) {
 	space := testSpace(t)
@@ -106,7 +116,7 @@ func TestBroadPhase_Update_DetectsOverlappingNeighbors(t *testing.T) {
 		hitQ = si.NewQueryBuilder(&hitTag).Build()
 	}})
 
-	bp := collisions.NewBroadPhase(space)
+	bp := collisions.NewBroadPhase(space, testProbeMargin)
 	handle := ecs.RegSys(bp)
 	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(handle, d)
@@ -134,7 +144,7 @@ func TestBroadPhase_Update_NoOverlap_NoHitAdded(t *testing.T) {
 		hitQ = si.NewQueryBuilder(&hitTag).Build()
 	}})
 
-	bp := collisions.NewBroadPhase(space)
+	bp := collisions.NewBroadPhase(space, testProbeMargin)
 	handle := ecs.RegSys(bp)
 	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(handle, d)
@@ -161,7 +171,7 @@ func TestBroadPhase_Update_SingleEntity_SelfExcluded(t *testing.T) {
 		hitQ = si.NewQueryBuilder(&hitTag).Build()
 	}})
 
-	bp := collisions.NewBroadPhase(space)
+	bp := collisions.NewBroadPhase(space, testProbeMargin)
 	handle := ecs.RegSys(bp)
 	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(handle, d)
@@ -192,7 +202,7 @@ func TestBroadPhase_Update_IgnoresNonCollidableNeighbor(t *testing.T) {
 		collQ = si.NewQueryBuilder(&collTag).Build()
 	}})
 
-	bp := collisions.NewBroadPhase(space)
+	bp := collisions.NewBroadPhase(space, testProbeMargin)
 	handle := ecs.RegSys(bp)
 	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(handle, d)
@@ -230,7 +240,7 @@ func TestBroadPhase_Update_DetectsEntityMovedByMoveSystem(t *testing.T) {
 	var hitTag goke.Comp[collisions.Hit]
 
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		idA = seedMovingCollidableEntity(t, si, space, posAt(0, 0, 10, 10), world.Velocity{Dir: geom.NewVec[float64](1, 0), Value: 105})
+		idA = seedMovingCollidableEntity(t, si, space, posAt(0, 0, 10, 10), world.Velocity{Dir: geom.NewVec(1, 0), Value: 105})
 		idB = seedBroadPhaseEntity(t, si, space, posAt(100, 0, 10, 10)) // far from idA's start, not yet overlapping
 		space.Flush(nil)
 		hitQ = si.NewQueryBuilder(&hitTag).Build()
@@ -238,7 +248,7 @@ func TestBroadPhase_Update_DetectsEntityMovedByMoveSystem(t *testing.T) {
 
 	moveSystem := world.NewMoveSystem(space, 0)
 	moveHandle := ecs.RegSys(moveSystem)
-	bp := collisions.NewBroadPhase(space)
+	bp := collisions.NewBroadPhase(space, testProbeMargin)
 	bpHandle := ecs.RegSys(bp)
 	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(moveHandle, d)
@@ -252,4 +262,99 @@ func TestBroadPhase_Update_DetectsEntityMovedByMoveSystem(t *testing.T) {
 	if !got[idA] || !got[idB] {
 		t.Errorf("expected BroadPhase to detect idA after MoveSystem moved it into idB, got %v (idA=%v idB=%v)", got, idA, idB)
 	}
+}
+
+// The margin is not decoration: it is what lets the broad phase notice a pair
+// one tick before they overlap. An entity travelling at world's own per-tick
+// cap has to be recorded as touching on the tick *before* it arrives, or the
+// narrow phase sees the overlap only once it is already deep.
+//
+// This is what the old fixed margin of 32 was guessing at. It guessed high,
+// which cost candidates; guessing low would cost collisions.
+func TestBroadPhase_MarginCoversOneTickOfClosingSpeed(t *testing.T) {
+	const size = 10
+	const maxStep = size / 2 // world's cap: MinSize/2
+	margin := 2 * float64(maxStep)
+
+	// A and B are exactly one tick of closing apart: still a clear gap now,
+	// certain to overlap after both take their largest allowed step.
+	gap := margin
+
+	space := testSpace(t)
+	ecs := goke.New()
+	var idA, idB uid.UID64
+	var collQ *goke.Query
+	var collTag goke.Comp[collisions.Collision]
+
+	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		idA = seedBroadPhaseEntity(t, si, space, posAt(0, 0, size, size))
+		idB = seedBroadPhaseEntity(t, si, space, posAt(size+gap, 0, size, size))
+		space.Flush(nil)
+		collQ = si.NewQueryBuilder(&collTag).Build()
+	}})
+
+	bp := collisions.NewBroadPhase(space, margin)
+	handle := ecs.RegSys(bp)
+	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
+		ctx.Run(handle, d)
+		ctx.Sync()
+	})
+	ecs.Tick(time.Millisecond)
+
+	if !touches(collQ, &collTag, idA, idB) {
+		t.Errorf("A did not record B as touching across a gap of %v — a pair this close closes it within one tick", gap)
+	}
+}
+
+// The other half of the same contract: reach further than one tick of closing
+// and every extra unit is area the index scans for pairs that cannot meet.
+func TestBroadPhase_MarginStopsAtOneTickOfClosingSpeed(t *testing.T) {
+	const size = 10
+	const maxStep = size / 2
+	margin := 2 * float64(maxStep)
+
+	space := testSpace(t)
+	ecs := goke.New()
+	var idA, idB uid.UID64
+	var collQ *goke.Query
+	var collTag goke.Comp[collisions.Collision]
+
+	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		idA = seedBroadPhaseEntity(t, si, space, posAt(0, 0, size, size))
+		idB = seedBroadPhaseEntity(t, si, space, posAt(size+margin+1, 0, size, size))
+		space.Flush(nil)
+		collQ = si.NewQueryBuilder(&collTag).Build()
+	}})
+
+	bp := collisions.NewBroadPhase(space, margin)
+	handle := ecs.RegSys(bp)
+	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
+		ctx.Run(handle, d)
+		ctx.Sync()
+	})
+	ecs.Tick(time.Millisecond)
+
+	if touches(collQ, &collTag, idA, idB) {
+		t.Errorf("A recorded B as touching across a gap of %v — further than the pair can close in one tick", margin+1)
+	}
+}
+
+// touches reports whether a's Collision lists b as a neighbour this tick.
+func touches(q *goke.Query, tag *goke.Comp[collisions.Collision], a, b uid.UID64) bool {
+	q.All()
+	for q.Next() {
+		cur := q.Cursor()
+		tags := tag.Slice(cur)
+		for i, id := range cur.IDs {
+			if id != a {
+				continue
+			}
+			for ti := uint8(0); ti < tags[i].TouchingCount; ti++ {
+				if tags[i].Touching[ti] == b {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

@@ -31,9 +31,10 @@ go test ./plugins/world/... -run TestName -v                     # a single test
 make demo                                                          # go mod tidy && run examples/collision-demo
 make demo-nav                                                     # go mod tidy && run examples/board-navigation-demo
 make demo-scenes                                                  # go mod tidy && run examples/scenes-demo
+make demo-vision                                                  # go mod tidy && run examples/vision-demo
 ```
 
-The three `examples/*` programs are real Ebitengine GUI apps (open a window)
+The four `examples/*` programs are real Ebitengine GUI apps (open a window)
 — `go test` alone can't exercise them. To sanity-check one still runs after
 a change in a headless environment: build to a temp path, run under
 `timeout <n>s`, treat exit 124 (still running, not crashed) as healthy.
@@ -125,6 +126,11 @@ shows how much of it is boilerplate vs. real behavior.
   `board`. Depends on `board` and `world`.
 - **`selection`** — mouse click/drag → `Selected` tag on `world` entities.
   Depends on `world`.
+- **`vision`** — narrowed perception: a `Sight` cone scanned against `world`'s
+  space each tick fills `Sighted` (who this entity can see, nearest first), and
+  `SightOutline` on an entity gets its view's shape computed and drawn. Publishes
+  facts only; reacting is a `world.Behavior`. Strategies live under
+  `vision/strategies/*`. Depends on `world`.
 
 Each package has a `doc.go` describing the gameplay capability it adds.
 

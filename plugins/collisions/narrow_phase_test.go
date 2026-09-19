@@ -165,7 +165,7 @@ func TestNarrowPhase_DynamicStatic_OnlyDynamicMoves(t *testing.T) {
 		t.Error("expected dynamic A to have moved")
 	}
 	if p := findPos(t, qB, posB, idB); p.TopLeft.X != 105 {
-		t.Errorf("expected static B to stay put at X=105, got X=%d", p.TopLeft.X)
+		t.Errorf("expected static B to stay put at X=105, got X=%v", p.TopLeft.X)
 	}
 }
 
@@ -228,7 +228,7 @@ func TestNarrowPhase_SensorContact_SkipsHandlerAndPush(t *testing.T) {
 		t.Errorf("handler called %d times, want 0 (sensor contacts must not dispatch to the handler)", len(handler.calls))
 	}
 	if p := findPos(t, qA, posA, idA); p.TopLeft.X != 100 {
-		t.Errorf("expected a sensor contact to never physically push A, TopLeft.X = %d, want 100", p.TopLeft.X)
+		t.Errorf("expected a sensor contact to never physically push A, TopLeft.X = %v, want 100", p.TopLeft.X)
 	}
 }
 
@@ -343,4 +343,75 @@ func TestNarrowPhase_ConfirmedHit_UsesPerEntityHitExpiresOverride(t *testing.T) 
 	if !found {
 		t.Fatal("expected to find entity A's Hit tag")
 	}
+}
+
+// The solver stops as soon as a whole pass separates nothing, which is safe
+// only because a pass that moved nothing leaves the geometry it just judged
+// untouched. A stack of three boxes is where that reasoning earns its keep:
+// pushing the first pair apart drives the middle box into the third, so the
+// second pass has work the first could not have seen. Stop too eagerly and
+// the outer boxes stay inside each other.
+func TestNarrowPhase_KeepsIteratingWhileSeparationCreatesNewOverlap(t *testing.T) {
+	space := testSpace(t)
+	var idA, idB, idC uid.UID64
+	var posComp goke.Comp[world.Position]
+	var q *goke.Query
+
+	runNarrowPhase(t, space, &spyHandler{}, goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		var pos goke.Comp[world.Position]
+		var vel goke.Comp[world.Velocity]
+		var hit goke.Comp[collisions.Hit]
+		var coll goke.Comp[collisions.Collision]
+
+		f := si.NewFactory(&pos, &vel, &hit, &coll)
+		f.Create(3)
+		f.Next()
+		slice := pos.Slice(&f.Cursor)
+		// Three 10-wide boxes overlapping 8 units each: a tight stack, so
+		// separating any pair pushes into the next.
+		slice[0] = posAt(100, 100, 10, 10)
+		slice[1] = posAt(102, 100, 10, 10)
+		slice[2] = posAt(104, 100, 10, 10)
+		idA, idB, idC = f.IDs[0], f.IDs[1], f.IDs[2]
+
+		touching := coll.Slice(&f.Cursor)
+		for i := range touching {
+			for j, id := range f.IDs {
+				if i != j {
+					touching[i].Touching[touching[i].TouchingCount] = id
+					touching[i].TouchingCount++
+				}
+			}
+		}
+		for i, id := range f.IDs {
+			space.Insert(id, slice[i].AABB)
+		}
+		space.Flush(nil)
+
+		posComp = pos
+		q = si.NewQueryBuilder(&pos).Build()
+	}})
+
+	a := findPos(t, q, posComp, idA)
+	b := findPos(t, q, posComp, idB)
+	c := findPos(t, q, posComp, idC)
+
+	for _, pair := range []struct {
+		name string
+		l, r world.Position
+	}{{"A/B", a, b}, {"B/C", b, c}, {"A/C", a, c}} {
+		// Resting exactly edge-to-edge is the right answer, so what is
+		// measured is depth, not whether the closed boxes touch.
+		if d := overlapDepth(pair.l, pair.r); d > 1e-6 {
+			t.Errorf("%s still overlap by %v after the solver ran: %v vs %v", pair.name, d, pair.l.AABB.AABB, pair.r.AABB.AABB)
+		}
+	}
+}
+
+// overlapDepth is how far two boxes penetrate on their shallower axis, and
+// zero (or less) when they only touch or stand apart.
+func overlapDepth(l, r world.Position) float64 {
+	x := min(l.BottomRight.X, r.BottomRight.X) - max(l.TopLeft.X, r.TopLeft.X)
+	y := min(l.BottomRight.Y, r.BottomRight.Y) - max(l.TopLeft.Y, r.TopLeft.Y)
+	return min(x, y)
 }

@@ -62,14 +62,14 @@ func (g *hexGrid) Neighbors(c CellID) []CellID {
 }
 
 // CellCenter shifts the standard axial-to-pixel conversion so cell (0,0) sits fully in positive space.
-func (g *hexGrid) CellCenter(c CellID) geom.Vec[float64] {
+func (g *hexGrid) CellCenter(c CellID) geom.Vec {
 	q, r := unpackAxial(c)
 	x := g.Size*(math.Sqrt(3)*float64(q)+math.Sqrt(3)/2*float64(r)) + g.Size
 	y := g.Size*(1.5*float64(r)) + g.Size
 	return geom.NewVec(x, y)
 }
 
-func (g *hexGrid) CellAt(pos geom.Vec[float64]) (CellID, bool) {
+func (g *hexGrid) CellAt(pos geom.Vec) (CellID, bool) {
 	if g.Size == 0 {
 		return 0, false
 	}

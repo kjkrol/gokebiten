@@ -10,8 +10,8 @@ type CellID uint64
 type Grid interface {
 	Neighbors(c CellID) []CellID
 	Contains(c CellID) bool
-	CellCenter(c CellID) geom.Vec[float64]
-	CellAt(pos geom.Vec[float64]) (CellID, bool)
+	CellCenter(c CellID) geom.Vec
+	CellAt(pos geom.Vec) (CellID, bool)
 	// CellIndex returns the CellID at the topology-specific coordinate pair
 	// (col,row for a square grid; axial q,r for a hex grid) — the direct,
 	// position-free counterpart to CellAt. ok is false only when out of

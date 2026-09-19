@@ -30,11 +30,11 @@ func TestDefaultCameraHandler_MiddleDrag_Pans(t *testing.T) {
 	h := newDefaultCameraHandler(cam, defaultCameraScrollSpeed)
 	before := cam.Bounds()
 
-	h.HandleEvents(&control.InputEvents{MiddleDown: true, CursorDelta: geom.NewVec[int32](10, 0)})
+	h.HandleEvents(&control.InputEvents{MiddleDown: true, CursorDelta: geom.NewVec(10, 0)})
 
 	after := cam.Bounds()
 	if after.TopLeft.X != before.TopLeft.X-10 {
-		t.Errorf("Bounds().TopLeft.X after middle-drag = %d, want %d", after.TopLeft.X, before.TopLeft.X-10)
+		t.Errorf("Bounds().TopLeft.X after middle-drag = %v, want %v", after.TopLeft.X, before.TopLeft.X-10)
 	}
 }
 
@@ -44,11 +44,11 @@ func TestDefaultCameraHandler_CursorNearRightEdge_ScrollsRight(t *testing.T) {
 	h := newDefaultCameraHandler(cam, defaultCameraScrollSpeed)
 	before := cam.Bounds()
 
-	h.HandleEvents(&control.InputEvents{MousePos: geom.NewVec[int32](990, 500)})
+	h.HandleEvents(&control.InputEvents{MousePos: geom.NewVec(990, 500)})
 
 	after := cam.Bounds()
 	if after.TopLeft.X <= before.TopLeft.X {
-		t.Errorf("Bounds().TopLeft.X after cursor near right edge = %d, want > %d", after.TopLeft.X, before.TopLeft.X)
+		t.Errorf("Bounds().TopLeft.X after cursor near right edge = %v, want > %v", after.TopLeft.X, before.TopLeft.X)
 	}
 }
 
@@ -64,7 +64,7 @@ func TestDefaultCameraHandler_CursorAtTrueEdge_DeadZoneDoesNotScroll(t *testing.
 	h := newDefaultCameraHandler(cam, defaultCameraScrollSpeed)
 	before := cam.Bounds()
 
-	h.HandleEvents(&control.InputEvents{MousePos: geom.NewVec[int32](999, 500)})
+	h.HandleEvents(&control.InputEvents{MousePos: geom.NewVec(999, 500)})
 
 	after := cam.Bounds()
 	if after != before {
@@ -84,11 +84,11 @@ func TestDefaultCameraHandler_CursorAtTrueEdge_WindowFillsScreen_Scrolls(t *test
 	h := newDefaultCameraHandler(cam, defaultCameraScrollSpeed)
 	before := cam.Bounds()
 
-	h.HandleEvents(&control.InputEvents{MousePos: geom.NewVec[int32](999, 500), WindowFillsScreen: true})
+	h.HandleEvents(&control.InputEvents{MousePos: geom.NewVec(999, 500), WindowFillsScreen: true})
 
 	after := cam.Bounds()
 	if after.TopLeft.X <= before.TopLeft.X {
-		t.Errorf("Bounds().TopLeft.X after cursor at the true edge with WindowFillsScreen = %d, want > %d", after.TopLeft.X, before.TopLeft.X)
+		t.Errorf("Bounds().TopLeft.X after cursor at the true edge with WindowFillsScreen = %v, want > %v", after.TopLeft.X, before.TopLeft.X)
 	}
 }
 
@@ -106,8 +106,8 @@ func TestDefaultCameraHandler_MiddleDrag_CursorOutsideWindow_DoesNotPan(t *testi
 
 	h.HandleEvents(&control.InputEvents{
 		MiddleDown:  true,
-		MousePos:    geom.NewVec[int32](-5, 500),
-		CursorDelta: geom.NewVec[int32](10, 0),
+		MousePos:    geom.NewVec(-5, 500),
+		CursorDelta: geom.NewVec(10, 0),
 	})
 
 	after := cam.Bounds()
@@ -127,7 +127,7 @@ func TestDefaultCameraHandler_CursorOutsideWindow_DoesNotScroll(t *testing.T) {
 	h := newDefaultCameraHandler(cam, defaultCameraScrollSpeed)
 	before := cam.Bounds()
 
-	h.HandleEvents(&control.InputEvents{MousePos: geom.NewVec[int32](-5, 500)})
+	h.HandleEvents(&control.InputEvents{MousePos: geom.NewVec(-5, 500)})
 
 	after := cam.Bounds()
 	if after != before {

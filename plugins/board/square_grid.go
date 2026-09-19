@@ -59,13 +59,13 @@ func (g *squareGrid) Neighbors(c CellID) []CellID {
 	return out
 }
 
-func (g *squareGrid) CellCenter(c CellID) geom.Vec[float64] {
+func (g *squareGrid) CellCenter(c CellID) geom.Vec {
 	x, y := g.cellXY(c)
 	half := float64(g.CellSize) / 2
 	return geom.NewVec(float64(x)*float64(g.CellSize)+half, float64(y)*float64(g.CellSize)+half)
 }
 
-func (g *squareGrid) CellAt(pos geom.Vec[float64]) (CellID, bool) {
+func (g *squareGrid) CellAt(pos geom.Vec) (CellID, bool) {
 	if g.CellSize == 0 {
 		return 0, false
 	}

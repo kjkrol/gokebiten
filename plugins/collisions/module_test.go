@@ -8,7 +8,7 @@ import (
 )
 
 func TestCollisions_LoadComps_ListsOwnedComponents(t *testing.T) {
-	p := collisions.New(testSpace(t), goke.New(), 0)
+	p := collisions.New(testSpace(t), goke.New(), 0, testProbeMargin)
 
 	tokens := p.LoadComps()
 	if len(tokens) != 5 {
@@ -18,7 +18,7 @@ func TestCollisions_LoadComps_ListsOwnedComponents(t *testing.T) {
 
 func TestCollisions_RegSystems_IsIdempotent(t *testing.T) {
 	ecs := goke.New()
-	p := collisions.New(testSpace(t), ecs, 0)
+	p := collisions.New(testSpace(t), ecs, 0, testProbeMargin)
 
 	// Must not panic or double-register systems when called more than once —
 	// RegSystems guards with p.built.

@@ -40,7 +40,7 @@ func (s *VelocitySystem) Update(_ *goke.CmdBuf, _ time.Duration) {
 			for _, m := range s.modifiers {
 				acc = m.Apply(cursor, i, acc)
 			}
-			vel[i].Value = int32(float64(vel[i].Value) * acc)
+			vel[i].Value = vel[i].Value * acc
 		}
 	}
 }

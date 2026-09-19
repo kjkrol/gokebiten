@@ -56,7 +56,7 @@ func (g *GameplayStage) Init(ctx game.Initializer) error {
 		Entities: world.EntitiesCfg{MaxCount: EntityCount, MinSize: EntitySize, MaxSize: EntitySize},
 	})
 	velocity := world.Velocity{}
-	velocity.SetDelta(geom.NewVec[int32](30, 20))
+	velocity.SetDelta(geom.NewVec(30, 20))
 	g.world.EntKindDict().Define(moverKind, func(k world.Kind[world.Position]) world.EntKind {
 		return world.EntKind{
 			Position: k.Load(func(p world.Position) world.Position { return p }),

@@ -18,14 +18,14 @@ type KeyEvent struct {
 }
 
 type ClickEvent struct {
-	Pos    geom.Vec[int32]
+	Pos    geom.Vec
 	Button ebiten.MouseButton
 	Action KeyAction
 }
 
 type InputEvents struct {
-	MousePos    geom.Vec[int32]
-	CursorDelta geom.Vec[int32]
+	MousePos    geom.Vec
+	CursorDelta geom.Vec
 	Modifiers   struct {
 		Shift, Ctrl, Alt bool
 	}
@@ -44,17 +44,17 @@ func (e *InputEvents) ResetTransient() {
 	e.ClickQueue = e.ClickQueue[:0]
 	e.KeyEvents = e.KeyEvents[:0]
 	e.ScrollDelta = 0
-	e.CursorDelta = geom.Vec[int32]{}
+	e.CursorDelta = geom.Vec{}
 }
 
 func (e *InputEvents) AddKeyEvent(key ebiten.Key, action KeyAction) {
 	e.KeyEvents = append(e.KeyEvents, KeyEvent{Key: key, Action: action})
 }
 
-// AddClickEvent takes plain int for caller ergonomics — stored as geom.Vec[int32].
+// AddClickEvent takes plain int for caller ergonomics — stored as geom.Vec.
 func (e *InputEvents) AddClickEvent(x, y int, button ebiten.MouseButton, action KeyAction) {
 	e.ClickQueue = append(e.ClickQueue, ClickEvent{
-		Pos:    geom.NewVec(int32(x), int32(y)),
+		Pos:    geom.NewVec(float64(x), float64(y)),
 		Button: button,
 		Action: action,
 	})

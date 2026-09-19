@@ -7,7 +7,7 @@ import (
 
 // PendingSelect is a completed click/drag gesture awaiting Update.
 type PendingSelect struct {
-	Start, End geom.Vec[int32]
+	Start, End geom.Vec
 	Additive   bool
 }
 
@@ -15,13 +15,13 @@ type PendingSelect struct {
 // HandleEvents writes to and System reads/clears.
 type Resources struct {
 	Dragging    bool
-	DragStart   geom.Vec[int32]
-	DragCurrent geom.Vec[int32]
+	DragStart   geom.Vec
+	DragCurrent geom.Vec
 	Pending     *PendingSelect
 	PendingIDs  []uid.UID64
 }
 
 // DragBox reports the screen-space rectangle of the drag gesture in progress, if any.
-func (s *Resources) DragBox() (start, current geom.Vec[int32], dragging bool) {
+func (s *Resources) DragBox() (start, current geom.Vec, dragging bool) {
 	return s.DragStart, s.DragCurrent, s.Dragging
 }

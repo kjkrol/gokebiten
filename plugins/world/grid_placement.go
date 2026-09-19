@@ -29,5 +29,5 @@ func (p *GridPlacement) Place(index, count int) Position {
 	x := (col * cellWidth) + (cellWidth / 2) - (p.EntitySize / 2)
 	y := (row * cellHeight) + (cellHeight / 2) - (p.EntitySize / 2)
 
-	return Position{AABB: plane.NewAABB(geom.NewVec(x, y), p.EntitySize, p.EntitySize)}
+	return Position{AABB: plane.NewAABB(geom.NewVec(float64(x), float64(y)), float64(p.EntitySize), float64(p.EntitySize))}
 }

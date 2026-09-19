@@ -1,6 +1,7 @@
 package world_test
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -34,7 +35,7 @@ type testHandles struct {
 // returns the ECS (with world.MoveSystem registered and plan set), a
 // verification query, and the seeded entity's component handles.
 // maxDelta caps per-tick displacement (0 for no limit).
-func newTestWorld(t *testing.T, vel world.Velocity, maxDelta uint32) (*goke.ECS, *goke.Query, testHandles) {
+func newTestWorld(t *testing.T, vel world.Velocity, maxDelta float64) (*goke.ECS, *goke.Query, testHandles) {
 	t.Helper()
 	space := testSpace(t)
 
@@ -48,7 +49,7 @@ func newTestWorld(t *testing.T, vel world.Velocity, maxDelta uint32) (*goke.ECS,
 		f.Next()
 		positions := pos.Slice(&f.Cursor)
 		velocities := velComp.Slice(&f.Cursor)
-		positions[0] = world.Position{AABB: plane.NewAABB(geom.NewVec[uint32](0, 0), 5, 5)}
+		positions[0] = world.Position{AABB: plane.NewAABB(geom.NewVec(0, 0), 5, 5)}
 		velocities[0] = vel
 
 		q = si.NewQueryBuilder(&pos, &velComp).Build()
@@ -79,48 +80,39 @@ func readFirst(t *testing.T, q *goke.Query, h testHandles) (world.Position, worl
 }
 
 func TestMoveSystem_Update_SubPixelAccumulatesWithoutMoving(t *testing.T) {
-	vel := world.Velocity{Dir: geom.NewVec[float64](1, 0), Value: 1} // 1 unit/sec
+	vel := world.Velocity{Dir: geom.NewVec(1, 0), Value: 1} // 1 unit/sec
 	ecs, q, h := newTestWorld(t, vel, 0)
 
-	ecs.Tick(10 * time.Millisecond) // AccX += 1*0.01 = 0.01, dx=0
+	ecs.Tick(10 * time.Millisecond) // 1 * 0.01 = one hundredth of a unit
 
-	p, v := readFirst(t, q, h)
-	if p.TopLeft.X != 0 {
-		t.Errorf("TopLeft.X = %d, want 0 (sub-pixel movement shouldn't translate)", p.TopLeft.X)
-	}
-	if v.AccX < 0.009 || v.AccX > 0.011 {
-		t.Errorf("AccX = %v, want ~0.01 (the sub-pixel remainder should accumulate)", v.AccX)
+	p, _ := readFirst(t, q, h)
+	if math.Abs(p.TopLeft.X-0.01) > 1e-9 {
+		t.Errorf("TopLeft.X = %v, want 0.01 — the step is a hundredth of a unit and it should land there", p.TopLeft.X)
 	}
 }
 
-func TestMoveSystem_Update_TranslatesOnWholePixels(t *testing.T) {
-	vel := world.Velocity{Dir: geom.NewVec[float64](1, 0), Value: 100} // 100 units/sec
+func TestMoveSystem_Update_TranslatesWholeUnits(t *testing.T) {
+	vel := world.Velocity{Dir: geom.NewVec(1, 0), Value: 100} // 100 units/sec
 	ecs, q, h := newTestWorld(t, vel, 0)
 
 	for range 3 {
 		ecs.Tick(20 * time.Millisecond) // AccX += 100*0.02 = 2.0 exactly, each tick
 	}
 
-	p, v := readFirst(t, q, h)
-	if p.TopLeft.X != 6 {
-		t.Errorf("TopLeft.X = %d, want 6 (3 ticks x 2px, no remainder)", p.TopLeft.X)
-	}
-	if v.AccX != 0 {
-		t.Errorf("AccX = %v, want 0 (each tick's 2.0 was a whole number, nothing left over)", v.AccX)
+	p, _ := readFirst(t, q, h)
+	if math.Abs(p.TopLeft.X-6) > 1e-9 {
+		t.Errorf("TopLeft.X = %v, want 6 (three ticks of two units)", p.TopLeft.X)
 	}
 }
 
 func TestMoveSystem_Update_ClampsDisplacementToMaxDelta(t *testing.T) {
-	vel := world.Velocity{Dir: geom.NewVec[float64](1, 0), Value: 1000} // 1000 units/sec
-	ecs, q, h := newTestWorld(t, vel, 3)                                // cap: 3 units/tick
+	vel := world.Velocity{Dir: geom.NewVec(1, 0), Value: 1000} // 1000 units/sec
+	ecs, q, h := newTestWorld(t, vel, 3)                       // cap: 3 units/tick
 
-	ecs.Tick(100 * time.Millisecond) // uncapped would be AccX += 100, clamped to 3
+	ecs.Tick(100 * time.Millisecond) // uncapped the step would be 100 units
 
-	p, v := readFirst(t, q, h)
-	if p.TopLeft.X != 3 {
-		t.Errorf("TopLeft.X = %d, want 3 (displacement clamped to maxDelta)", p.TopLeft.X)
-	}
-	if v.AccX != 0 {
-		t.Errorf("AccX = %v, want 0 (clamp applies before truncation, no debt left over)", v.AccX)
+	p, _ := readFirst(t, q, h)
+	if math.Abs(p.TopLeft.X-3) > 1e-9 {
+		t.Errorf("TopLeft.X = %v, want 3 (the step is clamped to maxDelta)", p.TopLeft.X)
 	}
 }

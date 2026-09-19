@@ -50,7 +50,9 @@ func (*Plugin) Builtin() {}
 func NewPlugin(cfg Config) *Plugin {
 	m := newModule(cfg)
 	cam := camera.NewFromSpaceWithConfig(cfg.Space.Width, cfg.Space.Height, cfg.Space.Toroidal, cfg.Camera)
-	return &Plugin{Res: Resources{Config: cfg, Telemetry: &m.telemetry, Camera: cam}, module: m, entKinds: newEntKindDict()}
+	dict := newEntKindDict()
+	m.entKinds = dict
+	return &Plugin{Res: Resources{Config: cfg, Telemetry: &m.telemetry, Camera: cam}, module: m, entKinds: dict}
 }
 
 // WithCameraControls enables the default wheel-zoom/middle-drag-pan/edge-scroll EventHandler.
@@ -77,6 +79,7 @@ func (p *Plugin) Name() string { return "gokebiten.world" }
 
 func (p *Plugin) Install(ctx plugin.Installer) error {
 	ctx.UseModule(p.module)
+	ctx.Setup(p.entKinds) // joins the tracked resources, so the type dictionary is saved
 	return nil
 }
 
@@ -87,7 +90,7 @@ func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
 
 // WithRenderer builds this plugin's own entity renderer, drawing cam-relative sprites from atlas.
 func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
-	p.renderer = newRenderer(p.Res.Camera, atlas)
+	p.renderer = newRenderer(p.Res.Camera, atlas, p.Res.Config.Space.Width, p.Res.Config.Space.Height)
 }
 
 // Renderer returns this plugin's own render.Renderer, or nil unless WithRenderer was called.
@@ -145,11 +148,21 @@ func (p *Plugin) Populate() error {
 // Space returns world's shared spatial index — every Populate entity is kept in sync with it.
 func (p *Plugin) Space() *gokg.Space { return p.module.space }
 
+// MaxStep is the furthest a single entity can move in one tick — the cap
+// MoveSystem applies. Two entities closing head-on therefore shut at most
+// 2*MaxStep of gap per tick, which is the reach a broad phase needs.
+func (p *Plugin) MaxStep() float64 { return p.module.maxStep() }
+
 // EntityRenderer returns the concrete entity renderer for further chaining (WithOverlay, WithModify, ...), or nil.
 func (p *Plugin) EntityRenderer() *Renderer { return p.renderer }
 
 // RegisterSpeedModifier adds m to the set VelocitySystem folds into every entity's Velocity.Value each tick.
 func (p *Plugin) RegisterSpeedModifier(m SpeedModifier) { p.module.RegisterSpeedModifier(m) }
+
+// RegisterBehavior adds b to the decision pass world runs each tick before
+// movement, in registration order — so a behavior consuming what earlier ones
+// decided must be registered after them. Call it from Stage.Init.
+func (p *Plugin) RegisterBehavior(b Behavior) { p.module.RegisterBehavior(b) }
 
 // EntKindDict returns this Plugin's registered set of EntKinds — call
 // Define to register kinds, Entry to build Seed's roster entries.

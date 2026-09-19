@@ -8,7 +8,7 @@ import (
 	"github.com/kjkrol/gokg/geom"
 )
 
-func vel(x, y int32) *world.Velocity {
+func vel(x, y float64) *world.Velocity {
 	v := &world.Velocity{}
 	v.SetDelta(geom.NewVec(x, y))
 	return v
@@ -17,8 +17,8 @@ func vel(x, y int32) *world.Velocity {
 func TestSwapVelocity(t *testing.T) {
 	cases := []struct {
 		name           string
-		penX, penY     int32
-		aX, aY, bX, bY int32
+		penX, penY     float64
+		aX, aY, bX, bY float64
 		wantSwap       bool
 	}{
 		{"pen.X>0, approaching (relVelX<0) -> swap X", 5, 0, -3, 0, 4, 0, true},
@@ -34,7 +34,7 @@ func TestSwapVelocity(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			velA := vel(c.aX, c.aY)
 			velB := vel(c.bX, c.bY)
-			pen := geom.Vec[int32]{X: c.penX, Y: c.penY}
+			pen := geom.Vec{X: c.penX, Y: c.penY}
 
 			swapVelocity(velA, velB, pen)
 
@@ -46,11 +46,11 @@ func TestSwapVelocity(t *testing.T) {
 			if c.wantSwap {
 				if c.penX != 0 {
 					if da.X != c.bX || db.X != c.aX {
-						t.Errorf("expected X components swapped, got velA.X=%d velB.X=%d", da.X, db.X)
+						t.Errorf("expected X components swapped, got velA.X=%v velB.X=%v", da.X, db.X)
 					}
 				} else {
 					if da.Y != c.bY || db.Y != c.aY {
-						t.Errorf("expected Y components swapped, got velA.Y=%d velB.Y=%d", da.Y, db.Y)
+						t.Errorf("expected Y components swapped, got velA.Y=%v velB.Y=%v", da.Y, db.Y)
 					}
 				}
 			}
@@ -62,8 +62,8 @@ func TestHandler_OnCollision_NilVelocitySkipsSwap(t *testing.T) {
 	h := NewHandler()
 
 	// Must not panic when one side is immovable (nil Velocity).
-	h.OnCollision(nil, collisions.CollisionEvent{VelA: nil, VelB: vel(1, 0), Penetration: geom.Vec[int32]{X: 1}})
-	h.OnCollision(nil, collisions.CollisionEvent{VelA: vel(1, 0), VelB: nil, Penetration: geom.Vec[int32]{X: 1}})
+	h.OnCollision(nil, collisions.CollisionEvent{VelA: nil, VelB: vel(1, 0), Penetration: geom.Vec{X: 1}})
+	h.OnCollision(nil, collisions.CollisionEvent{VelA: vel(1, 0), VelB: nil, Penetration: geom.Vec{X: 1}})
 }
 
 func TestHandler_OnCollision_SwapsOnRealContact(t *testing.T) {
@@ -71,7 +71,7 @@ func TestHandler_OnCollision_SwapsOnRealContact(t *testing.T) {
 	velA := vel(-3, 0)
 	velB := vel(4, 0)
 
-	h.OnCollision(nil, collisions.CollisionEvent{VelA: velA, VelB: velB, Penetration: geom.Vec[int32]{X: 5}})
+	h.OnCollision(nil, collisions.CollisionEvent{VelA: velA, VelB: velB, Penetration: geom.Vec{X: 5}})
 
 	if da, db := velA.Delta(), velB.Delta(); da.X != 4 || db.X != -3 {
 		t.Errorf("velA=%+v velB=%+v, want swapped X components", da, db)

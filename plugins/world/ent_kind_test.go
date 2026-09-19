@@ -13,10 +13,10 @@ type spawnerTag struct{}
 
 type spawnerStat struct{ HP int }
 
-type propData struct{ x uint32 }
+type propData struct{ x float64 }
 
 func spawnerTestPos() Position {
-	return Position{AABB: plane.NewAABB(geom.NewVec[uint32](0, 0), 10, 10)}
+	return Position{AABB: plane.NewAABB(geom.NewVec(0, 0), 10, 10)}
 }
 
 // statKind defines a kind at a fixed Position whose spawnerStat is read from int roster data.
@@ -178,7 +178,7 @@ func TestPopulate_KindsWithDifferentDataAndComponents(t *testing.T) {
 	var stat goke.Comp[spawnerStat]
 	var tagPos goke.Comp[Position]
 	var units int
-	var propX []uint32
+	var propX []float64
 	setupWorld(p.module, func(si *goke.SysInit) {
 		uq := si.NewQueryBuilder(&stat).Build()
 		for uq.All(); uq.Next(); {

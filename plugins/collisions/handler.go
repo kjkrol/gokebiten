@@ -14,7 +14,7 @@ type CollisionEvent struct {
 	EntityA, EntityB uid.UID64
 	PosA, PosB       *world.Position
 	VelA, VelB       *world.Velocity
-	Penetration      geom.Vec[int32]
+	Penetration      geom.Vec
 }
 
 // CollisionHandler reacts to newly-resolved contacts; System calls it at most

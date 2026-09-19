@@ -25,7 +25,7 @@ func (h *Handler) OnCollision(_ *goke.CmdBuf, e collisions.CollisionEvent) {
 
 // swapVelocity swaps the velocity components along the penetration axis,
 // unless the objects are already separating on that axis.
-func swapVelocity(velA, velB *world.Velocity, pen geom.Vec[int32]) {
+func swapVelocity(velA, velB *world.Velocity, pen geom.Vec) {
 	da, db := velA.Delta(), velB.Delta()
 	switch {
 	case pen.X != 0:

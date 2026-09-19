@@ -207,7 +207,7 @@ func TestEngine_Init_WorldViewportDefaultsToScreenSize(t *testing.T) {
 	}
 	b := got.Bounds()
 	if w, h := b.BottomRight.X-b.TopLeft.X, b.BottomRight.Y-b.TopLeft.Y; w != 200 || h != 150 {
-		t.Errorf("Camera().Bounds() size = %dx%d, want 200x150 (screen size, not world size)", w, h)
+		t.Errorf("Camera().Bounds() size = %vx%v, want 200x150 (screen size, not world size)", w, h)
 	}
 }
 

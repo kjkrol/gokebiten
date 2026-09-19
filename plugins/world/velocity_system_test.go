@@ -1,6 +1,7 @@
 package world_test
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -26,7 +27,7 @@ func TestVelocitySystem_Update_ComposesModifiersMultiplicatively(t *testing.T) {
 		f := si.NewFactory(&velComp)
 		f.Create(1)
 		f.Next()
-		velComp.Slice(&f.Cursor)[0] = world.Velocity{Dir: geom.NewVec[float64](1, 0), Value: 100}
+		velComp.Slice(&f.Cursor)[0] = world.Velocity{Dir: geom.NewVec(1, 0), Value: 100}
 		q = si.NewQueryBuilder(&velComp).Build()
 	}})
 
@@ -48,10 +49,11 @@ func TestVelocitySystem_Update_ComposesModifiersMultiplicatively(t *testing.T) {
 		if len(vel) == 0 {
 			continue
 		}
-		// 100 * 0.5 * 0.25 = 12.5, truncated to 12 — the two factors must
-		// have been multiplied together, not just the last one applied.
-		if vel[0].Value != 12 {
-			t.Errorf("Velocity.Value = %d, want 12 — modifiers should compose multiplicatively", vel[0].Value)
+		// 100 * 0.5 * 0.25 = 12.5, and it stays 12.5 — a continuous speed no
+		// longer loses the half to truncation. The two factors must have been
+		// multiplied together, not just the last one applied.
+		if math.Abs(vel[0].Value-12.5) > 1e-9 {
+			t.Errorf("Velocity.Value = %v, want 12.5 — modifiers should compose multiplicatively", vel[0].Value)
 		}
 		return
 	}

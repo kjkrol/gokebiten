@@ -65,6 +65,6 @@ func (h *defaultCameraHandler) HandleEvents(events *control.InputEvents) {
 		dy = h.scrollSpeed
 	}
 	if dx != 0 || dy != 0 {
-		h.cam.Translate(dx, dy)
+		h.cam.Translate(float64(dx), float64(dy))
 	}
 }

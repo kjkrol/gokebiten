@@ -1,12 +1,12 @@
 module github.com/kjkrol/gokebiten
 
-go 1.27.0
+go 1.27.1
 
 require (
-	github.com/hajimehoshi/ebiten/v2 v2.10.1
+	github.com/hajimehoshi/ebiten/v2 v2.10.2
 	github.com/kjkrol/astar v1.1.1
 	github.com/kjkrol/goke/v3 v3.2.3
-	github.com/kjkrol/gokg v1.3.2
+	github.com/kjkrol/gokg v1.3.4
 	github.com/kjkrol/uid v0.3.0
 )
 

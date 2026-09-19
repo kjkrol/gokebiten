@@ -22,7 +22,13 @@ type module struct {
 	seeds        []goke.System
 	telemetry    Telemetry
 
+	entKinds *EntKindDict
+
+	behaviors         []Behavior
+	behaviorRunnables []goke.Runnable
+
 	modifiers        []SpeedModifier
+	steeringRunnable goke.Runnable
 	velocityRunnable goke.Runnable
 	moveRunnable     goke.Runnable
 }
@@ -43,14 +49,30 @@ func (w *module) RegSystems(ecs *goke.ECS) {
 	if w.velocityRunnable != nil {
 		return
 	}
+	for _, b := range w.behaviors {
+		w.behaviorRunnables = append(w.behaviorRunnables, ecs.RegSys(b))
+	}
+	w.steeringRunnable = ecs.RegSys(NewSteeringSystem())
 	velocitySystem := NewVelocitySystem(w.modifiers)
-	moveSystem := NewMoveSystem(w.space, w.config.Entities.MinSize/2)
+	moveSystem := NewMoveSystem(w.space, w.maxStep())
 	w.velocityRunnable = ecs.RegSys(velocitySystem)
 	w.moveRunnable = ecs.RegSys(moveSystem)
 }
 
-// RunPlan runs world's movement pipeline (speed modifiers, then integration) for this tick.
+// maxStep is the furthest one entity may travel in a single tick. MoveSystem
+// clamps to it so nothing tunnels through a neighbour; anything that has to
+// notice an entity before it arrives — a broad phase, say — has to reach at
+// least this far ahead, which is why it is named here rather than inlined.
+func (w *module) maxStep() float64 { return float64(w.config.Entities.MinSize) / 2 }
+
+// RunPlan runs world's tick: decisions first, then the movement pipeline
+// (speed modifiers, then integration) that acts on them.
 func (w *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
+	for _, b := range w.behaviorRunnables {
+		ctx.Run(b, d)
+		ctx.Sync()
+	}
+	ctx.Run(w.steeringRunnable, d)
 	ctx.Run(w.velocityRunnable, d)
 	ctx.Run(w.moveRunnable, d)
 	ctx.Sync()
@@ -65,6 +87,8 @@ func (w *module) LoadComps() []goke.CompToken {
 		goke.LoadComp[Position](),
 		goke.LoadComp[Appearance](),
 		goke.LoadComp[Velocity](),
+		goke.LoadComp[Type](),
+		goke.LoadComp[Steering](),
 	}
 }
 
@@ -75,6 +99,8 @@ func (w *module) LoadComps() []goke.CompToken {
 // PostLoad recomputes Count and reinserts every loaded entity's Position into space — see plugin.PostLoader.
 func (w *module) PostLoad() goke.System {
 	return goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		w.remapTypes(si)
+
 		var pos goke.Comp[Position]
 		query := si.NewQueryBuilder(&pos).Build()
 		query.All()
@@ -92,6 +118,42 @@ func (w *module) PostLoad() goke.System {
 	}}
 }
 
+// remapTypes rewrites every loaded Type.ID through the saved dictionary, so a
+// world keeps its kinds even when the game's Define order changed since the
+// save. EntKindDict.order is this build's mapping and gob never touches it;
+// EntKindDict.saved is what the save brought in.
+func (w *module) remapTypes(si *goke.SysInit) {
+	saved := w.entKinds.saved
+
+	lut := make([]TypeID, len(saved))
+	moved := false
+	for old, name := range saved {
+		k, ok := w.entKinds.Get(name)
+		if !ok {
+			panic(fmt.Sprintf("world: the save names EntKind %q, which this build no longer defines", name))
+		}
+		lut[old] = k.TypeID
+		moved = moved || k.TypeID != TypeID(old)
+	}
+	if !moved {
+		return
+	}
+
+	var typ goke.Comp[Type]
+	query := si.NewQueryBuilder(&typ).Build()
+	query.All()
+	for query.Next() {
+		cursor := query.Cursor()
+		types := typ.Slice(cursor)
+		for i := range cursor.IDs {
+			if int(types[i].ID) >= len(lut) {
+				panic(fmt.Sprintf("world: loaded entity carries TypeID %d, beyond the %d the save named", types[i].ID, len(lut)))
+			}
+			types[i].ID = lut[types[i].ID]
+		}
+	}
+}
+
 // =================================================================
 // world-specific
 // =================================================================
@@ -99,10 +161,16 @@ func (w *module) PostLoad() goke.System {
 // RegisterSpeedModifier adds m to the set VelocitySystem folds into every entity's Velocity.Value each tick.
 func (w *module) RegisterSpeedModifier(m SpeedModifier) { w.modifiers = append(w.modifiers, m) }
 
+// RegisterBehavior adds b to the decision pass that runs before movement.
+func (w *module) RegisterBehavior(b Behavior) { w.behaviors = append(w.behaviors, b) }
+
 // populate queues a spawn of one entity of kind per element of data, each element feeding kind's Load templates.
 func (w *module) populate(kind EntKind, data []any) {
 	count := len(data)
-	extras := []entityExtras{Const(Appearance{SpriteID: kind.SpriteID}).adder()}
+	extras := []entityExtras{
+		Const(Appearance{SpriteID: kind.SpriteID}).adder(),
+		Const(Type{ID: kind.TypeID}).adder(),
+	}
 	for _, c := range kind.Components {
 		extras = append(extras, c.adder())
 	}
@@ -142,9 +210,9 @@ func (w *module) populate(kind EntKind, data []any) {
 }
 
 func (w *module) validateSize(id uid.UID64, pos Position) {
-	if pos.Size.X < w.config.Entities.MinSize || pos.Size.X > w.config.Entities.MaxSize ||
-		pos.Size.Y < w.config.Entities.MinSize || pos.Size.Y > w.config.Entities.MaxSize {
-		panic(fmt.Sprintf("world: entity %d size %dx%d outside declared bounds [%d, %d]",
+	if pos.Size.X < float64(w.config.Entities.MinSize) || pos.Size.X > float64(w.config.Entities.MaxSize) ||
+		pos.Size.Y < float64(w.config.Entities.MinSize) || pos.Size.Y > float64(w.config.Entities.MaxSize) {
+		panic(fmt.Sprintf("world: entity %d size %vx%v outside declared bounds [%d, %d]",
 			id, pos.Size.X, pos.Size.Y, w.config.Entities.MinSize, w.config.Entities.MaxSize))
 	}
 }

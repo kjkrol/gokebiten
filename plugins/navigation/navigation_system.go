@@ -49,7 +49,7 @@ type navigationSystem struct {
 	grid       board.Grid
 	terrain    board.Terrain
 	occupancy  board.Occupancy
-	speed      int32
+	speed      float64
 	space      *gokg.Space
 	pathFinder *pathFinder
 
@@ -78,7 +78,7 @@ const targetWaitTimeout = 500 * time.Millisecond
 const arrivalEpsilon = 2.0
 
 // newNavigationSystem builds a navigationSystem whose base movement speed, before any world.SpeedModifier scales it, is speed world-units/sec.
-func newNavigationSystem(pathFinder *pathFinder, grid board.Grid, terrain board.Terrain, occupancy board.Occupancy, speed int32) *navigationSystem {
+func newNavigationSystem(pathFinder *pathFinder, grid board.Grid, terrain board.Terrain, occupancy board.Occupancy, speed float64) *navigationSystem {
 	return &navigationSystem{
 		grid: grid, terrain: terrain, occupancy: occupancy, speed: speed,
 		pathFinder: pathFinder,
@@ -224,12 +224,11 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 
 			velocities[i].Value = 0
 
-			if s.space != nil {
-				ix, iy := int32(dx), int32(dy)
-				if ix != 0 || iy != 0 {
-					s.space.Translate(id, &positions[i].AABB, geom.NewVec(uint32(ix), uint32(iy)))
-					snapped = true
-				}
+			// Close enough to the waypoint: step the rest of the way exactly,
+			// which a continuous world can do without rounding first.
+			if s.space != nil && (dx != 0 || dy != 0) {
+				s.space.Translate(id, &positions[i].AABB, geom.NewVec(dx, dy))
+				snapped = true
 			}
 
 			if leg.Active {

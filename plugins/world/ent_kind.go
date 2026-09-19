@@ -3,6 +3,8 @@ package world
 import (
 	"fmt"
 
+	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/render"
 	"github.com/kjkrol/uid"
 )
@@ -60,6 +62,7 @@ func (t Template[T]) resolve(data any, id uid.UID64) T {
 // this kind spawns with, each fixed (Const) or read from its roster entry (Kind.Load).
 type EntKind struct {
 	Name       string
+	TypeID     TypeID
 	SpriteID   render.SpriteID
 	Position   Template[Position]
 	Velocity   Template[Velocity]
@@ -83,16 +86,43 @@ func (k EntKind) validate(data any) error {
 type EntKindDict struct {
 	entries map[string]EntKind
 	next    render.SpriteID
+	order   []string // live: TypeID -> name, in Define order
+	saved   []string // what a save brought in; empty on a fresh run
 }
+
+var (
+	_ goke.SetupProvider  = (*EntKindDict)(nil)
+	_ plugin.Serializable = (*EntKindDict)(nil)
+)
 
 func newEntKindDict() *EntKindDict { return &EntKindDict{entries: make(map[string]EntKind)} }
 
-// Define registers the EntKind define builds, whose roster entries carry a P, assigning its SpriteID by call order.
+// SetupSystems is a no-op — the dictionary contributes no startup systems. It
+// registers with ctx.Setup only to join the Stage's tracked resources, which is
+// what gets it saved and loaded.
+func (d *EntKindDict) SetupSystems() []goke.System { return nil }
+
+// Persisted returns the TypeID -> name mapping for Persistence.Save/Load. The
+// live order is copied into a second field rather than persisted directly: a
+// load has to land somewhere that does not clobber the mapping this build just
+// built, which is what module.remapTypes compares against.
+func (d *EntKindDict) Persisted() []any {
+	d.saved = d.order
+	return []any{&d.saved}
+}
+
+// Define registers the EntKind define builds, whose roster entries carry a P,
+// assigning its TypeID and SpriteID by call order.
 func (d *EntKindDict) Define[P any](name string, define func(k Kind[P]) EntKind) {
+	if len(d.order) == MaxEntKinds {
+		panic(fmt.Sprintf("world: cannot Define %q: a dictionary holds at most %d kinds", name, MaxEntKinds))
+	}
 	k := define(Kind[P]{})
 	k.Name = name
+	k.TypeID = TypeID(len(d.order))
 	k.SpriteID = d.next
 	k.accepts = func(data any) bool { _, ok := data.(P); return ok }
+	d.order = append(d.order, name)
 	d.next++
 	d.entries[k.Name] = k
 }

@@ -7,8 +7,8 @@ import (
 	"github.com/kjkrol/gokg/plane"
 )
 
-// AABB is an alias for geom.AABB[uint32], the world-coordinate rectangle type used throughout camera/render.
-type AABB = geom.AABB[uint32]
+// AABB is an alias for geom.AABB, the world-coordinate rectangle type used throughout camera/render.
+type AABB = geom.AABB
 
 // Quad is one piece of a rectangle projected to screen space by ToScreenQuads; T0X/T1X/T0Y/T1Y give its UV sub-range.
 type Quad struct {
@@ -38,9 +38,9 @@ type Camera interface {
 	// Bounds returns the current effective (post-zoom) world-space viewport.
 	Bounds() AABB
 	// MoveTo repositions the visible window's top-left corner, keeping size.
-	MoveTo(x, y uint32)
+	MoveTo(x, y float64)
 	// Translate shifts the visible window by a signed delta.
-	Translate(dx, dy int32)
+	Translate(dx, dy float64)
 	// Zoom returns the current zoom factor (1 = default).
 	Zoom() float32
 	// ZoomIn multiplies the zoom factor by factor, keeping (anchorX, anchorY)
@@ -90,19 +90,19 @@ type State struct {
 
 // basicCamera is Camera's only implementation — construct via NewFromSpace.
 type basicCamera struct {
-	surface      plane.Space2D[uint32]
-	viewportSize geom.Vec[uint32] // fixed size at zoom 1 (e.g. screen size)
+	surface      plane.Space2D
+	viewportSize geom.Vec // fixed size at zoom 1 (e.g. screen size)
 	toroidal     bool
 	minZoomCfg   float32 // 0 = only the automatic world-fit floor applies
 	maxZoom      float32 // 0 = unrestricted
 	zoom         float32
 
-	effective plane.AABB[uint32] // the current visible window — always valid and clamped to the world
+	effective plane.AABB // the current visible window — always valid and clamped to the world
 }
 
 var _ Camera = (*basicCamera)(nil)
 
-func newBasicCamera(surface plane.Space2D[uint32], viewport AABB, toroidal bool) *basicCamera {
+func newBasicCamera(surface plane.Space2D, viewport AABB, toroidal bool) *basicCamera {
 	w := viewport.BottomRight.X - viewport.TopLeft.X
 	h := viewport.BottomRight.Y - viewport.TopLeft.Y
 	return &basicCamera{
@@ -117,18 +117,18 @@ func newBasicCamera(surface plane.Space2D[uint32], viewport AABB, toroidal bool)
 // NewFromSpace builds a Camera sized width x height (toroidal or not) — the
 // viewport defaults to the full surface at (0,0) unless one is given.
 func NewFromSpace(width, height uint32, toroidal bool, viewport ...AABB) Camera {
-	var surface plane.Space2D[uint32]
+	var surface plane.Space2D
 	if toroidal {
-		surface = plane.NewToroidal2D(width, height)
+		surface = plane.NewToroidal2D(float64(width), float64(height))
 	} else {
-		surface = plane.NewEuclidean2D(width, height)
+		surface = plane.NewEuclidean2D(float64(width), float64(height))
 	}
 	vp := AABB{}
 	if len(viewport) > 0 {
 		vp = viewport[0]
 	}
 	if vp.Equals(AABB{}) {
-		vp = geom.NewAABBAt(geom.NewVec[uint32](0, 0), width, height)
+		vp = geom.NewAABBAt(geom.NewVec(0, 0), float64(width), float64(height))
 	}
 	return newBasicCamera(surface, vp, toroidal)
 }
@@ -139,7 +139,7 @@ func NewFromSpace(width, height uint32, toroidal bool, viewport ...AABB) Camera 
 func NewFromSpaceWithConfig(width, height uint32, toroidal bool, cfg Config) Camera {
 	var viewport []AABB
 	if cfg.ViewportWidth != 0 && cfg.ViewportHeight != 0 {
-		viewport = []AABB{geom.NewAABBAt(geom.NewVec[uint32](0, 0), cfg.ViewportWidth, cfg.ViewportHeight)}
+		viewport = []AABB{geom.NewAABBAt(geom.NewVec(0, 0), float64(cfg.ViewportWidth), float64(cfg.ViewportHeight))}
 	}
 	cam := NewFromSpace(width, height, toroidal, viewport...)
 	if cfg.MinZoom > 0 {
@@ -282,18 +282,16 @@ func (c *basicCamera) Bounds() AABB {
 }
 
 // MoveTo repositions the visible window's top-left corner, keeping size.
-func (c *basicCamera) MoveTo(x, y uint32) {
-	dx := int32(int64(x) - int64(c.effective.TopLeft.X))
-	dy := int32(int64(y) - int64(c.effective.TopLeft.Y))
-	c.Translate(dx, dy)
+func (c *basicCamera) MoveTo(x, y float64) {
+	c.Translate(x-c.effective.TopLeft.X, y-c.effective.TopLeft.Y)
 }
 
 // Translate shifts the visible window by a signed delta, clamping
 // (Euclidean) or wrapping (Toroidal) it against the world via gokg's
 // Reposition — effective is the single source of truth for position, so
 // this never needs to reason about a separately-tracked reference box.
-func (c *basicCamera) Translate(dx, dy int32) {
-	c.surface.Reposition(&c.effective, geom.NewVec(uint32(dx), uint32(dy)))
+func (c *basicCamera) Translate(dx, dy float64) {
+	c.surface.Reposition(&c.effective, geom.NewVec(dx, dy))
 }
 
 // Zoom returns the current zoom factor (1 = default).
@@ -317,31 +315,26 @@ func (c *basicCamera) ZoomIn(factor float32, anchorX, anchorY float32) {
 	c.setZoom(newZoom)
 
 	afterX, afterY := c.ToScreen(anchorX, anchorY)
-	dx := int32((afterX - beforeX) / c.zoom)
-	dy := int32((afterY - beforeY) / c.zoom)
+	dx := float64((afterX - beforeX) / c.zoom)
+	dy := float64((afterY - beforeY) / c.zoom)
 	if dx != 0 || dy != 0 {
 		c.Translate(dx, dy)
 	}
 }
 
-// setZoom resizes effective for the new zoom, keeping its center fixed
-// as much as possible, then clamps it back into the world via Reposition
-// — the same mechanism Translate uses, so a center that would need a
-// negative top-left clamps correctly instead of underflowing.
+// setZoom resizes effective for the new zoom, keeping its center fixed as much
+// as possible, then clamps it back into the world via Reposition — the same
+// mechanism Translate uses, so a center that would need a negative top-left
+// clamps correctly.
 func (c *basicCamera) setZoom(zoom float32) {
-	cx := int64(c.effective.TopLeft.X) + int64(c.effective.Size.X)/2
-	cy := int64(c.effective.TopLeft.Y) + int64(c.effective.Size.Y)/2
+	cx := c.effective.TopLeft.X + c.effective.Size.X/2
+	cy := c.effective.TopLeft.Y + c.effective.Size.Y/2
 
-	w := uint32(float64(c.viewportSize.X) / float64(zoom))
-	h := uint32(float64(c.viewportSize.Y) / float64(zoom))
-
-	desiredX := cx - int64(w)/2
-	desiredY := cy - int64(h)/2
-	deltaX := int32(desiredX - int64(c.effective.TopLeft.X))
-	deltaY := int32(desiredY - int64(c.effective.TopLeft.Y))
+	w := c.viewportSize.X / float64(zoom)
+	h := c.viewportSize.Y / float64(zoom)
 
 	eff := plane.NewAABB(c.effective.TopLeft, w, h)
-	c.surface.Reposition(&eff, geom.NewVec(uint32(deltaX), uint32(deltaY)))
+	c.surface.Reposition(&eff, geom.NewVec(cx-w/2-c.effective.TopLeft.X, cy-h/2-c.effective.TopLeft.Y))
 
 	c.zoom = zoom
 	c.effective = eff

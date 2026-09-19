@@ -37,7 +37,10 @@ func (p *Plugin) Name() string { return "gokebiten.collisions" }
 func (p *Plugin) Install(ctx plugin.Installer) error {
 	space := p.worldPlugin.Space()
 
-	p.module = New(space, ctx.ECS(), p.hitExpires)
+	// Two entities closing head-on shut 2*MaxStep of gap per tick, so that is
+	// exactly how far the broad phase has to see — taken from world rather
+	// than guessed, so it follows the entity size instead of contradicting it.
+	p.module = New(space, ctx.ECS(), p.hitExpires, 2*p.worldPlugin.MaxStep())
 	if len(p.handlers) > 0 {
 		p.module.SetCollisionHandlers(p.handlers...)
 	}

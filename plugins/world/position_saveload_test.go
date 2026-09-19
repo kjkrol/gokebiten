@@ -28,7 +28,7 @@ func TestPosition_RoundTrip(t *testing.T) {
 		f.Create(1)
 		f.Next()
 		p := pos.Slice(&f.Cursor)
-		p[0] = world.Position{AABB: plane.NewAABB(geom.NewVec[uint32](12, 34), 5, 6)}
+		p[0] = world.Position{AABB: plane.NewAABB(geom.NewVec(12, 34), 5, 6)}
 	}})
 
 	ecs.Pause()

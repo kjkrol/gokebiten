@@ -17,7 +17,7 @@ import (
 )
 
 type pendingSeed struct {
-	x, y, size uint32
+	x, y, size float64
 	id         *uid.UID64
 }
 
@@ -59,7 +59,7 @@ func newHarness(t *testing.T) *harness {
 
 // seed queues an entity at world position (x,y) sized size x size — the
 // returned pointer is filled in once start() runs.
-func (h *harness) seed(x, y, size uint32) *uid.UID64 {
+func (h *harness) seed(x, y, size float64) *uid.UID64 {
 	id := new(uid.UID64)
 	h.pending = append(h.pending, pendingSeed{x: x, y: y, size: size, id: id})
 	return id
@@ -268,21 +268,21 @@ func TestSystem_DragBox_TracksLiveDragState(t *testing.T) {
 	if !dragging {
 		t.Fatal("expected dragging=true right after a press")
 	}
-	if start != geom.NewVec[int32](10, 10) || current != geom.NewVec[int32](10, 10) {
+	if start != geom.NewVec(10, 10) || current != geom.NewVec(10, 10) {
 		t.Errorf("start/current = %v/%v, want (10,10)/(10,10)", start, current)
 	}
 
-	move := &control.InputEvents{MousePos: geom.NewVec[int32](40, 60)}
+	move := &control.InputEvents{MousePos: geom.NewVec(40, 60)}
 	h.handler.HandleEvents(move)
 
 	start, current, dragging = h.state.DragBox()
 	if !dragging {
 		t.Error("expected dragging to remain true while the button is still held")
 	}
-	if start != geom.NewVec[int32](10, 10) {
+	if start != geom.NewVec(10, 10) {
 		t.Errorf("start = %v, want unchanged (10,10)", start)
 	}
-	if current != geom.NewVec[int32](40, 60) {
+	if current != geom.NewVec(40, 60) {
 		t.Errorf("current = %v, want (40,60) (updated from MousePos with no click event)", current)
 	}
 
@@ -314,12 +314,17 @@ func TestSelectionSystem_WorldBox_WrapsAcrossSeam(t *testing.T) {
 	sys := &SelectionSystem{camera: cam, space: space}
 
 	// dragging the full width of the 200px viewport spans world 950..1150.
-	box := sys.worldBox(geom.NewVec[int32](0, 0), geom.NewVec[int32](200, 10))
+	box := sys.worldBox(geom.NewVec(0, 0), geom.NewVec(200, 10))
 
-	if box.FragMask == 0 {
+	frags := 0
+	box.VisitFragments(func(plane.FragPosition, geom.AABB) bool {
+		frags++
+		return true
+	})
+	if frags == 0 {
 		t.Fatal("expected worldBox to fragment when the drag spans the wrap seam")
 	}
 	if w := box.BottomRight.X - box.TopLeft.X; w > 200 {
-		t.Errorf("worldBox main-fragment width = %d, want <= 200 (not the whole-world box independent wrapping used to produce)", w)
+		t.Errorf("worldBox main-fragment width = %v, want <= 200 (not the whole-world box independent wrapping used to produce)", w)
 	}
 }
