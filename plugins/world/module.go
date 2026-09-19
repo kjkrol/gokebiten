@@ -22,6 +22,10 @@ type module struct {
 	seeds        []goke.System
 	telemetry    Telemetry
 
+	// despawned is this tick's removals, so asking twice for the same entity
+	// costs the world one slot, not two.
+	despawned map[uid.UID64]struct{}
+
 	entKinds *EntKindDict
 
 	behaviors         []Behavior
@@ -37,7 +41,7 @@ var _ goke.Module = (*module)(nil)
 
 // newModule builds the world's topology and spatial index from cfg.
 func newModule(cfg Config) *module {
-	return &module{config: cfg, space: buildSpace(cfg)}
+	return &module{config: cfg, space: buildSpace(cfg), despawned: make(map[uid.UID64]struct{})}
 }
 
 // =================================================================
@@ -68,6 +72,7 @@ func (w *module) maxStep() float64 { return float64(w.config.Entities.MinSize) /
 // RunPlan runs world's tick: decisions first, then the movement pipeline
 // (speed modifiers, then integration) that acts on them.
 func (w *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
+	clear(w.despawned)
 	for _, b := range w.behaviorRunnables {
 		ctx.Run(b, d)
 		ctx.Sync()
@@ -163,6 +168,18 @@ func (w *module) RegisterSpeedModifier(m SpeedModifier) { w.modifiers = append(w
 
 // RegisterBehavior adds b to the decision pass that runs before movement.
 func (w *module) RegisterBehavior(b Behavior) { w.behaviors = append(w.behaviors, b) }
+
+// despawn drops id from the ECS and from the spatial index, once per tick however often it is asked.
+func (w *module) despawn(cb *goke.CmdBuf, id uid.UID64) {
+	if _, gone := w.despawned[id]; gone {
+		return
+	}
+	w.despawned[id] = struct{}{}
+	cb.RemoveOne(id)
+	w.space.Remove(id)
+	w.spawnedCount--
+	w.telemetry.Count--
+}
 
 // populate queues a spawn of one entity of kind per element of data, each element feeding kind's Load templates.
 func (w *module) populate(kind EntKind, data []any) {

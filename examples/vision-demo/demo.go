@@ -25,6 +25,7 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/stats"
 	"github.com/kjkrol/gokebiten/plugins/vision"
 	"github.com/kjkrol/gokebiten/plugins/vision/strategies/flee"
+	"github.com/kjkrol/gokebiten/plugins/vision/strategies/hunt"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
 	"github.com/kjkrol/gokg/geom"
@@ -35,13 +36,16 @@ const (
 	ScreenWidth  = 1024
 	ScreenHeight = 768
 
-	EntityCount = 40
-	RectSize    = 16
+	PreyCount = 10
+	RectSize  = 16
 
-	sightRadius  = 200
-	sightHalf    = math.Pi / 5
-	roamSpeed    = 90
-	watcherKind  = "watcher"
+	sightRadius = 200
+	sightHalf   = math.Pi / 5
+	roamSpeed   = 90
+	// The hunter is the slower one: it only ever catches what steers badly.
+	hunterSpeed  = roamSpeed * 0.9
+	preyKind     = "prey"
+	hunterKind   = "hunter"
 	backdropGrey = 40
 )
 
@@ -94,37 +98,38 @@ func (s *mainStage) Stack() game.Scenes { return s.stack }
 func (s *mainStage) Init(ctx game.Initializer) error {
 	s.world = ctx.UseWorld(world.Config{
 		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
-		Entities: world.EntitiesCfg{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize},
+		Entities: world.EntitiesCfg{MaxCount: PreyCount + 1, MinSize: RectSize, MaxSize: RectSize},
 	})
 
-	s.world.EntKindDict().Define(watcherKind, func(k world.Kind[body]) world.EntKind {
+	kinds := s.world.EntKindDict()
+	kinds.Define(preyKind, func(k world.Kind[body]) world.EntKind {
 		return world.EntKind{
 			Position: k.Load(func(b body) world.Position { return b.pos }),
 			Velocity: k.Load(func(b body) world.Velocity { return b.vel }),
-			Components: []world.ComponentTemplate{
-				// Facing is set from the entity's own heading at spawn; the
-				// scan keeps looking wherever the entity was last pointed.
-				k.Load(func(b body) vision.Sight {
-					return vision.Sight{Facing: b.vel.Dir, HalfAngle: sightHalf, Radius: sightRadius}
-				}),
-				k.Const(vision.Sighted{}),
-				k.Const(vision.SightOutline{}),
-				// Reflex holds a decision for three ticks before it acts and
-				// refuses new ones meanwhile; TurnRate keeps the swerve smooth.
+			Components: append(s.sees(k),
 				k.Const(world.Steering{Reflex: 3, TurnRate: 0.12}),
 				k.Const(flee.Skittish{}),
-				collisions.Collidable(s.world.Space()),
-				k.Const(collisions.Contacts{}),
-				k.Const(elastic.Bouncy{}),
-			},
+				k.Const(hunt.Prey{}),
+				k.Const(elastic.Bouncy{})),
+		}
+	})
+	kinds.Define(hunterKind, func(k world.Kind[body]) world.EntKind {
+		return world.EntKind{
+			Position: k.Load(func(b body) world.Position { return b.pos }),
+			Velocity: k.Load(func(b body) world.Velocity { return b.vel }),
+			Components: append(s.sees(k),
+				k.Const(world.Steering{Reflex: 1, TurnRate: 0.30}),
+				k.Const(hunt.Predator{}), k.Const(collisions.Sensor{})),
 		}
 	})
 
 	s.avoidance = flee.New()
 	s.world.RegisterBehavior(s.avoidance)
+	s.world.RegisterBehavior(hunt.New())
 	s.world.RegisterBehavior(&faceTravel{})
 	s.world.RegisterBehavior(elastic.New())
 	s.world.RegisterBehavior(stats.New(&s.hits))
+	s.world.RegisterBehavior(&eat{world: s.world})
 
 	s.vision = vision.NewPlugin(s.world)
 	s.collisions = collisions.NewPlugin(s.world)
@@ -147,20 +152,42 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	return ctx.Track(comp)
 }
 
+// sees is what every kind in this demo shares: a cone that looks where the
+// entity is going, a steady hand on the tiller, and a body that collides.
+func (s *mainStage) sees(k world.Kind[body]) []world.ComponentTemplate {
+	return []world.ComponentTemplate{
+		// Facing is set from the entity's own heading at spawn; the scan keeps
+		// looking wherever the entity was last pointed.
+		k.Load(func(b body) vision.Sight {
+			return vision.Sight{Facing: b.vel.Dir, HalfAngle: sightHalf, Radius: sightRadius}
+		}),
+		k.Const(vision.Sighted{}),
+		k.Const(vision.SightOutline{}),
+		collisions.Collidable(s.world.Space()),
+		k.Const(collisions.Contacts{}),
+	}
+}
+
 func (s *mainStage) Restore(game.Persistence) (bool, error) { return false, nil }
 
 func (s *mainStage) Spawn() error {
 	kinds := s.world.EntKindDict()
 	placement := world.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize)
 
-	entries := make([]world.Entry, EntityCount)
-	for i := range entries {
+	const total = PreyCount + 1
+	roam := func(i int, speed float64) body {
 		a := rand.Float64() * 2 * math.Pi
-		entries[i] = kinds.Entry(watcherKind, body{
-			pos: placement.Place(i, EntityCount),
-			vel: world.Velocity{Dir: geom.NewVec(math.Cos(a), math.Sin(a)), Value: roamSpeed},
-		})
+		return body{
+			pos: placement.Place(i, total),
+			vel: world.Velocity{Dir: geom.NewVec(math.Cos(a), math.Sin(a)), Value: speed},
+		}
 	}
+
+	entries := make([]world.Entry, 0, total)
+	for i := range PreyCount {
+		entries = append(entries, kinds.Entry(preyKind, roam(i, roamSpeed)))
+	}
+	entries = append(entries, kinds.Entry(hunterKind, roam(PreyCount, hunterSpeed)))
 	s.world.Seed(entries...)
 	return nil
 }
@@ -201,6 +228,34 @@ func (f *faceTravel) Update(*goke.CmdBuf, time.Duration) {
 	}
 }
 
+// eat is what a catch means in this demo: the hunter touches a prey, and the
+// prey is gone. This is the collision reaction the engine deliberately leaves
+// to the game — Contacts names who was struck, world.Despawn takes it out.
+type eat struct {
+	world    *world.Plugin
+	query    *goke.Query
+	contacts goke.Comp[collisions.Contacts]
+}
+
+var _ world.Behavior = (*eat)(nil)
+
+func (e *eat) Init(si *goke.SysInit) {
+	e.query = si.NewQueryBuilder(&e.contacts).Include(goke.Include[hunt.Predator]()).Build()
+}
+
+func (e *eat) Update(cb *goke.CmdBuf, _ time.Duration) {
+	e.query.All()
+	for e.query.Next() {
+		cursor := e.query.Cursor()
+		contacts := e.contacts.Slice(cursor)
+		for i := range cursor.IDs {
+			for _, caught := range contacts[i].All() {
+				e.world.Despawn(cb, caught.Other)
+			}
+		}
+	}
+}
+
 // =========================== Scene ===========================
 
 type mainScene struct {
@@ -218,8 +273,10 @@ func (m *mainScene) Layers() []func() render.Renderer {
 
 	kinds := s.world.EntKindDict()
 	atlas := render.NewAtlas(RectSize, len(kinds.All()))
-	watcher, _ := kinds.Get(watcherKind)
-	atlas.RegisterAt(watcher.SpriteID, render.Solid(color.RGBA{R: 120, G: 190, B: 255, A: 255}))
+	prey, _ := kinds.Get(preyKind)
+	hunter, _ := kinds.Get(hunterKind)
+	atlas.RegisterAt(prey.SpriteID, render.Solid(color.RGBA{R: 120, G: 190, B: 255, A: 255}))
+	atlas.RegisterAt(hunter.SpriteID, render.Solid(color.RGBA{R: 225, G: 70, B: 70, A: 255}))
 	atlas.Close()
 	s.world.WithRenderer(atlas)
 	s.vision.WithRenderer(atlas)

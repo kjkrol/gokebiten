@@ -115,9 +115,10 @@ shows how much of it is boilerplate vs. real behavior.
   `ctx.UseWorld(cfg)` in `Init`, once (a second call panics); `cfg` sizes
   the space, toroidality, entity bounds and camera, and a Stage that never
   calls it gets no world:
-  Position/Velocity/Appearance, entity spawning, the shared `*gokg.Space`
-  index, per-tick movement, and the shared `camera.Camera` (a root package,
-  not a plugin of its own) exposed via `world.Plugin.Camera()`.
+  Position/Velocity/Appearance, entity spawning and `Despawn` (which clears
+  both the ECS and the index, so nothing goes on seeing a ghost), the shared
+  `*gokg.Space` index, per-tick movement, and the shared `camera.Camera` (a
+  root package, not a plugin of its own) exposed via `world.Plugin.Camera()`.
 - **`board`** — optional grid + terrain over `world`; depends on `world`.
 - **`collisions`** — optional broad/narrow-phase physics over `world`'s
   space; handler strategies live under `collisions/strategies/*`. Optional

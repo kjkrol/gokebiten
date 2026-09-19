@@ -30,7 +30,12 @@ func (c *installCtx) Setup(providers ...goke.SetupProvider) {
 func (c *installCtx) RegSys(f func() goke.System) goke.Runnable { return c.ecs.RegSys(f()) }
 func (c *installCtx) ECS() *goke.ECS                            { return c.ecs }
 
-type body struct{ x, y float64 }
+// body is a test entity: where it is, and which way it is going — a zero dir
+// is something standing still.
+type body struct {
+	x, y float64
+	dir  geom.Vec
+}
 
 func at(d body) world.Position {
 	return world.Position{AABB: plane.NewAABB(geom.NewVec(d.x, d.y), 10, 10)}
@@ -80,7 +85,12 @@ func runWith(t *testing.T, tune func(*flee.Behavior), runner body, facing geom.V
 		}
 	})
 	dict.Define("threat", func(k world.Kind[body]) world.EntKind {
-		return world.EntKind{Position: k.Load(at), Velocity: k.Const(world.Velocity{})}
+		return world.EntKind{Position: k.Load(at), Velocity: k.Load(func(d body) world.Velocity {
+			if d.dir == (geom.Vec{}) {
+				return world.Velocity{}
+			}
+			return world.Velocity{Dir: d.dir, Value: 1}
+		})}
 	})
 
 	w.Seed(dict.Entry("runner", runner))
@@ -117,7 +127,8 @@ func runWith(t *testing.T, tune func(*flee.Behavior), runner body, facing geom.V
 
 func heading(v geom.Vec) float64 { return math.Atan2(v.Y, v.X) }
 
-// One threat dead ahead: the runner must end up heading away from it.
+// One threat dead ahead: the runner is going straight at it, so it must end up
+// heading away instead.
 func TestFlee_TurnsAwayFromWhatItSees(t *testing.T) {
 	east := geom.NewVec(1.0, 0.0)
 	got := run(t, body{x: 500, y: 500}, east, body{x: 800, y: 500})
@@ -158,5 +169,31 @@ func TestFlee_SwitchedOffLeavesTheHeadingAlone(t *testing.T) {
 
 	if got != east {
 		t.Errorf("heading %v with the behavior off, want it untouched (%v)", got, east)
+	}
+}
+
+// Something standing well off to one side is no threat at all: the runner is
+// not going at it, and it is not coming, so the heading is left alone.
+func TestFlee_IgnoresWhatItMerelyPassesBy(t *testing.T) {
+	east := geom.NewVec(1.0, 0.0)
+	// 65 degrees off the runner's course — inside the cone, outside the swerve.
+	if got := run(t, body{x: 500, y: 500}, east, body{x: 600, y: 714}); got != east {
+		t.Errorf("heading %v, want it untouched (%v) — nothing here is on a collision course", got, east)
+	}
+}
+
+// The other half of the rule: the runner is not going at it, but it is coming
+// at the runner, and that is just as much a reason to move.
+func TestFlee_TurnsAwayFromWhatIsComingAtIt(t *testing.T) {
+	east := geom.NewVec(1.0, 0.0)
+	towards := geom.NewVec(100, 214) // runner -> threat, the same 65 degrees off course
+	closing := geom.NewVec(-towards.X, -towards.Y)
+	norm := math.Hypot(closing.X, closing.Y)
+	closing = geom.NewVec(closing.X/norm, closing.Y/norm)
+
+	got := run(t, body{x: 500, y: 500}, east, body{x: 600, y: 714, dir: closing})
+
+	if math.Abs(heading(got)-heading(closing)) > 1e-6 {
+		t.Errorf("heading %.4f rad, want %.4f — straight away from what is closing in", heading(got), heading(closing))
 	}
 }

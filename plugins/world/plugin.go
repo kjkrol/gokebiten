@@ -10,6 +10,7 @@ import (
 	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/render"
 	"github.com/kjkrol/gokg"
+	"github.com/kjkrol/uid"
 )
 
 // Resources is world's single published Resources.
@@ -144,6 +145,10 @@ func (p *Plugin) Populate() error {
 	p.seeded = nil
 	return nil
 }
+
+// Despawn takes an entity out of the world: out of the ECS at the end of the
+// tick, and out of the shared spatial index, so nothing goes on seeing a ghost.
+func (p *Plugin) Despawn(cb *goke.CmdBuf, id uid.UID64) { p.module.despawn(cb, id) }
 
 // Space returns world's shared spatial index — every Populate entity is kept in sync with it.
 func (p *Plugin) Space() *gokg.Space { return p.module.space }
