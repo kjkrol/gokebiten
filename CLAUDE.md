@@ -120,8 +120,13 @@ shows how much of it is boilerplate vs. real behavior.
   not a plugin of its own) exposed via `world.Plugin.Camera()`.
 - **`board`** — optional grid + terrain over `world`; depends on `world`.
 - **`collisions`** — optional broad/narrow-phase physics over `world`'s
-  space; handler strategies live under `collisions/strategies/*`. Depends
-  on `world`.
+  space; handler strategies live under `collisions/strategies/*`. Optional
+  `Mass`/`Restitution` components tune an entity's bounce (a side that
+  cannot move counts as infinitely heavy); separation itself is always an
+  even split. Game logic never goes in a `CollisionHandler` — an entity
+  given `Contacts` has what it struck published there each tick, and reacts
+  from a `world.Behavior` (`strategies/hit` is one, showing a hit for a
+  while after the contact). Depends on `world`.
 - **`navigation`** — pathfinding/movement toward a `MoveOrder` across a
   `board`. Depends on `board` and `world`.
 - **`selection`** — mouse click/drag → `Selected` tag on `world` entities.

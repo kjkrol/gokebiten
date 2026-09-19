@@ -1,6 +1,7 @@
 package collisions
 
 import (
+	"math"
 	"time"
 
 	"github.com/kjkrol/goke/v3"
@@ -15,28 +16,33 @@ import (
 var _ goke.System = (*NarrowPhase)(nil)
 
 type NarrowPhase struct {
-	space       *gokg.Space
-	handler     CollisionHandler
-	hitDuration time.Duration
+	space *gokg.Space
 
-	hitQry     *goke.Query
-	pos        goke.Comp[world.Position]
-	vel        goke.Comp[world.Velocity]
-	hitTag     goke.Comp[Hit]
-	collision  goke.Comp[Collision]
-	hitExpires goke.OptComp[HitExpires]
+	touchQry    *goke.Query
+	pos         goke.Comp[world.Position]
+	vel         goke.Comp[world.Velocity]
+	collision   goke.Comp[Collision]
+	mass        goke.OptComp[Mass]
+	restitution goke.OptComp[Restitution]
+	contacts    goke.OptComp[Contacts]
 
-	dynQry *goke.Query
-	dynPos goke.Comp[world.Position]
-	dynVel goke.Comp[world.Velocity]
+	dynQry         *goke.Query
+	dynPos         goke.Comp[world.Position]
+	dynVel         goke.Comp[world.Velocity]
+	dynMass        goke.OptComp[Mass]
+	dynRestitution goke.OptComp[Restitution]
+	dynContacts    goke.OptComp[Contacts]
 
-	staticQuery *goke.Query
-	staticPos   goke.Comp[world.Position]
+	staticQuery       *goke.Query
+	staticPos         goke.Comp[world.Position]
+	staticRestitution goke.OptComp[Restitution]
 
 	sensorIDs map[uid.UID64]struct{}
 	staticIDs map[uid.UID64]struct{}
 
-	removeEditor *goke.Editor
+	// pending is what each side's velocity has already gained this tick, so a
+	// second contact is resolved against the first rather than beside it.
+	pending map[uid.UID64]geom.Vec
 
 	// solver holds this tick's geometry, sides the identities and components
 	// that go with it. The two are filled in lockstep, so a pair's index in
@@ -45,27 +51,23 @@ type NarrowPhase struct {
 	sides  []pairSides
 
 	dynSeeded, staticSeeded bool
-
-	confirmed map[uid.UID64]bool
 }
 
-func NewNarrowPhase(space *gokg.Space, handler CollisionHandler, hitDuration time.Duration) *NarrowPhase {
+func NewNarrowPhase(space *gokg.Space) *NarrowPhase {
 	return &NarrowPhase{
-		space: space, handler: handler, hitDuration: hitDuration,
-		confirmed: make(map[uid.UID64]bool),
+		space:     space,
 		sensorIDs: make(map[uid.UID64]struct{}),
 		staticIDs: make(map[uid.UID64]struct{}),
+		pending:   make(map[uid.UID64]geom.Vec),
 	}
 }
 
 func (n *NarrowPhase) Init(si *goke.SysInit) {
-	n.hitQry = si.NewQueryBuilder(&n.pos, &n.vel, &n.hitTag, &n.collision).Optional(&n.hitExpires).Build()
-	n.dynQry = si.NewQueryBuilder(&n.dynPos, &n.dynVel).Build()
-	n.staticQuery = si.NewQueryBuilder(&n.staticPos).Build()
-	if init, ok := n.handler.(Initializer); ok {
-		init.Init(si)
-	}
-	n.removeEditor = n.hitQry.NewEditorBuilder().Remove(goke.Remove[Hit]()).Build()
+	n.touchQry = si.NewQueryBuilder(&n.pos, &n.vel, &n.collision).
+		Optional(&n.mass, &n.restitution, &n.contacts).Build()
+	n.dynQry = si.NewQueryBuilder(&n.dynPos, &n.dynVel).
+		Optional(&n.dynMass, &n.dynRestitution, &n.dynContacts).Build()
+	n.staticQuery = si.NewQueryBuilder(&n.staticPos).Optional(&n.staticRestitution).Build()
 	sensorQry := si.NewQueryBuilder().Include(goke.Include[Sensor]()).Build()
 	sensorQry.All()
 	for sensorQry.Next() {
@@ -94,15 +96,26 @@ type contactSide struct {
 	Entity uid.UID64
 	Pos    *world.Position
 	Vel    *world.Velocity
+	// Mass is +Inf for a side with no Velocity — the whole bounce goes to the other one.
+	Mass        float64
+	Restitution float64
+	// Contacts is nil unless this side asked to be told what it struck.
+	Contacts *Contacts
 }
 
-func (n *NarrowPhase) Update(cb *goke.CmdBuf, _ time.Duration) {
+// at is the i-th entry of an optional component's chunk slice, nil when the chunk carries none.
+func at[T any](s []T, i int) *T {
+	if i >= len(s) {
+		return nil
+	}
+	return &s[i]
+}
+
+func (n *NarrowPhase) Update(_ *goke.CmdBuf, _ time.Duration) {
 	const solverIterations = 16
-	clear(n.confirmed)
 
 	n.pair()
-	n.solve(cb, solverIterations)
-	n.finalizeHitTags(cb)
+	n.solve(solverIterations)
 }
 
 func (n *NarrowPhase) isSensor(id uid.UID64) bool {
@@ -120,35 +133,43 @@ func (n *NarrowPhase) pair() {
 	n.solver.Reset()
 	n.sides = n.sides[:0]
 
-	n.hitQry.All()
-	for n.hitQry.Next() {
-		cursor := n.hitQry.Cursor()
+	n.touchQry.All()
+	for n.touchQry.Next() {
+		cursor := n.touchQry.Cursor()
 		posSlice := n.pos.Slice(cursor)
 		velSlice := n.vel.Slice(cursor)
 		collisionSlice := n.collision.Slice(cursor)
+		massSlice := n.mass.Slice(cursor)
+		restitutionSlice := n.restitution.Slice(cursor)
+		contactsSlice := n.contacts.Slice(cursor)
 		for i, entityA := range cursor.IDs {
 			p, v, c := &posSlice[i], &velSlice[i], &collisionSlice[i]
-			n.confirmed[entityA] = false
+			if c.TouchingCount == 0 {
+				continue
+			}
+			sideA := contactSide{
+				Entity: entityA, Pos: p, Vel: v,
+				Mass:        massOf(at(massSlice, i)),
+				Restitution: restitutionOf(at(restitutionSlice, i)),
+				Contacts:    at(contactsSlice, i),
+			}
 
 			for ti := uint8(0); ti < c.TouchingCount; ti++ {
 				entityB := c.Touching[ti]
 				if entityA.Index() >= entityB.Index() {
 					continue
 				}
-				posB, velB, ok := n.resolveB(entityB)
+				sideB, ok := n.resolveB(entityB)
 				if !ok {
 					continue
 				}
+				sensor := n.isSensor(entityA) || n.isSensor(entityB)
 				n.solver.Add(collide.Pair{
-					A: &p.AABB, B: &posB.AABB,
-					StaticB: velB == nil,
-					Sensor:  n.isSensor(entityA) || n.isSensor(entityB),
+					A: &p.AABB, B: &sideB.Pos.AABB,
+					StaticB: sideB.Vel == nil,
+					Sensor:  sensor,
 				})
-				n.sides = append(n.sides, pairSides{
-					A:      contactSide{Entity: entityA, Pos: p, Vel: v},
-					B:      contactSide{Entity: entityB, Pos: posB, Vel: velB},
-					sensor: n.isSensor(entityA) || n.isSensor(entityB),
-				})
+				n.sides = append(n.sides, pairSides{A: sideA, B: sideB, sensor: sensor})
 			}
 
 			c.clear()
@@ -163,55 +184,90 @@ func (n *NarrowPhase) pair() {
 // existing entity), so a "try dynQry.Seek, fall back to staticQuery.Seek"
 // probe would always succeed on the first try and read garbage bytes as a
 // static entity's Velocity.
-func (n *NarrowPhase) resolveB(id uid.UID64) (pos *world.Position, vel *world.Velocity, ok bool) {
+func (n *NarrowPhase) resolveB(id uid.UID64) (contactSide, bool) {
 	if n.isStatic(id) {
-		ok = n.staticSeeded && n.staticQuery.SeekH(id)
+		ok := n.staticSeeded && n.staticQuery.SeekH(id)
 		if !ok {
 			ok = n.staticQuery.Seek(id)
 			n.staticSeeded = ok
 		}
 		if !ok {
-			return nil, nil, false
+			return contactSide{}, false
 		}
-		return n.staticPos.At(n.staticQuery.Cursor()), nil, true
+		cur := n.staticQuery.Cursor()
+		return contactSide{
+			Entity: id, Pos: n.staticPos.At(cur),
+			Mass:        math.Inf(1),
+			Restitution: restitutionOf(n.staticRestitution.At(cur)),
+		}, true
 	}
 
-	ok = n.dynSeeded && n.dynQry.SeekH(id)
+	ok := n.dynSeeded && n.dynQry.SeekH(id)
 	if !ok {
 		ok = n.dynQry.Seek(id)
 		n.dynSeeded = ok
 	}
 	if !ok {
-		return nil, nil, false
+		return contactSide{}, false
 	}
 	cur := n.dynQry.Cursor()
-	return n.dynPos.At(cur), n.dynVel.At(cur), true
+	return contactSide{
+		Entity: id, Pos: n.dynPos.At(cur), Vel: n.dynVel.At(cur),
+		Mass:        massOf(n.dynMass.At(cur)),
+		Restitution: restitutionOf(n.dynRestitution.At(cur)),
+		Contacts:    n.dynContacts.At(cur),
+	}, true
 }
 
-func (n *NarrowPhase) solve(cb *goke.CmdBuf, solverIterations int) {
+func (n *NarrowPhase) solve(solverIterations int) {
+	clear(n.pending)
+
 	n.space.Resolve(&n.solver, solverIterations, func(i int, pen geom.Vec) {
 		sides := &n.sides[i]
 
-		// Confirmation is about "something struck me" and holds for a sensor
-		// contact too; only the physical reaction is withheld from one.
-		if _, ok := n.confirmed[sides.A.Entity]; ok {
-			n.confirmed[sides.A.Entity] = true
+		normal, aligned := normalOf(pen)
+		var impact float64
+		if aligned && !sides.sensor {
+			impact = n.exchange(sides.A, sides.B, normal)
 		}
-		if _, ok := n.confirmed[sides.B.Entity]; ok {
-			n.confirmed[sides.B.Entity] = true
+		// The normal points the way A leaves B, so B is told the opposite —
+		// each side then reads its own contact as "this is where I go".
+		if sides.A.Contacts != nil {
+			sides.A.Contacts.add(sides.B.Entity, impact, normal)
 		}
-		if sides.sensor || n.handler == nil {
-			return
+		if sides.B.Contacts != nil {
+			sides.B.Contacts.add(sides.A.Entity, impact, geom.NewVec(-normal.X, -normal.Y))
 		}
-		n.handler.OnCollision(cb, CollisionEvent{
-			EntityA: sides.A.Entity, EntityB: sides.B.Entity,
-			PosA: sides.A.Pos, PosB: sides.B.Pos,
-			VelA: sides.A.Vel, VelB: sides.B.Vel,
-			Penetration: pen,
-		})
 	})
 	n.reindexMoved()
 	n.space.Flush(nil)
+}
+
+// exchange is the impulse this contact trades along normal, booked against both
+// sides so the ones after it start from what it left behind.
+func (n *NarrowPhase) exchange(a, b contactSide, normal geom.Vec) float64 {
+	deltaA, deltaB := n.velocityOf(a), n.velocityOf(b)
+	impact := impactOf(a, b, deltaA, deltaB, normal)
+	if impact == 0 {
+		return 0
+	}
+	if inv := inverseMass(a); inv != 0 {
+		n.pending[a.Entity] = plus(n.pending[a.Entity], impact*inv, normal)
+	}
+	if inv := inverseMass(b); inv != 0 {
+		n.pending[b.Entity] = plus(n.pending[b.Entity], -impact*inv, normal)
+	}
+	return impact
+}
+
+// velocityOf is the side's velocity with this tick's earlier contacts folded in.
+func (n *NarrowPhase) velocityOf(s contactSide) geom.Vec {
+	return plus(deltaOf(s.Vel), 1, n.pending[s.Entity])
+}
+
+// plus is v plus scale times add.
+func plus(v geom.Vec, scale float64, add geom.Vec) geom.Vec {
+	return geom.NewVec(v.X+scale*add.X, v.Y+scale*add.Y)
 }
 
 // reindexMoved tells the spatial index where the boxes the solver pushed
@@ -229,40 +285,4 @@ func (n *NarrowPhase) reindexMoved() {
 			n.space.Reindex(sides.B.Entity, sides.B.Pos.AABB)
 		}
 	})
-}
-
-func (n *NarrowPhase) finalizeHitTags(cb *goke.CmdBuf) {
-	now := time.Now()
-	defaultUntil := now.Add(n.hitDuration)
-
-	n.hitQry.All()
-	for n.hitQry.Next() {
-		cursor := n.hitQry.Cursor()
-		tags := n.hitTag.Slice(cursor)
-		hasOverride := n.hitExpires.Present(cursor)
-		var overrides []HitExpires
-		if hasOverride {
-			overrides = n.hitExpires.Slice(cursor)
-		}
-		buf := n.hitQry.BeginMigrate(cb)
-		for i, id := range cursor.IDs {
-			confirmedThisTick, tracked := n.confirmed[id]
-			if !tracked {
-				continue
-			}
-			if confirmedThisTick {
-				until := defaultUntil
-				if hasOverride {
-					until = now.Add(overrides[i].Duration)
-				}
-				tags[i].SetExpiresAt(until)
-				continue
-			}
-			if tags[i].HasExpiry() {
-				continue
-			}
-			buf.Add(id)
-		}
-		buf.Commit(n.removeEditor)
-	}
 }

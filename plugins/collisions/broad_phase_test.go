@@ -87,12 +87,18 @@ func seedMovingCollidableEntity(t *testing.T, si *goke.SysInit, space *gokg.Spac
 	return id
 }
 
-func hasHit(q *goke.Query) map[uid.UID64]bool {
+// recorded reports which entities q matched came out of the tick with at
+// least one candidate to their name.
+func recorded(q *goke.Query, comp goke.Comp[collisions.Collision]) map[uid.UID64]bool {
 	found := map[uid.UID64]bool{}
 	q.All()
 	for q.Next() {
-		for _, id := range q.Cursor().IDs {
-			found[id] = true
+		cur := q.Cursor()
+		slice := comp.Slice(cur)
+		for i, id := range cur.IDs {
+			if slice[i].TouchingCount > 0 {
+				found[id] = true
+			}
 		}
 	}
 	return found
@@ -106,14 +112,14 @@ func TestBroadPhase_Update_DetectsOverlappingNeighbors(t *testing.T) {
 	space := testSpace(t)
 	ecs := goke.New()
 	var idA, idB uid.UID64
-	var hitQ *goke.Query
-	var hitTag goke.Comp[collisions.Hit]
+	var candidateQ *goke.Query
+	var candidates goke.Comp[collisions.Collision]
 
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		idA = seedBroadPhaseEntity(t, si, space, posAt(0, 0, 10, 10))
 		idB = seedBroadPhaseEntity(t, si, space, posAt(5, 0, 10, 10)) // overlaps A by 5px
 		space.Flush(nil)
-		hitQ = si.NewQueryBuilder(&hitTag).Build()
+		candidateQ = si.NewQueryBuilder(&candidates).Build()
 	}})
 
 	bp := collisions.NewBroadPhase(space, testProbeMargin)
@@ -124,24 +130,24 @@ func TestBroadPhase_Update_DetectsOverlappingNeighbors(t *testing.T) {
 	})
 	ecs.Tick(time.Millisecond)
 
-	got := hasHit(hitQ)
+	got := recorded(candidateQ, candidates)
 	if !got[idA] || !got[idB] {
-		t.Errorf("expected both overlapping entities to get a Hit tag, got %v (idA=%v idB=%v)", got, idA, idB)
+		t.Errorf("expected both overlapping entities to record a candidate, got %v (idA=%v idB=%v)", got, idA, idB)
 	}
 }
 
-func TestBroadPhase_Update_NoOverlap_NoHitAdded(t *testing.T) {
+func TestBroadPhase_Update_NoOverlap_NothingRecorded(t *testing.T) {
 	space := testSpace(t)
 	ecs := goke.New()
 	var idA, idB uid.UID64
-	var hitQ *goke.Query
-	var hitTag goke.Comp[collisions.Hit]
+	var candidateQ *goke.Query
+	var candidates goke.Comp[collisions.Collision]
 
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		idA = seedBroadPhaseEntity(t, si, space, posAt(0, 0, 10, 10))
 		idB = seedBroadPhaseEntity(t, si, space, posAt(900, 900, 10, 10)) // far away
 		space.Flush(nil)
-		hitQ = si.NewQueryBuilder(&hitTag).Build()
+		candidateQ = si.NewQueryBuilder(&candidates).Build()
 	}})
 
 	bp := collisions.NewBroadPhase(space, testProbeMargin)
@@ -152,9 +158,9 @@ func TestBroadPhase_Update_NoOverlap_NoHitAdded(t *testing.T) {
 	})
 	ecs.Tick(time.Millisecond)
 
-	got := hasHit(hitQ)
+	got := recorded(candidateQ, candidates)
 	if got[idA] || got[idB] {
-		t.Errorf("expected neither distant entity to get a Hit tag, got %v", got)
+		t.Errorf("expected neither distant entity to record a candidate, got %v", got)
 	}
 }
 
@@ -162,13 +168,13 @@ func TestBroadPhase_Update_SingleEntity_SelfExcluded(t *testing.T) {
 	space := testSpace(t)
 	ecs := goke.New()
 	var id uid.UID64
-	var hitQ *goke.Query
-	var hitTag goke.Comp[collisions.Hit]
+	var candidateQ *goke.Query
+	var candidates goke.Comp[collisions.Collision]
 
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		id = seedBroadPhaseEntity(t, si, space, posAt(0, 0, 10, 10))
 		space.Flush(nil)
-		hitQ = si.NewQueryBuilder(&hitTag).Build()
+		candidateQ = si.NewQueryBuilder(&candidates).Build()
 	}})
 
 	bp := collisions.NewBroadPhase(space, testProbeMargin)
@@ -179,7 +185,7 @@ func TestBroadPhase_Update_SingleEntity_SelfExcluded(t *testing.T) {
 	})
 	ecs.Tick(time.Millisecond)
 
-	if got := hasHit(hitQ); got[id] {
+	if got := recorded(candidateQ, candidates); got[id] {
 		t.Errorf("expected a lone entity to never touch itself, got %v", got)
 	}
 }
@@ -236,14 +242,14 @@ func TestBroadPhase_Update_DetectsEntityMovedByMoveSystem(t *testing.T) {
 	space := testSpace(t)
 	ecs := goke.New()
 	var idA, idB uid.UID64
-	var hitQ *goke.Query
-	var hitTag goke.Comp[collisions.Hit]
+	var candidateQ *goke.Query
+	var candidates goke.Comp[collisions.Collision]
 
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		idA = seedMovingCollidableEntity(t, si, space, posAt(0, 0, 10, 10), world.Velocity{Dir: geom.NewVec(1, 0), Value: 105})
 		idB = seedBroadPhaseEntity(t, si, space, posAt(100, 0, 10, 10)) // far from idA's start, not yet overlapping
 		space.Flush(nil)
-		hitQ = si.NewQueryBuilder(&hitTag).Build()
+		candidateQ = si.NewQueryBuilder(&candidates).Build()
 	}})
 
 	moveSystem := world.NewMoveSystem(space, 0)
@@ -258,7 +264,7 @@ func TestBroadPhase_Update_DetectsEntityMovedByMoveSystem(t *testing.T) {
 
 	ecs.Tick(time.Second) // idA moves 105 units, landing 5px into idB
 
-	got := hasHit(hitQ)
+	got := recorded(candidateQ, candidates)
 	if !got[idA] || !got[idB] {
 		t.Errorf("expected BroadPhase to detect idA after MoveSystem moved it into idB, got %v (idA=%v idB=%v)", got, idA, idB)
 	}

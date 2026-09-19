@@ -15,6 +15,7 @@ import (
 	"github.com/kjkrol/gokebiten/game"
 	"github.com/kjkrol/gokebiten/plugins/collisions"
 	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/elastic"
+	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/hit"
 	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/stats"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
@@ -26,6 +27,10 @@ const (
 	ScreenHeight = 1024
 
 	saveBasePath = "collision-demo"
+
+	// hitDuration is how long an entity keeps showing a collision — long
+	// enough to see at this tick rate, short enough to look like a flash.
+	hitDuration = 100 * time.Millisecond
 )
 
 // rng is where every random choice in this demo comes from. It is a variable
@@ -114,17 +119,24 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 		for si := range entityShapes {
 			kinds.Define(entityKindName(ci, si), func(k world.Kind[body]) world.EntKind {
 				return world.EntKind{
-					Position:   k.Load(func(b body) world.Position { return b.pos }),
-					Velocity:   k.Load(func(b body) world.Velocity { return b.vel }),
-					Components: []world.ComponentTemplate{collisions.Collidable(s.world.Space())},
+					Position: k.Load(func(b body) world.Position { return b.pos }),
+					Velocity: k.Load(func(b body) world.Velocity { return b.vel }),
+					Components: []world.ComponentTemplate{
+						collisions.Collidable(s.world.Space()),
+						k.Const(collisions.Contacts{}),
+						k.Const(elastic.Bouncy{}),
+						k.Const(hit.Mark{Duration: hitDuration}),
+					},
 				}
 			})
 		}
 	}
 	kinds.Define(hitKind, func(world.Kind[struct{}]) world.EntKind { return world.EntKind{} })
 
-	s.collisions = collisions.NewPlugin(100*time.Millisecond, s.world).
-		SetCollisionHandlers(elastic.NewHandler(), stats.NewHandler(&s.collisionStats))
+	s.world.RegisterBehavior(elastic.New())
+	s.world.RegisterBehavior(stats.New(&s.collisionStats))
+	s.world.RegisterBehavior(hit.New(hitDuration))
+	s.collisions = collisions.NewPlugin(s.world)
 	s.state = &State{}
 	if err := ctx.Use(s.collisions); err != nil {
 		return err
@@ -208,8 +220,8 @@ func (m *mainScene) Layers() []func() render.Renderer {
 			atlas.RegisterAt(kind.SpriteID, shape(c))
 		}
 	}
-	hit, _ := kinds.Get(hitKind)
-	atlas.RegisterAt(hit.SpriteID, render.Solid(palette[entityColors]))
+	hitSprite, _ := kinds.Get(hitKind)
+	atlas.RegisterAt(hitSprite.SpriteID, render.Solid(palette[entityColors]))
 	atlas.Close()
 	s.world.WithRenderer(atlas)
 
@@ -222,7 +234,7 @@ func (m *mainScene) Layers() []func() render.Renderer {
 		},
 		func() render.Renderer {
 			return s.world.EntityRenderer().
-				WithOverlay[collisions.Hit](world.Appearance{SpriteID: hit.SpriteID})
+				WithStrategy(hit.Overlay(world.Appearance{SpriteID: hitSprite.SpriteID}))
 		},
 		func() render.Renderer {
 			kin := s.world.Res.Telemetry

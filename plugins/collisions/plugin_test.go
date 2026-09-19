@@ -14,7 +14,7 @@ func testWorldPlugin() *world.Plugin {
 }
 
 func TestPlugin_Name(t *testing.T) {
-	p := NewPlugin(0, testWorldPlugin())
+	p := NewPlugin(testWorldPlugin())
 	if p.Name() != "gokebiten.collisions" {
 		t.Errorf("Name() = %q, want %q", p.Name(), "gokebiten.collisions")
 	}

@@ -35,8 +35,6 @@ const (
 	ScreenWidth  = 1024
 	ScreenHeight = 768
 
-	// Few entities on purpose: a scan costs far more than a contact test, and
-	// the point here is to watch individual courses bend, not to fill a screen.
 	EntityCount = 40
 	RectSize    = 16
 
@@ -116,6 +114,8 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 				k.Const(world.Steering{Reflex: 3, TurnRate: 0.12}),
 				k.Const(flee.Skittish{}),
 				collisions.Collidable(s.world.Space()),
+				k.Const(collisions.Contacts{}),
+				k.Const(elastic.Bouncy{}),
 			},
 		}
 	})
@@ -123,10 +123,11 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	s.avoidance = flee.New()
 	s.world.RegisterBehavior(s.avoidance)
 	s.world.RegisterBehavior(&faceTravel{})
+	s.world.RegisterBehavior(elastic.New())
+	s.world.RegisterBehavior(stats.New(&s.hits))
 
 	s.vision = vision.NewPlugin(s.world)
-	s.collisions = collisions.NewPlugin(150*time.Millisecond, s.world).
-		SetCollisionHandlers(elastic.NewHandler(), stats.NewHandler(&s.hits))
+	s.collisions = collisions.NewPlugin(s.world)
 
 	if err := ctx.Use(s.vision); err != nil {
 		return err

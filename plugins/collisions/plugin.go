@@ -11,21 +11,17 @@ import (
 )
 
 // Plugin wires the collision engine into a Game — optional, borrows world.Plugin's own Space.
-// Must never import collisions/strategies/*; compose handlers via SetCollisionHandlers instead.
+// Must never import collisions/strategies/*; a game registers those as world behaviors.
 type Plugin struct {
-	handlers    []CollisionHandler
-	hitExpires  time.Duration
 	worldPlugin *world.Plugin
 	module      *module
 }
 
 var _ plugin.Plugin = (*Plugin)(nil)
 
-// NewPlugin builds the collisions plugin over worldPlugin's shared spatial
-// index — hitExpires is the default Hit lifetime for entities that don't
-// supply their own HitExpires (0 for a Hit that never auto-expires on its own).
-func NewPlugin(hitExpires time.Duration, worldPlugin *world.Plugin) *Plugin {
-	return &Plugin{hitExpires: hitExpires, worldPlugin: worldPlugin}
+// NewPlugin builds the collisions plugin over worldPlugin's shared spatial index.
+func NewPlugin(worldPlugin *world.Plugin) *Plugin {
+	return &Plugin{worldPlugin: worldPlugin}
 }
 
 // =================================================================
@@ -40,11 +36,7 @@ func (p *Plugin) Install(ctx plugin.Installer) error {
 	// Two entities closing head-on shut 2*MaxStep of gap per tick, so that is
 	// exactly how far the broad phase has to see — taken from world rather
 	// than guessed, so it follows the entity size instead of contradicting it.
-	p.module = New(space, ctx.ECS(), p.hitExpires, 2*p.worldPlugin.MaxStep())
-	if len(p.handlers) > 0 {
-		p.module.SetCollisionHandlers(p.handlers...)
-	}
-
+	p.module = New(space, ctx.ECS(), 2*p.worldPlugin.MaxStep())
 	ctx.UseModule(p.module)
 	return nil
 }
@@ -63,12 +55,3 @@ func (p *Plugin) EventHandler() control.EventHandler { return nil }
 
 // Serializable is a no-op — collisions has nothing to persist.
 func (p *Plugin) Serializable() plugin.Serializable { return nil }
-
-// =================================================================
-// collisions-specific
-// =================================================================
-
-func (p *Plugin) SetCollisionHandlers(handlers ...CollisionHandler) *Plugin {
-	p.handlers = handlers
-	return p
-}

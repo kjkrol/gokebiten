@@ -21,17 +21,16 @@ const CanCollide gokg.Capability = 1 << 1
 
 var _ goke.System = (*BroadPhase)(nil)
 
-// BroadPhase records, for every collidable entity, who is close enough to be
-// worth a real overlap test this tick — the candidates NarrowPhase then judges.
+// BroadPhase records, for every collidable entity, who is close enough to be worth
+// a real overlap test this tick, and drops what that entity struck the tick before.
 type BroadPhase struct {
 	space     *gokg.Space
 	margin    float64
 	query     *goke.Query
 	pos       goke.Comp[world.Position]
 	vel       goke.Comp[world.Velocity]
-	hit       goke.Comp[Hit]
 	collision goke.Comp[Collision]
-	addEditor *goke.Editor
+	contacts  goke.OptComp[Contacts]
 
 	probe probe
 }
@@ -45,8 +44,6 @@ type probe struct {
 	box      plane.AABB
 	self     uid.UID64
 	touching *Collision
-	migrate  *goke.MigrateBuf
-	tagged   bool
 	onFound  func(uid.UID64, plane.FragPosition)
 }
 
@@ -62,27 +59,26 @@ func NewBroadPhase(space *gokg.Space, margin float64) *BroadPhase {
 }
 
 func (b *BroadPhase) Init(si *goke.SysInit) {
-	b.query = si.NewQueryBuilder(&b.pos, &b.vel, &b.collision).Build()
-	si.RegComp[Hit]()
-	b.addEditor = b.query.NewEditorBuilder(&b.hit).Build()
+	b.query = si.NewQueryBuilder(&b.pos, &b.vel, &b.collision).Optional(&b.contacts).Build()
 }
 
-func (b *BroadPhase) Update(cb *goke.CmdBuf, _ time.Duration) {
+func (b *BroadPhase) Update(_ *goke.CmdBuf, _ time.Duration) {
 	b.query.All()
 	for b.query.Next() {
 		cursor := b.query.Cursor()
 		posSlice := b.pos.Slice(cursor)
 		collisionSlice := b.collision.Slice(cursor)
-		b.probe.migrate = b.query.BeginMigrate(cb)
+		contactsSlice := b.contacts.Slice(cursor)
 		for i, entityA := range cursor.IDs {
+			if c := at(contactsSlice, i); c != nil {
+				c.clear()
+			}
 			b.probe.self = entityA
 			b.probe.touching = &collisionSlice[i]
-			b.probe.tagged = false
 			b.probe.box = posSlice[i].AABB
 
 			b.space.Neighbours(&b.probe.box, b.margin, CanCollide, b.probe.onFound)
 		}
-		b.probe.migrate.Commit(b.addEditor)
 	}
 }
 
@@ -96,8 +92,4 @@ func (p *probe) found(other uid.UID64, _ plane.FragPosition) {
 		return
 	}
 	p.touching.addTouching(other)
-	if !p.tagged {
-		p.migrate.Add(p.self)
-		p.tagged = true
-	}
 }

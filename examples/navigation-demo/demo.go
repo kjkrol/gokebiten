@@ -29,7 +29,6 @@ const (
 	EntitySize   = 22
 	UnitSpeed    = CellSize * 2
 	MaxEntCount  = 10
-	hitExpires   = 50 * time.Millisecond
 
 	saveBasePath = "board-navigation-demo"
 )
@@ -95,7 +94,7 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 		return err
 	}
 
-	s.collisions = collisions.NewPlugin(hitExpires, s.world)
+	s.collisions = collisions.NewPlugin(s.world)
 	if err := ctx.Use(s.collisions); err != nil {
 		return err
 	}

@@ -81,7 +81,7 @@ func TestSaveLoadCycle(t *testing.T) {
 	if err := wp.Populate(); err != nil {
 		t.Fatalf("Populate: %v", err)
 	}
-	cm := collisions.New(wp.Space(), ecs, 0, 2*wp.MaxStep())
+	cm := collisions.New(wp.Space(), ecs, 2*wp.MaxStep())
 
 	ctx := &testInstallCtx{ecs: ecs}
 	if err := wp.Install(ctx); err != nil {
@@ -131,7 +131,7 @@ func TestSaveLoadCycle(t *testing.T) {
 
 	ecs2 := goke.New()
 	plugin2 := world.NewPlugin(cfg)
-	cm2 := collisions.New(plugin2.Space(), ecs2, 0, 2*plugin2.MaxStep())
+	cm2 := collisions.New(plugin2.Space(), ecs2, 2*plugin2.MaxStep())
 
 	ctx2 := &testInstallCtx{ecs: ecs2}
 	if err := plugin2.Install(ctx2); err != nil {

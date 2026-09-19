@@ -1,17 +1,26 @@
 // Package collisions detects and resolves overlaps between world entities
-// each tick, over world's shared spatial index. It tags colliding entities
-// with Hit and dispatches to pluggable CollisionHandlers (e.g. elastic
-// bounce, or your own) - Sensor entities detect without pushing, Static
-// entities never move.
+// each tick, over world's shared spatial index, and publishes what each entity
+// struck in Contacts — Sensor entities detect without pushing, Static entities
+// never move.
 //
-// A CollisionHandler is a hook inside the solver, not a place to put game
-// behaviour: it runs on live Position/Velocity pointers, possibly several times
-// per tick, and what it writes feeds the separation happening around it. That
-// is what elastic needs and what nothing else should want.
+// How hard a contact hits back is the entities' own business: Mass and
+// Restitution shape the impulse it publishes, each falling back to a sensible
+// default when absent. Neither touches the push that separates the overlap — that one always splits the penetration evenly between the two
+// sides, whatever they weigh.
 //
-// To react to a collision rather than resolve it, read the components this
-// package publishes — Hit for "something struck me", Collision.Touching for
-// "who I am against right now" — from a world.Behavior registered with
-// world.Plugin.RegisterBehavior. Those run once per tick, in their own phase,
-// and can add or remove components freely.
+// Reacting to a collision is a world.Behavior reading Contacts — "who I struck
+// and how hard" — registered with world.Plugin.RegisterBehavior. That goes for
+// the bounce itself (strategies/elastic) as much as for showing a hit
+// (strategies/hit), counting (strategies/stats) or logging (strategies/debug):
+// this package detects and separates, and every reaction to that is a
+// behaviour a game registers. Those run once per tick, in their own phase,
+// and can add or remove components freely, which is what "the bullet is gone
+// and the target has lost HP" needs. Which entities a reaction applies to is
+// the behavior's own query: a tag given to a kind scopes it to that kind, a
+// tag given through one roster entry scopes it to one entity.
+//
+// A reaction reads the contacts of the tick that has just finished, since the
+// collision phase runs after the behaviors do. Only entities the broad phase
+// walks over — the ones carrying Velocity — record contacts; a Static wall
+// never does, having nothing to clear its list each tick.
 package collisions

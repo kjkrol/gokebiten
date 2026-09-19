@@ -16,25 +16,17 @@ type module struct {
 	margin float64
 	ecs    *goke.ECS
 
-	handlers     []CollisionHandler
-	extra        []goke.System
-	extraHandles []goke.Runnable
-	hitDuration  time.Duration
-
 	broadPhase  goke.Runnable
 	narrowPhase goke.Runnable
 	built       bool
 }
 
-// New builds the collision engine over space, expiring Hit tags after
-// hitExpires by default - a touching entity's own HitExpires overrides
-// it. margin is how far the broad phase reaches past each entity when
-// probing — see NewBroadPhase. Safe to call before ECS.Load, since systems
-// register via RegSystems (see [goke.Module]).
-func New(space *gokg.Space, ecs *goke.ECS, hitExpires time.Duration, margin float64) *module {
-	m := &module{space: space, margin: margin, ecs: ecs, hitDuration: hitExpires}
-	m.extra = append(m.extra, NewTagExpirySystem(func(h *Hit) time.Time { return h.ExpiresAt() }))
-	return m
+// New builds the collision engine over space. margin is how far the broad
+// phase reaches past each entity when probing — see NewBroadPhase. Safe to
+// call before ECS.Load, since systems register via RegSystems (see
+// [goke.Module]).
+func New(space *gokg.Space, ecs *goke.ECS, margin float64) *module {
+	return &module{space: space, margin: margin, ecs: ecs}
 }
 
 // =================================================================
@@ -54,11 +46,6 @@ func (m *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
 
 	ctx.Run(m.narrowPhase, d)
 	ctx.Sync()
-
-	for _, h := range m.extraHandles {
-		ctx.Run(h, d)
-		ctx.Sync()
-	}
 }
 
 // SetupSystems is empty — the collision engine has no one-time seeding of its own.
@@ -68,8 +55,9 @@ func (m *module) SetupSystems() []goke.System { return nil }
 func (m *module) LoadComps() []goke.CompToken {
 	return []goke.CompToken{
 		goke.LoadComp[Collision](),
-		goke.LoadComp[Hit](),
-		goke.LoadComp[HitExpires](),
+		goke.LoadComp[Contacts](),
+		goke.LoadComp[Mass](),
+		goke.LoadComp[Restitution](),
 		goke.LoadComp[Sensor](),
 		goke.LoadComp[Static](),
 	}
@@ -101,27 +89,8 @@ func (m *module) PostLoad() goke.System {
 // collisions-specific
 // =================================================================
 
-func (m *module) SetCollisionHandlers(handlers ...CollisionHandler) *module {
-	m.handlers = handlers
-	return m
-}
-
-func (m *module) RegSys(sys goke.System) *module {
-	m.extra = append(m.extra, sys)
-	return m
-}
-
 func (m *module) build() {
-	broad, narrow := m.useCollisions(MultiHandler(m.handlers...), m.hitDuration)
-	m.broadPhase = m.ecs.RegSys(broad)
-	m.narrowPhase = m.ecs.RegSys(narrow)
-
-	for _, sys := range m.extra {
-		m.extraHandles = append(m.extraHandles, m.ecs.RegSys(sys))
-	}
+	m.broadPhase = m.ecs.RegSys(NewBroadPhase(m.space, m.margin))
+	m.narrowPhase = m.ecs.RegSys(NewNarrowPhase(m.space))
 	m.built = true
-}
-
-func (m *module) useCollisions(handler CollisionHandler, hitDuration time.Duration) (*BroadPhase, *NarrowPhase) {
-	return NewBroadPhase(m.space, m.margin), NewNarrowPhase(m.space, handler, hitDuration)
 }

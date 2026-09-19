@@ -1,9 +1,9 @@
 package stats
 
-// Stats is the aggregate collision-count telemetry this strategy maintains — see physics.Plugin.EnableStats.
+// Stats is the running collision count this strategy maintains, for a game to read and display.
 type Stats struct {
 	Counter int
 }
 
-// Reset zeroes Counter — called each stats interval when Stats is a registered Resource.
+// Reset zeroes Counter, for a game showing a per-interval rate rather than a total.
 func (s *Stats) Reset() { s.Counter = 0 }
