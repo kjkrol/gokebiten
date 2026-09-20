@@ -7,6 +7,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/plugins/collisions"
+	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/hit"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
 	"github.com/kjkrol/gokg"
@@ -38,6 +39,20 @@ func (c *testInstallCtx) RegSys(factory func() goke.System) goke.Runnable {
 }
 func (c *testInstallCtx) ECS() *goke.ECS { return c.ecs }
 
+// eachOnce drops repeated tokens, as the engine does: a kind and a module may
+// both name a type — Collision here — and Load refuses to be told twice.
+func eachOnce(tokens []goke.CompToken) []goke.CompToken {
+	listed := map[string]bool{}
+	var once []goke.CompToken
+	for _, token := range tokens {
+		if !listed[token.Name] {
+			listed[token.Name] = true
+			once = append(once, token)
+		}
+	}
+	return once
+}
+
 // countCollidable reports how many entities the space will offer as collision
 // candidates — the only way to observe, from outside, that something actually
 // carries CanCollide.
@@ -64,20 +79,28 @@ func TestSaveLoadCycle(t *testing.T) {
 	wp := world.NewPlugin(cfg)
 	placement := world.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize)
 	motion := newRandomVelocity(200, 50, 10)
-	kinds := wp.EntKindDict()
-	var entries []world.Entry
-	for i := range count {
-		name := fmt.Sprintf("k%d", i)
-		kinds.Define(name, func(k world.Kind[body]) world.EntKind {
-			return world.EntKind{
-				Position:   k.Load(func(b body) world.Position { return b.pos }),
-				Velocity:   k.Load(func(b body) world.Velocity { return b.vel }),
-				Components: []world.ComponentTemplate{collisions.Collidable(wp.Space())},
-			}
-		})
-		entries = append(entries, kinds.Entry(name, body{pos: placement.Place(i, count), vel: motion.initialVelocity(i)}))
+	// Both halves define the kinds, as a Stage's Init does before it ever loads:
+	// the dictionary is what tells Load about hit.Mark, which no module owns.
+	defineKinds := func(wp *world.Plugin) []world.Entry {
+		kinds := wp.EntKindDict()
+		var entries []world.Entry
+		for i := range count {
+			name := fmt.Sprintf("k%d", i)
+			kinds.Define(name, func(k world.Kind[body]) world.EntKind {
+				return world.EntKind{
+					Position: k.Load(func(b body) world.Position { return b.pos }),
+					Velocity: k.Load(func(b body) world.Velocity { return b.vel }),
+					Components: []world.ComponentTemplate{
+						collisions.Collidable(wp.Space()),
+						k.Const(hit.Mark{Duration: hitDuration}),
+					},
+				}
+			})
+			entries = append(entries, kinds.Entry(name, body{pos: placement.Place(i, count), vel: motion.initialVelocity(i)}))
+		}
+		return entries
 	}
-	wp.Seed(entries...)
+	wp.Seed(defineKinds(wp)...)
 	if err := wp.Populate(); err != nil {
 		t.Fatalf("Populate: %v", err)
 	}
@@ -131,6 +154,7 @@ func TestSaveLoadCycle(t *testing.T) {
 
 	ecs2 := goke.New()
 	plugin2 := world.NewPlugin(cfg)
+	defineKinds(plugin2)
 	cm2 := collisions.New(plugin2.Space(), ecs2, 2*plugin2.MaxStep())
 
 	ctx2 := &testInstallCtx{ecs: ecs2}
@@ -141,7 +165,7 @@ func TestSaveLoadCycle(t *testing.T) {
 	// Ask every installed module what it owns rather than re-listing it here:
 	// a hand-written list silently rots the moment a plugin gains a component.
 	comps := goke.ProvidedComps(append([]any{cm2}, ctx2.tracked...)...)
-	if err := ecs2.Load(path, comps...); err != nil {
+	if err := ecs2.Load(path, eachOnce(comps)...); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	cm2.RegSystems(ecs2)

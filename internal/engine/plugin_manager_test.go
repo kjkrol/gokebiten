@@ -101,3 +101,22 @@ func TestEcsHost_RunPopulate_StopsAtFirstError(t *testing.T) {
 		t.Errorf("Populate after the failing one ran %d times, want 0", after.ran)
 	}
 }
+
+type stubCompProvider struct{}
+
+type stubSharedComp struct{ N int }
+
+func (stubCompProvider) LoadComps() []goke.CompToken {
+	return []goke.CompToken{goke.LoadComp[stubSharedComp]()}
+}
+
+// A kind and a module may both name a type, and goke refuses to be told twice.
+func TestEcsHost_ProvidedComps_ListsASharedTypeOnce(t *testing.T) {
+	host := newECSHost()
+	host.track(stubCompProvider{})
+	host.track(stubCompProvider{})
+
+	if got := host.providedComps(); len(got) != 1 {
+		t.Errorf("providedComps() returned %d tokens, want 1 for a type two providers name", len(got))
+	}
+}

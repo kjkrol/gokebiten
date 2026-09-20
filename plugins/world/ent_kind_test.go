@@ -227,3 +227,29 @@ func TestKind_Const_MatchesPackageConst(t *testing.T) {
 		t.Errorf("k.Const read the roster entry: HP = %d, want 3", got.HP)
 	}
 }
+
+func TestEntKindDict_LoadComps_ListsWhatItsKindsCarryEachOnce(t *testing.T) {
+	d := newEntKindDict()
+	if got := d.LoadComps(); len(got) != 0 {
+		t.Fatalf("an empty dictionary lists %d component types, want none", len(got))
+	}
+
+	for _, name := range []string{"first", "second"} {
+		d.Define(name, func(k Kind[int]) EntKind {
+			return EntKind{
+				Position:   k.Const(spawnerTestPos()),
+				Velocity:   k.Const(Velocity{}),
+				Components: []ComponentTemplate{k.Const(spawnerTag{}), k.Load(func(hp int) spawnerStat { return spawnerStat{HP: hp} })},
+			}
+		})
+	}
+
+	var got []string
+	for _, token := range d.LoadComps() {
+		got = append(got, token.Name)
+	}
+	want := []string{goke.LoadComp[spawnerTag]().Name, goke.LoadComp[spawnerStat]().Name}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("LoadComps() = %v, want %v — each type once, however many kinds carry it", got, want)
+	}
+}

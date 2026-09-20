@@ -11,6 +11,8 @@ import (
 	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gokg/geom"
+	"github.com/kjkrol/gokg/plane"
 )
 
 func testWorldConfig() world.Config {
@@ -53,6 +55,8 @@ func (a *ecsAccessor) RegisterBehavior(...plugin.Behavior) error { return plugin
 type saveLoadTestGame struct {
 	acc      *ecsAccessor
 	setup    func(*goke.SysInit)
+	define   func(*world.EntKindDict) []world.Entry
+	world    *world.Plugin
 	loadFrom string
 	loadArgs []any
 
@@ -61,7 +65,10 @@ type saveLoadTestGame struct {
 
 func (g *saveLoadTestGame) Name() string { return "stage" }
 func (g *saveLoadTestGame) Init(ctx game.Initializer) error {
-	ctx.UseWorld(testWorldConfig())
+	g.world = ctx.UseWorld(testWorldConfig())
+	if g.define != nil {
+		g.world.Seed(g.define(g.world.EntKindDict())...)
+	}
 	g.acc = &ecsAccessor{setup: g.setup}
 	return ctx.Use(g.acc)
 }
@@ -152,5 +159,57 @@ func TestGame_SaveLoad_RoundTrip(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("expected the saved world.Appearance entity to survive the round trip")
+	}
+}
+
+type saveTestTag struct{}
+
+type saveTestMark struct{ Left int }
+
+// A save holds whatever a kind gives its entities, the game's own tags included
+// — and a type the kind shares with a module, world.Steering here, is no clash.
+func TestGame_SaveLoad_KeepsWhatAKindGivesItsEntities(t *testing.T) {
+	basePath := t.TempDir() + "/save"
+	define := func(kinds *world.EntKindDict) []world.Entry {
+		kinds.Define("marked", func(k world.Kind[struct{}]) world.EntKind {
+			return world.EntKind{
+				Position: k.Const(world.Position{AABB: plane.NewAABB(geom.NewVec(100, 100), 10, 10)}),
+				Velocity: k.Const(world.Velocity{}),
+				Components: []world.ComponentTemplate{
+					k.Const(saveTestTag{}),
+					k.Const(saveTestMark{Left: 3}),
+					k.Const(world.Steering{TurnRate: 0.5}),
+				},
+			}
+		})
+		return []world.Entry{kinds.Entry("marked", struct{}{})}
+	}
+
+	eng := engine.NewEngine(oneStageGame{stage: &saveLoadTestGame{define: define}, props: game.Props{}})
+	if err := eng.Init(); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	if err := eng.Persistence().Save(basePath, ""); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	var mark goke.Comp[saveTestMark]
+	var q *goke.Query
+	loaded := &saveLoadTestGame{
+		define:   define,
+		setup:    func(si *goke.SysInit) { q = si.NewQueryBuilder(&mark).Include(goke.Include[saveTestTag]()).Build() },
+		loadFrom: basePath,
+	}
+	eng2 := engine.NewEngine(oneStageGame{stage: loaded, props: game.Props{}})
+	if err := eng2.Init(); err != nil {
+		t.Fatalf("Init from the save: %v", err)
+	}
+
+	var marks []saveTestMark
+	for q.All(); q.Next(); {
+		marks = append(marks, mark.Slice(q.Cursor())...)
+	}
+	if len(marks) != 1 || marks[0].Left != 3 {
+		t.Errorf("tagged entities after Load = %+v, want the one saved with Left 3", marks)
 	}
 }

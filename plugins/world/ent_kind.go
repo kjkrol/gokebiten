@@ -12,6 +12,7 @@ import (
 // ComponentTemplate is one component of an EntKind — see Const and Kind.Load.
 type ComponentTemplate interface {
 	adder() entityExtras
+	loadToken() goke.CompToken
 }
 
 // Template yields one component value per spawned entity, optionally
@@ -49,6 +50,8 @@ func (t Template[T]) WithEffect(effect func(v T, id uid.UID64)) Template[T] {
 func (t Template[T]) adder() entityExtras {
 	return &componentAdder[T]{value: t.value, effect: t.effect}
 }
+
+func (t Template[T]) loadToken() goke.CompToken { return goke.LoadComp[T]() }
 
 func (t Template[T]) resolve(data any, id uid.UID64) T {
 	v := t.value(data)
@@ -92,6 +95,7 @@ type EntKindDict struct {
 
 var (
 	_ goke.SetupProvider  = (*EntKindDict)(nil)
+	_ goke.CompProvider   = (*EntKindDict)(nil)
 	_ plugin.Serializable = (*EntKindDict)(nil)
 )
 
@@ -101,6 +105,21 @@ func newEntKindDict() *EntKindDict { return &EntKindDict{entries: make(map[strin
 // registers with ctx.Setup only to join the Stage's tracked resources, which is
 // what gets it saved and loaded.
 func (d *EntKindDict) SetupSystems() []goke.System { return nil }
+
+// LoadComps lists every component type the defined kinds give their entities, each once — see [goke.CompProvider].
+func (d *EntKindDict) LoadComps() []goke.CompToken {
+	var tokens []goke.CompToken
+	listed := map[string]bool{}
+	for _, name := range d.order {
+		for _, c := range d.entries[name].Components {
+			if token := c.loadToken(); !listed[token.Name] {
+				listed[token.Name] = true
+				tokens = append(tokens, token)
+			}
+		}
+	}
+	return tokens
+}
 
 // Persisted returns the TypeID -> name mapping for Persistence.Save/Load. The
 // live order is copied into a second field rather than persisted directly: a

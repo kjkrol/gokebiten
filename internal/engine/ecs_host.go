@@ -60,8 +60,20 @@ func (h *ecsHost) registerRenderer(factory func() render.Renderer) render.Render
 	return r
 }
 
-// providedComps collects LoadComps from every tracked value implementing goke.CompProvider.
-func (h *ecsHost) providedComps() []goke.CompToken { return goke.ProvidedComps(h.tracked...) }
+// providedComps collects LoadComps from every tracked value implementing
+// goke.CompProvider, each type once — a kind and a module may both name it.
+func (h *ecsHost) providedComps() []goke.CompToken {
+	all := goke.ProvidedComps(h.tracked...)
+	listed := make(map[string]bool, len(all))
+	tokens := all[:0]
+	for _, token := range all {
+		if !listed[token.Name] {
+			listed[token.Name] = true
+			tokens = append(tokens, token)
+		}
+	}
+	return tokens
+}
 
 // postLoadSystems collects PostLoad from every tracked value implementing PostLoader.
 func (h *ecsHost) postLoadSystems() []goke.System {

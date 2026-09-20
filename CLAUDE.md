@@ -83,7 +83,11 @@ are registered in `Stage.Init` via `EntKindDict().Define(func(k world.Kind[P])
 world.EntKind {...})` — `P` is the kind's roster data type, every component is
 `Const` or `k.Load` from that data — and roster entries are built only through
 the dictionary, `EntKindDict().Entry(name, data)` (panics on an unknown kind or
-data that isn't its `P`), then passed to `world.Plugin.Seed`. Cell kinds go
+data that isn't its `P`), then passed to `world.Plugin.Seed`. The dictionary
+also tells `Persistence.Load` about every component type its kinds carry
+(`EntKindDict.LoadComps`), so a game's own tags and state (`hunt.Predator`,
+`hit.Mark`) survive a save without being registered anywhere else; the engine
+lists a type a kind shares with a module once. Cell kinds go
 through `board.Plugin.CellKindDict().Create`; both dictionaries issue `SpriteID`s.
 
 Package layout: `render` (root) — `Renderer`/`AtlasSource`/`Atlas`/
