@@ -136,6 +136,7 @@ func (n *NarrowPhase) pair() {
 				sides := pairSides{A: sideA, B: sideB, tagsA: chunkTags, tagsB: tagsB}
 				n.solver.Add(collide.Pair{
 					A: &sideA.Base.Pos.AABB, B: &sideB.Base.Pos.AABB,
+					KeyA: entityA.Index(), KeyB: entityB.Index(),
 					StaticA: sideA.immovable(),
 					StaticB: sideB.immovable(),
 					Sensor:  sides.detectOnly(),
