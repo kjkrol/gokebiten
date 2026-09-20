@@ -50,7 +50,7 @@ type Renderer struct {
 	style  HighlightStyle
 
 	query *goke.Query
-	pos   goke.Comp[world.Position]
+	base  goke.Comp[world.Base]
 }
 
 var _ render.Renderer = (*Renderer)(nil)
@@ -67,16 +67,16 @@ func (r *Renderer) WithStyle(style HighlightStyle) *Renderer {
 }
 
 func (r *Renderer) Init(si *goke.SysInit) {
-	r.query = si.NewQueryBuilder(&r.pos).Include(goke.Include[Selected]()).Build()
+	r.query = si.NewQueryBuilder(&r.base).Include(goke.Include[Selected]()).Build()
 }
 
 func (r *Renderer) Draw(screen *ebiten.Image) {
 	r.query.All()
 	for r.query.Next() {
 		cursor := r.query.Cursor()
-		positions := r.pos.Slice(cursor)
+		bases := r.base.Slice(cursor)
 		for i := range cursor.IDs {
-			r.style.Draw(screen, r.camera, positions[i].AABB.AABB)
+			r.style.Draw(screen, r.camera, bases[i].Pos.AABB.AABB)
 		}
 	}
 

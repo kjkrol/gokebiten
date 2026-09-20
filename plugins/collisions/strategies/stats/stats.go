@@ -1,49 +1,19 @@
-// Package stats is a ready-made world.Behavior: a running count of how many
-// contacts happened, for telemetry.
+// Package stats is a ready-made reaction to contacts: a running count of how
+// many happened, for telemetry.
 //
-// Register it with world.Plugin.RegisterBehavior; only entities carrying
-// collisions.Contacts are counted, and each pair counts once however many of
-// its two sides record it.
+// Hand Count to plugin.Between and register that with
+// collisions.Plugin.RegisterBehavior — Between[plugin.Anything, plugin.Anything]
+// to count every confirmed contact, detected-only ones included, or a pair of
+// tags to count just those. It rides the narrow phase's own pass, at the cost
+// of no query of its own.
 package stats
 
 import (
-	"time"
-
-	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/plugins/collisions"
-	"github.com/kjkrol/gokebiten/plugins/world"
 )
 
-var _ world.Behavior = (*Behavior)(nil)
-
-// Behavior adds this tick's contacts to a Stats counter the game owns.
-type Behavior struct {
-	stats *Stats
-
-	query    *goke.Query
-	contacts goke.Comp[collisions.Contacts]
-}
-
-// New builds the behavior, counting into stats.
-func New(stats *Stats) *Behavior { return &Behavior{stats: stats} }
-
-func (b *Behavior) Init(si *goke.SysInit) {
-	b.query = si.NewQueryBuilder(&b.contacts).Build()
-}
-
-func (b *Behavior) Update(*goke.CmdBuf, time.Duration) {
-	b.query.All()
-	for b.query.Next() {
-		cursor := b.query.Cursor()
-		contacts := b.contacts.Slice(cursor)
-		for i, self := range cursor.IDs {
-			for _, c := range contacts[i].All() {
-				// The lower index owns the pair — the same rule the narrow
-				// phase pairs by, so a contact both sides recorded counts once.
-				if self.Index() < c.Other.Index() {
-					b.stats.Counter++
-				}
-			}
-		}
-	}
+// Count adds every contact it is handed to a Stats counter the game owns.
+func Count(stats *Stats) func(plugin.Tick, collisions.Meeting) {
+	return func(plugin.Tick, collisions.Meeting) { stats.Counter++ }
 }

@@ -31,14 +31,14 @@ func TestWorld_PostLoad_SetsCountFromLoadedEntities(t *testing.T) {
 	pos := Position{}
 	pos.Size.X, pos.Size.Y = 10, 10
 
-	var posComp goke.Comp[Position]
+	var baseComp goke.Comp[Base]
 	ecs := goke.New()
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		f := si.NewFactory(&posComp)
+		f := si.NewFactory(&baseComp)
 		f.Create(3)
 		for f.Next() {
-			for i := range posComp.Slice(&f.Cursor) {
-				posComp.Slice(&f.Cursor)[i] = pos
+			for i := range baseComp.Slice(&f.Cursor) {
+				baseComp.Slice(&f.Cursor)[i].Pos = pos
 			}
 		}
 	}}, w.PostLoad())

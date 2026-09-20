@@ -94,6 +94,14 @@ func (p *Plugin) EventHandler() control.EventHandler { return nil }
 // Serializable returns board's persistable state (its terrain).
 func (p *Plugin) Serializable() plugin.Serializable { return &p.Res }
 
+// RegisterBehavior reports ErrUnhostedBehavior — board hosts no behaviors.
+func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
+	for _, b := range behaviors {
+		return fmt.Errorf("%w: %T in %s", plugin.ErrUnhostedBehavior, b, p.Name())
+	}
+	return nil
+}
+
 // =================================================================
 // board-specific
 // =================================================================

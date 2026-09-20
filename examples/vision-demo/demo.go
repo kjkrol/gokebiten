@@ -1,10 +1,17 @@
-// Command vision-demo shows entities steering around each other by sight
-// rather than bouncing off each other by contact.
+// Command vision-demo shows ten entities keeping out of each other's way by
+// sight, and one red hunter that lives off the ones who fail at it.
 //
-// Every entity carries a Sight cone, drawn on screen, and the flee behavior
-// turns it away from whatever the cone picks up. Collisions are installed
-// alongside and counted, so the telemetry line puts a number on how much the
-// avoidance is buying: press A to switch it off and watch the counter climb.
+// Everything here carries a Sight cone, drawn on screen. The prey give way to
+// whatever their cone says is on a collision course — something bearing down on
+// them, or their own heading pointing into someone — and pass by everything
+// else — bar the hunter, which is broken away from the moment it comes into
+// view, whichever way it happens to be drifting. It goes the other way itself:
+// it steers at the nearest prey it sees — or, seeing none, looks a quarter turn
+// to one side, runs on, and looks again — and whatever it touches is gone, which
+// is a world.Despawn from an ordinary behavior reading the contact. It is a
+// tenth slower than what it chases, so it only ever catches bad steering.
+//
+// Press A to switch the avoidance off and watch the entity count fall.
 //
 // The world wraps, so a cone reaching past an edge is drawn again on the far
 // side — and an entity sees through the seam just as it moves through it.
@@ -20,8 +27,8 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/game"
+	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/plugins/collisions"
-	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/elastic"
 	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/stats"
 	"github.com/kjkrol/gokebiten/plugins/vision"
 	"github.com/kjkrol/gokebiten/plugins/vision/strategies/flee"
@@ -43,10 +50,13 @@ const (
 	sightHalf   = math.Pi / 5
 	roamSpeed   = 90
 	// The hunter is the slower one: it only ever catches what steers badly.
-	hunterSpeed  = roamSpeed * 0.9
-	preyKind     = "prey"
-	hunterKind   = "hunter"
-	backdropGrey = 40
+	hunterSpeed = roamSpeed * 0.9
+	// With nobody in view the hunter looks to one side, runs on a second, and
+	// looks again — long enough to cover ground, short enough to keep scanning.
+	hunterLooksEvery = time.Second
+	preyKind         = "prey"
+	hunterKind       = "hunter"
+	backdropGrey     = 40
 )
 
 // =========================== Game ===========================
@@ -60,7 +70,7 @@ func NewDemo() *Demo { return &Demo{stage: &mainStage{avoiding: true}} }
 
 func (d *Demo) Props() game.Props {
 	return game.Props{
-		Title:       "gokebiten — sight and avoidance",
+		Title:       "gokebiten — sight, avoidance and a hunter",
 		ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight,
 		TargetTPS: TPS,
 	}
@@ -110,7 +120,7 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 				k.Const(world.Steering{Reflex: 3, TurnRate: 0.12}),
 				k.Const(flee.Skittish{}),
 				k.Const(hunt.Prey{}),
-				k.Const(elastic.Bouncy{})),
+				k.Const(collisions.Physics{Restitution: 1})),
 		}
 	})
 	kinds.Define(hunterKind, func(k world.Kind[body]) world.EntKind {
@@ -119,20 +129,27 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 			Velocity: k.Load(func(b body) world.Velocity { return b.vel }),
 			Components: append(s.sees(k),
 				k.Const(world.Steering{Reflex: 1, TurnRate: 0.30}),
-				k.Const(hunt.Predator{}), k.Const(collisions.Sensor{})),
+				k.Const(hunt.Predator{}), k.Const(flee.Threat{})),
 		}
 	})
 
 	s.avoidance = flee.New()
-	s.world.RegisterBehavior(s.avoidance)
-	s.world.RegisterBehavior(hunt.New())
-	s.world.RegisterBehavior(&faceTravel{})
-	s.world.RegisterBehavior(elastic.New())
-	s.world.RegisterBehavior(stats.New(&s.hits))
-	s.world.RegisterBehavior(&eat{world: s.world})
 
 	s.vision = vision.NewPlugin(s.world)
+	if err := s.vision.RegisterBehavior(
+		plugin.Between[flee.Skittish, plugin.Anything](s.avoidance.Steer, plugin.Asking[flee.Threat]()),
+		plugin.Between[hunt.Predator, hunt.Prey](hunt.Chase(hunterLooksEvery)),
+		plugin.Between[plugin.Anything, plugin.Anything](faceTravel),
+	); err != nil {
+		return err
+	}
 	s.collisions = collisions.NewPlugin(s.world)
+	if err := s.collisions.RegisterBehavior(
+		plugin.Between[plugin.Anything, plugin.Anything](stats.Count(&s.hits)),
+		plugin.Between[hunt.Predator, hunt.Prey](s.caught),
+	); err != nil {
+		return err
+	}
 
 	if err := ctx.Use(s.vision); err != nil {
 		return err
@@ -161,10 +178,8 @@ func (s *mainStage) sees(k world.Kind[body]) []world.ComponentTemplate {
 		k.Load(func(b body) vision.Sight {
 			return vision.Sight{Facing: b.vel.Dir, HalfAngle: sightHalf, Radius: sightRadius}
 		}),
-		k.Const(vision.Sighted{}),
 		k.Const(vision.SightOutline{}),
 		collisions.Collidable(s.world.Space()),
-		k.Const(collisions.Contacts{}),
 	}
 }
 
@@ -200,59 +215,17 @@ func (s *mainStage) Update(ctx goke.RunCtx, d time.Duration) {
 	ctx.Sync()
 }
 
+// caught is what a catch means in this demo: the hunter touches a prey, and
+// the prey is gone.
+func (s *mainStage) caught(t plugin.Tick, m collisions.Meeting) {
+	s.world.Despawn(t.Cmd, m.Other)
+}
+
 // faceTravel points each entity's Sight where it is actually going, so the cone
 // follows the swerve instead of staring at where the entity set off.
-type faceTravel struct {
-	query *goke.Query
-	sight goke.Comp[vision.Sight]
-	vel   goke.Comp[world.Velocity]
-}
-
-var _ world.Behavior = (*faceTravel)(nil)
-
-func (f *faceTravel) Init(si *goke.SysInit) {
-	f.query = si.NewQueryBuilder(&f.sight, &f.vel).Build()
-}
-
-func (f *faceTravel) Update(*goke.CmdBuf, time.Duration) {
-	f.query.All()
-	for f.query.Next() {
-		cursor := f.query.Cursor()
-		sights := f.sight.Slice(cursor)
-		vels := f.vel.Slice(cursor)
-		for i := range cursor.IDs {
-			if d := vels[i].Dir; d.X != 0 || d.Y != 0 {
-				sights[i].Facing = d
-			}
-		}
-	}
-}
-
-// eat is what a catch means in this demo: the hunter touches a prey, and the
-// prey is gone. This is the collision reaction the engine deliberately leaves
-// to the game — Contacts names who was struck, world.Despawn takes it out.
-type eat struct {
-	world    *world.Plugin
-	query    *goke.Query
-	contacts goke.Comp[collisions.Contacts]
-}
-
-var _ world.Behavior = (*eat)(nil)
-
-func (e *eat) Init(si *goke.SysInit) {
-	e.query = si.NewQueryBuilder(&e.contacts).Include(goke.Include[hunt.Predator]()).Build()
-}
-
-func (e *eat) Update(cb *goke.CmdBuf, _ time.Duration) {
-	e.query.All()
-	for e.query.Next() {
-		cursor := e.query.Cursor()
-		contacts := e.contacts.Slice(cursor)
-		for i := range cursor.IDs {
-			for _, caught := range contacts[i].All() {
-				e.world.Despawn(cb, caught.Other)
-			}
-		}
+func faceTravel(_ plugin.Tick, s vision.Sighting) {
+	if d := s.Base.Vel.Dir; d.X != 0 || d.Y != 0 {
+		s.Sight.Facing = d
 	}
 }
 

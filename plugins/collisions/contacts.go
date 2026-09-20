@@ -20,24 +20,3 @@ type Contact struct {
 	Impact float64
 	Normal geom.Vec
 }
-
-// Contacts is what this entity actually struck, for game logic to read a tick
-// later — give it to a kind with k.Const(collisions.Contacts{}).
-type Contacts struct {
-	Items [MaxContacts]Contact
-	Count uint8
-}
-
-// All is what this entity struck, in the order the contacts were confirmed.
-func (c *Contacts) All() []Contact { return c.Items[:c.Count] }
-
-// add records one confirmed contact, up to MaxContacts.
-func (c *Contacts) add(other uid.UID64, impact float64, normal geom.Vec) {
-	if c.Count < MaxContacts {
-		c.Items[c.Count] = Contact{Other: other, Impact: impact, Normal: normal}
-		c.Count++
-	}
-}
-
-// clear drops the previous tick's contacts.
-func (c *Contacts) clear() { c.Count = 0 }

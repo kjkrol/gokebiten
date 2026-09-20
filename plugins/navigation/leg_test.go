@@ -30,7 +30,7 @@ type legWorld struct {
 	ecs       *goke.ECS
 	ids       []uid.UID64
 
-	pos   goke.Comp[world.Position]
+	pos   goke.Comp[world.Base]
 	cell  goke.Comp[board.Cell]
 	order goke.OptComp[MoveOrder]
 	q     *goke.Query
@@ -50,9 +50,8 @@ func newLegWorld(t *testing.T, w, h uint32, units ...legUnit) *legWorld {
 	lw.ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		for _, u := range units {
 			var cell goke.Comp[board.Cell]
-			var pos goke.Comp[world.Position]
-			var vel goke.Comp[world.Velocity]
-			comps := []goke.Addable{&cell, &pos, &vel}
+			var pos goke.Comp[world.Base]
+			comps := []goke.Addable{&cell, &pos}
 			var order goke.Comp[MoveOrder]
 			if u.hasOrder {
 				comps = append(comps, &order)
@@ -63,7 +62,7 @@ func newLegWorld(t *testing.T, w, h uint32, units ...legUnit) *legWorld {
 			id := f.Cursor.IDs[0]
 			p := world.Position{AABB: board.CellAABB(lw.grid, u.start, legEntitySize)}
 			cell.Slice(&f.Cursor)[0] = board.Cell{ID: u.start}
-			pos.Slice(&f.Cursor)[0] = p
+			pos.Slice(&f.Cursor)[0].Pos = p
 			if u.hasOrder {
 				order.Slice(&f.Cursor)[0] = MoveOrder{Target: u.target}
 			}
@@ -100,7 +99,7 @@ func (lw *legWorld) read() map[uid.UID64]legState {
 		cur := lw.q.Cursor()
 		positions, cells, orders := lw.pos.Slice(cur), lw.cell.Slice(cur), lw.order.Slice(cur)
 		for i, id := range cur.IDs {
-			st := legState{pos: positions[i], cell: cells[i].ID}
+			st := legState{pos: positions[i].Pos, cell: cells[i].ID}
 			if orders != nil {
 				st.order, st.hasOrder = orders[i], true
 			}

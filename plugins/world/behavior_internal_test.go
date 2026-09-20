@@ -1,10 +1,12 @@
 package world
 
 import (
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokg/geom"
 	"github.com/kjkrol/gokg/plane"
 )
@@ -21,11 +23,11 @@ type driveVelocity struct {
 
 	visited int
 	query   *goke.Query
-	vel     goke.Comp[Velocity]
+	base    goke.Comp[Base]
 }
 
 func (b *driveVelocity) Init(si *goke.SysInit) {
-	qb := si.NewQueryBuilder(&b.vel)
+	qb := si.NewQueryBuilder(&b.base)
 	if b.tagged {
 		qb.Include(goke.Include[behaviorTag]())
 	}
@@ -39,10 +41,10 @@ func (b *driveVelocity) Update(*goke.CmdBuf, time.Duration) {
 	b.query.All()
 	for b.query.Next() {
 		cursor := b.query.Cursor()
-		vels := b.vel.Slice(cursor)
+		bases := b.base.Slice(cursor)
 		for i := range cursor.IDs {
-			vels[i].Dir = geom.NewVec(1.0, 0.0)
-			vels[i].Value = 600
+			bases[i].Vel.Dir = geom.NewVec(1.0, 0.0)
+			bases[i].Vel.Value = 600
 			b.visited++
 		}
 	}
@@ -63,11 +65,11 @@ func spawnAt(wm *module, x float64, extras ...ComponentTemplate) {
 func tickWorld(t *testing.T, wm *module) []float64 {
 	t.Helper()
 
-	var pos goke.Comp[Position]
+	var base goke.Comp[Base]
 	var query *goke.Query
 	ecs := goke.New()
 	ecs.Setup(append(wm.SetupSystems(), goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		query = si.NewQueryBuilder(&pos).Build()
+		query = si.NewQueryBuilder(&base).Build()
 	}})...)
 	wm.RegSystems(ecs)
 	ecs.SetPlan(wm.RunPlan)
@@ -77,9 +79,9 @@ func tickWorld(t *testing.T, wm *module) []float64 {
 	query.All()
 	for query.Next() {
 		cursor := query.Cursor()
-		positions := pos.Slice(cursor)
+		bases := base.Slice(cursor)
 		for i := range cursor.IDs {
-			xs = append(xs, positions[i].TopLeft.X)
+			xs = append(xs, bases[i].Pos.TopLeft.X)
 		}
 	}
 	return xs
@@ -137,5 +139,19 @@ func TestBehavior_NoneRegisteredLeavesTheTickUnchanged(t *testing.T) {
 
 	if xs := tickWorld(t, wm); len(xs) != 1 || xs[0] != 100 {
 		t.Errorf("positions = %v, want the entity still at 100", xs)
+	}
+}
+
+// World hosts systems run before movement and nothing else: what belongs in
+// another plugin's pass is refused, so registering it in the wrong place is an
+// error rather than a behavior that silently never runs.
+func TestRegisterBehavior_RefusesWhatIsNotASystem(t *testing.T) {
+	p := testPlugin()
+
+	if err := p.RegisterBehavior(&driveVelocity{}); err != nil {
+		t.Errorf("RegisterBehavior(a system) = %v, want nil", err)
+	}
+	if err := p.RegisterBehavior(struct{}{}); !errors.Is(err, plugin.ErrUnhostedBehavior) {
+		t.Errorf("RegisterBehavior(not a system) = %v, want ErrUnhostedBehavior", err)
 	}
 }

@@ -44,12 +44,16 @@ func modify[T any](f func(Appearance, T) Appearance) AppearanceStrategy[T] {
 	})
 }
 
-// Facing returns a Strategy rewriting SpriteID from the entity's current Velocity, via spriteFor.
-func Facing(spriteFor func(Velocity) render.SpriteID) AppearanceStrategy[Velocity] {
-	return modify(func(a Appearance, v Velocity) Appearance {
-		a.SpriteID = spriteFor(v)
-		return a
-	})
+// Facing returns a Modifier rewriting SpriteID from the entity's current Velocity, via spriteFor.
+func Facing(spriteFor func(Velocity) render.SpriteID) AppearanceModifier { return facing(spriteFor) }
+
+type facing func(Velocity) render.SpriteID
+
+func (f facing) Bind(*goke.QueryBuilder) {}
+
+func (f facing) Apply(_ *goke.Cursor, _ int, base *Base, dst []Appearance) []Appearance {
+	dst[0].SpriteID = f(base.Vel)
+	return dst
 }
 
 // AppearanceModifier computes or refines an entity's draw layers — runs in
@@ -65,7 +69,7 @@ type conditionalApperanceStrategy[T any] struct {
 
 func (h *conditionalApperanceStrategy[T]) Bind(qb *goke.QueryBuilder) { qb.Optional(&h.comp) }
 
-func (h *conditionalApperanceStrategy[T]) Apply(cur *goke.Cursor, i int, dst []Appearance) []Appearance {
+func (h *conditionalApperanceStrategy[T]) Apply(cur *goke.Cursor, i int, _ *Base, dst []Appearance) []Appearance {
 	if !h.comp.Present(cur) {
 		return dst
 	}

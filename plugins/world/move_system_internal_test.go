@@ -48,11 +48,11 @@ func TestMoveSystem_CarriesSubUnitSpeedEveryTick(t *testing.T) {
 		Velocity: Const(Velocity{Dir: geom.NewVec(1, 0), Value: 30}),
 	}, []any{nil})
 
-	var pos goke.Comp[Position]
+	var base goke.Comp[Base]
 	var query *goke.Query
 	ecs := goke.New()
 	ecs.Setup(append(wm.SetupSystems(), goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		query = si.NewQueryBuilder(&pos).Build()
+		query = si.NewQueryBuilder(&base).Build()
 	}})...)
 	wm.RegSystems(ecs)
 	ecs.SetPlan(wm.RunPlan)
@@ -60,7 +60,7 @@ func TestMoveSystem_CarriesSubUnitSpeedEveryTick(t *testing.T) {
 	x := func() float64 {
 		query.All()
 		for query.Next() {
-			return pos.Slice(query.Cursor())[0].TopLeft.X
+			return base.Slice(query.Cursor())[0].Pos.TopLeft.X
 		}
 		t.Fatal("the entity vanished")
 		return 0

@@ -45,17 +45,16 @@ func newEnteredWorld(t *testing.T, w, h uint32, start, target board.CellID) *ent
 	ew.ecs = goke.New()
 	ew.ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		var cell goke.Comp[board.Cell]
-		var pos goke.Comp[world.Position]
-		var vel goke.Comp[world.Velocity]
+		var pos goke.Comp[world.Base]
 		var order goke.Comp[MoveOrder]
 
-		f := si.NewFactory(&cell, &pos, &vel, &order)
+		f := si.NewFactory(&cell, &pos, &order)
 		f.Create(1)
 		f.Next()
 		ew.id = f.Cursor.IDs[0]
 		p := world.Position{AABB: board.CellAABB(ew.grid, start, legEntitySize)}
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: start}
-		pos.Slice(&f.Cursor)[0] = p
+		pos.Slice(&f.Cursor)[0].Pos = p
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(start, ew.id)
 		space.Insert(ew.id, p.AABB)

@@ -13,7 +13,7 @@ var _ render.Renderer = (*Renderer)(nil)
 // AppearanceModifier in order to resolve its final draw layers.
 type Renderer struct {
 	renderQuery *goke.Query
-	pos         goke.Comp[Position]
+	base        goke.Comp[Base]
 	appearance  goke.Comp[Appearance]
 	modifiers   []AppearanceModifier
 	layers      []Appearance
@@ -25,7 +25,7 @@ func newRenderer(cam camera.Camera, atlas render.AtlasSource, worldW, worldH uin
 }
 
 func (s *Renderer) Init(si *goke.SysInit) {
-	qb := si.NewQueryBuilder(&s.pos, &s.appearance)
+	qb := si.NewQueryBuilder(&s.base, &s.appearance)
 	for _, m := range s.modifiers {
 		m.Bind(qb)
 	}
@@ -38,16 +38,16 @@ func (s *Renderer) Draw(screen *ebiten.Image) {
 	s.renderQuery.All()
 	for s.renderQuery.Next() {
 		cursor := s.renderQuery.Cursor()
-		positions := s.pos.Slice(cursor)
+		bases := s.base.Slice(cursor)
 		appearances := s.appearance.Slice(cursor)
 
 		for i := range cursor.IDs {
 			s.layers = append(s.layers[:0], appearances[i])
 			for _, m := range s.modifiers {
-				s.layers = m.Apply(cursor, i, s.layers)
+				s.layers = m.Apply(cursor, i, &bases[i], s.layers)
 			}
 			for _, l := range s.layers {
-				s.batch.drawQuad(positions[i], l.SpriteID)
+				s.batch.drawQuad(bases[i].Pos, l.SpriteID)
 			}
 		}
 	}

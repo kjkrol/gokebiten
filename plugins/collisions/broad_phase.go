@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/plugins/world"
 
 	"github.com/kjkrol/gokg"
@@ -27,12 +28,21 @@ type BroadPhase struct {
 	space     *gokg.Space
 	margin    float64
 	query     *goke.Query
-	pos       goke.Comp[world.Position]
-	vel       goke.Comp[world.Velocity]
+	base      goke.Comp[world.Base]
 	collision goke.Comp[Collision]
-	contacts  goke.OptComp[Contacts]
 
-	probe probe
+	// host runs the Each behaviors registered with the plugin, inside this pass.
+	host *plugin.EachHost[Struck]
+
+	// walking is the chunk the host is being run over — what struckAt reads.
+	// The func is bound once for the same reason probe.onFound is.
+	walking struct {
+		ids        []uid.UID64
+		collisions []Collision
+	}
+	struckAt func(i int) Struck
+
+	probe neighbourProbe
 }
 
 // probe is the state one entity's neighbour search runs against, held on the
@@ -40,7 +50,7 @@ type BroadPhase struct {
 // Space.Neighbours can be bound once — the same reason raycast.View binds its
 // collector once. A closure built inside the loop would escape to the heap on
 // every entity, every tick.
-type probe struct {
+type neighbourProbe struct {
 	box      plane.AABB
 	self     uid.UID64
 	touching *Collision
@@ -53,33 +63,48 @@ type probe struct {
 // nothing more: every extra unit is area the spatial index has to scan and
 // candidates the narrow phase then has to reject.
 func NewBroadPhase(space *gokg.Space, margin float64) *BroadPhase {
-	b := &BroadPhase{space: space, margin: margin}
+	return newBroadPhase(space, margin, &plugin.EachHost[Struck]{})
+}
+
+func newBroadPhase(space *gokg.Space, margin float64, host *plugin.EachHost[Struck]) *BroadPhase {
+	b := &BroadPhase{space: space, margin: margin, host: host}
+	b.struckAt = b.struck
 	b.probe.onFound = b.probe.found
 	return b
 }
 
 func (b *BroadPhase) Init(si *goke.SysInit) {
-	b.query = si.NewQueryBuilder(&b.pos, &b.vel, &b.collision).Optional(&b.contacts).Build()
+	qb := si.NewQueryBuilder(&b.base, &b.collision)
+	b.host.Bind(qb)
+	b.query = qb.Build()
 }
 
-func (b *BroadPhase) Update(_ *goke.CmdBuf, _ time.Duration) {
+func (b *BroadPhase) Update(cb *goke.CmdBuf, d time.Duration) {
+	t := plugin.Tick{Cmd: cb, Now: time.Now(), Dt: d}
 	b.query.All()
 	for b.query.Next() {
 		cursor := b.query.Cursor()
-		posSlice := b.pos.Slice(cursor)
+		bases := b.base.Slice(cursor)
 		collisionSlice := b.collision.Slice(cursor)
-		contactsSlice := b.contacts.Slice(cursor)
+
+		// Hosted behaviors go first: what they read is last tick's contacts,
+		// which the loop below is about to clear.
+		b.walking.ids, b.walking.collisions = cursor.IDs, collisionSlice
+		b.host.Run(t, cursor, b.struckAt)
 		for i, entityA := range cursor.IDs {
-			if c := at(contactsSlice, i); c != nil {
-				c.clear()
-			}
+			collisionSlice[i].clearContacts()
 			b.probe.self = entityA
 			b.probe.touching = &collisionSlice[i]
-			b.probe.box = posSlice[i].AABB
+			b.probe.box = bases[i].Pos.AABB
 
 			b.space.Neighbours(&b.probe.box, b.margin, CanCollide, b.probe.onFound)
 		}
 	}
+}
+
+// struck is what the hosted behaviors are told about the i-th entity of the chunk being walked.
+func (b *BroadPhase) struck(i int) Struck {
+	return Struck{ID: b.walking.ids[i], Contacts: b.walking.collisions[i].Contacts()}
 }
 
 // found records one candidate. Whether the neighbour takes part in collisions
@@ -87,7 +112,7 @@ func (b *BroadPhase) Update(_ *goke.CmdBuf, _ time.Duration) {
 // still has to be filtered out. Which wrapped image was hit makes no
 // difference either; the narrow phase works that out again from current
 // geometry.
-func (p *probe) found(other uid.UID64, _ plane.FragPosition) {
+func (p *neighbourProbe) found(other uid.UID64, _ plane.FragPosition) {
 	if other == p.self {
 		return
 	}

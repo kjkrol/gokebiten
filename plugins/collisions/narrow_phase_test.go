@@ -14,222 +14,192 @@ import (
 	"github.com/kjkrol/uid"
 )
 
-func runNarrowPhase(t *testing.T, space *gokg.Space, setup ...goke.System) *goke.ECS {
-	t.Helper()
-	ecs := goke.New()
-	ecs.Setup(setup...)
+const epsilon = 1e-9
 
-	np := collisions.NewNarrowPhase(space)
-	handle := ecs.RegSys(np)
+// thing is one entity of a narrow-phase fixture — a 10x10 box at y=100 — and,
+// once the tick has run, what became of it.
+type thing struct {
+	x        float64
+	delta    geom.Vec
+	physics  *collisions.Physics // nil: only ever detected
+	touching []int               // fixture indices it lists as broad-phase candidates
+
+	id       uid.UID64
+	base     world.Base
+	contacts []collisions.Contact
+}
+
+func elastic(mass float64) *collisions.Physics {
+	return &collisions.Physics{Mass: mass, Restitution: 1}
+}
+
+// narrowTick spawns things in order — so a lower fixture index is a lower
+// entity index — runs one narrow-phase tick over them, and reads each back.
+func narrowTick(t *testing.T, things ...*thing) {
+	t.Helper()
+	space := testSpace(t)
+
+	var base goke.Comp[world.Base]
+	var coll goke.Comp[collisions.Collision]
+	var physics goke.Comp[collisions.Physics]
+	var seen goke.Comp[collisions.Collision]
+	var read *goke.Query
+
+	ecs := goke.New()
+	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		for _, th := range things {
+			comps := []goke.Addable{&base, &coll}
+			if th.physics != nil {
+				comps = append(comps, &physics)
+			}
+			f := si.NewFactory(comps...)
+			f.Create(1)
+			f.Next()
+			th.id = f.IDs[0]
+			placed := world.Base{Pos: posAt(th.x, 100, 10, 10)}
+			placed.Vel.SetDelta(th.delta)
+			base.Slice(&f.Cursor)[0] = placed
+			if th.physics != nil {
+				physics.Slice(&f.Cursor)[0] = *th.physics
+			}
+			space.Insert(th.id, placed.Pos.AABB)
+		}
+		space.Flush(nil)
+
+		// Candidates are named by fixture index, and ids exist only now.
+		byID := map[uid.UID64]*thing{}
+		for _, th := range things {
+			byID[th.id] = th
+		}
+		all := si.NewQueryBuilder(&coll).Build()
+		for all.All(); all.Next(); {
+			cursor := all.Cursor()
+			lists := coll.Slice(cursor)
+			for i, id := range cursor.IDs {
+				for _, other := range byID[id].touching {
+					lists[i].Touching[lists[i].TouchingCount] = things[other].id
+					lists[i].TouchingCount++
+				}
+			}
+		}
+		read = si.NewQueryBuilder(&base, &seen).Build()
+	}})
+
+	handle := ecs.RegSys(collisions.NewNarrowPhase(space))
 	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(handle, d)
 		ctx.Sync()
 	})
 	ecs.Tick(time.Millisecond)
-	return ecs
-}
 
-// findPos scans q for id specifically and returns its Position — q may also
-// match other entities, so this never trusts "the first thing the query
-// finds" the way a bare range over q.Next() would.
-func findPos(t *testing.T, q *goke.Query, posComp goke.Comp[world.Position], id uid.UID64) world.Position {
-	t.Helper()
-	q.All()
-	for q.Next() {
-		cur := q.Cursor()
-		slice := posComp.Slice(cur)
-		for i, gotID := range cur.IDs {
-			if gotID == id {
-				return slice[i]
-			}
+	byID := map[uid.UID64]*thing{}
+	for _, th := range things {
+		byID[th.id] = th
+	}
+	for read.All(); read.Next(); {
+		cursor := read.Cursor()
+		bases := base.Slice(cursor)
+		recorded := seen.Slice(cursor)
+		for i, id := range cursor.IDs {
+			th := byID[id]
+			th.base = bases[i]
+			th.contacts = append([]collisions.Contact(nil), recorded[i].Contacts()...)
 		}
 	}
-	t.Fatalf("entity %v not found by the query", id)
-	return world.Position{}
 }
 
-func TestNarrowPhase_DynamicDynamic_Overlap(t *testing.T) {
-	space := testSpace(t)
-	var idA, idB uid.UID64
-	var posComp goke.Comp[world.Position]
-	var q *goke.Query
+func (th *thing) left() float64 { return float64(th.base.Pos.TopLeft.X) }
 
-	runNarrowPhase(t, space, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		var posA goke.Comp[world.Position]
-		var velA goke.Comp[world.Velocity]
-		var collA goke.Comp[collisions.Collision]
-		fa := si.NewFactory(&posA, &velA, &collA)
-		fa.Create(1)
-		fa.Next()
-		posA.Slice(&fa.Cursor)[0] = posAt(100, 100, 10, 10) // plenty of margin from the world edge
-		idA = fa.IDs[0]
+func (th *thing) speedX() float64 { return th.base.Vel.Delta().X }
 
-		var posB goke.Comp[world.Position]
-		var velB goke.Comp[world.Velocity]
-		fb := si.NewFactory(&posB, &velB)
-		fb.Create(1)
-		fb.Next()
-		posB.Slice(&fb.Cursor)[0] = posAt(105, 100, 10, 10) // overlaps A by 5px on X
-		idB = fb.IDs[0]
+func TestNarrowPhase_PhysicalPair_IsPushedApart(t *testing.T) {
+	a := &thing{x: 100, physics: elastic(1), touching: []int{1}}
+	b := &thing{x: 105, physics: elastic(1)}
 
-		coll := collA.Slice(&fa.Cursor)
-		coll[0].Touching[0] = idB
-		coll[0].TouchingCount = 1
+	narrowTick(t, a, b)
 
-		posComp = posA
-		q = si.NewQueryBuilder(&posA).Include(goke.Include[collisions.Collision]()).Build()
-	}})
-
-	if p := findPos(t, q, posComp, idA); p.TopLeft.X == 100 {
-		t.Error("expected A's position to have moved apart from B")
+	if a.left() >= 100 || b.left() <= 105 {
+		t.Errorf("a at %v, b at %v — want both pushed out of a 5-unit overlap", a.left(), b.left())
 	}
 }
 
-func TestNarrowPhase_DynamicStatic_OnlyDynamicMoves(t *testing.T) {
-	space := testSpace(t)
-	var posA, posB goke.Comp[world.Position]
-	var idA, idB uid.UID64
-	var qA, qB *goke.Query
-	var staticEditor *goke.Editor
-	var contactsComp goke.Comp[collisions.Contacts]
-	var contactsQ *goke.Query
+// An infinite mass is what a wall is: it holds its ground, and whatever runs
+// into it is pushed all the way out and sent back the way it came.
+func TestNarrowPhase_ImmovableSide_StaysPutAndReflectsTheOther(t *testing.T) {
+	ball := &thing{x: 100, delta: geom.NewVec(4, 0), physics: elastic(1), touching: []int{1}}
+	wall := &thing{x: 105, physics: elastic(math.Inf(1))}
 
-	seed := goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		var velA goke.Comp[world.Velocity]
-		var collA goke.Comp[collisions.Collision]
-		fa := si.NewFactory(&posA, &velA, &collA, &contactsComp)
-		fa.Create(1)
-		fa.Next()
-		posA.Slice(&fa.Cursor)[0] = posAt(100, 100, 10, 10)   // plenty of margin from the world edge
-		velA.Slice(&fa.Cursor)[0].SetDelta(geom.NewVec(4, 0)) // closing on the wall
-		idA = fa.IDs[0]
+	narrowTick(t, ball, wall)
 
-		fb := si.NewFactory(&posB) // no Velocity -> must be tagged Static (see addStatic below)
-		fb.Create(1)
-		fb.Next()
-		posB.Slice(&fb.Cursor)[0] = posAt(105, 100, 10, 10)
-		idB = fb.IDs[0]
+	if wall.left() != 105 {
+		t.Errorf("the wall moved to %v, want it left at 105", wall.left())
+	}
+	if ball.left() != 95 {
+		t.Errorf("the ball is at %v, want it pushed the whole 5 units out, to 95", ball.left())
+	}
+	if math.Abs(ball.speedX()+4) > epsilon {
+		t.Errorf("the ball moves at %v, want -4 — straight back off the wall", ball.speedX())
+	}
+	// The impulse is the ball's alone: -(1+1) * -4 / (1/DefaultMass) = 8, not
+	// the 4 an equal partner would have taken half of.
+	if len(ball.contacts) != 1 || math.Abs(ball.contacts[0].Impact-8) > epsilon {
+		t.Errorf("contacts = %+v, want one at impact 8", ball.contacts)
+	}
+}
 
-		coll := collA.Slice(&fa.Cursor)
-		coll[0].Touching[0] = idB
-		coll[0].TouchingCount = 1
+// A pair is built from whichever side has the lower index, so an immovable
+// entity spawned before the one that runs into it has to be named static on
+// its own side of the pair — or the solver shoves the wall.
+func TestNarrowPhase_ImmovableSpawnedFirst_StillStopsWhatRunsIntoIt(t *testing.T) {
+	wall := &thing{x: 105, physics: elastic(math.Inf(1)), touching: []int{1}}
+	ball := &thing{x: 100, delta: geom.NewVec(4, 0), physics: elastic(1), touching: []int{0}}
 
-		qA = si.NewQueryBuilder(&posA).Include(goke.Include[world.Velocity]()).Build()
-		qB = si.NewQueryBuilder(&posB).Exclude(goke.Exclude[world.Velocity]()).Build()
-		contactsQ = si.NewQueryBuilder(&contactsComp).Build()
-	}}
+	narrowTick(t, wall, ball)
 
-	// Static is a zero-size tag: Factory/Track reject zero-size data
-	// columns, so — same as Sensor — it's added via an Editor migration in
-	// a second Setup-phase system run after the seed.
-	var staticComp goke.Comp[collisions.Static]
-	addStatic := goke.SystemFn{
-		OnInit: func(si *goke.SysInit) {
-			staticEditor = qB.NewEditorBuilder(&staticComp).Build()
-		},
-		OnUpdate: func(cb *goke.CmdBuf, _ time.Duration) {
-			qB.All()
-			for qB.Next() {
-				buf := qB.BeginMigrate(cb)
-				for _, id := range qB.Cursor().IDs {
-					buf.Add(id)
-				}
-				buf.Commit(staticEditor)
+	if wall.id.Index() >= ball.id.Index() {
+		t.Fatalf("fixture broken: wall index %d, ball index %d — the wall has to come first", wall.id.Index(), ball.id.Index())
+	}
+	if wall.left() != 105 {
+		t.Errorf("the wall moved to %v, want it left at 105", wall.left())
+	}
+	if ball.left() != 95 || math.Abs(ball.speedX()+4) > epsilon {
+		t.Errorf("the ball is at %v moving %v, want 95 and -4", ball.left(), ball.speedX())
+	}
+}
+
+// An entity with no Physics takes no part in the physical world: a town to walk
+// into, a trigger, a hunter's jaws. The contact is still reported — that is the
+// point of it — but nothing is pushed and no impulse changes hands.
+func TestNarrowPhase_SideWithoutPhysics_IsDetectedButNeverPushed(t *testing.T) {
+	for name, town := range map[string]*thing{
+		"spawned after the walker":  {x: 105},
+		"spawned before the walker": {x: 105, touching: []int{1}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			walker := &thing{x: 100, delta: geom.NewVec(4, 0), physics: elastic(1), touching: []int{1}}
+			order := []*thing{walker, town}
+			if len(town.touching) > 0 {
+				walker.touching = []int{0}
+				order = []*thing{town, walker}
 			}
-		},
-	}
 
-	runNarrowPhase(t, space, seed, addStatic)
+			narrowTick(t, order...)
 
-	// An immovable wall weighs infinitely, so the impulse is A's alone:
-	// -(1+1) * -4 / (1/DefaultMass) = 8, rather than the 4 an equal partner
-	// would have taken half of.
-	got := contactsBy(t, contactsQ, contactsComp)[idA]
-	if len(got) != 1 {
-		t.Fatalf("A recorded %d contacts, want 1", len(got))
-	}
-	if math.Abs(got[0].Impact-8) > 1e-9 {
-		t.Errorf("impact against the wall = %v, want 8", got[0].Impact)
-	}
-	if p := findPos(t, qA, posA, idA); p.TopLeft.X == 100 {
-		t.Error("expected dynamic A to have moved")
-	}
-	if p := findPos(t, qB, posB, idB); p.TopLeft.X != 105 {
-		t.Errorf("expected static B to stay put at X=105, got X=%v", p.TopLeft.X)
-	}
-}
-
-func TestNarrowPhase_SensorContact_RecordedButNeverPushed(t *testing.T) {
-	space := testSpace(t)
-	var posA goke.Comp[world.Position]
-	var idA uid.UID64
-	var qA *goke.Query
-	var sensorEditor *goke.Editor
-
-	var idB uid.UID64
-	var contactsComp goke.Comp[collisions.Contacts]
-	var contactsQ *goke.Query
-
-	seed := goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		var velA goke.Comp[world.Velocity]
-		var collA goke.Comp[collisions.Collision]
-		fa := si.NewFactory(&posA, &velA, &collA, &contactsComp)
-		fa.Create(1)
-		fa.Next()
-		posA.Slice(&fa.Cursor)[0] = posAt(100, 100, 10, 10) // plenty of margin from the world edge
-		velA.Slice(&fa.Cursor)[0].SetDelta(geom.NewVec(5, 0))
-		idA = fa.IDs[0]
-
-		var posB goke.Comp[world.Position]
-		var velB goke.Comp[world.Velocity]
-		fb := si.NewFactory(&posB, &velB)
-		fb.Create(1)
-		fb.Next()
-		posB.Slice(&fb.Cursor)[0] = posAt(105, 100, 10, 10)
-		idB = fb.IDs[0]
-
-		coll := collA.Slice(&fa.Cursor)
-		coll[0].Touching[0] = idB
-		coll[0].TouchingCount = 1
-
-		qA = si.NewQueryBuilder(&posA).Include(goke.Include[world.Velocity]()).Build()
-		contactsQ = si.NewQueryBuilder(&contactsComp).Build()
-	}}
-
-	// Sensor is a zero-size tag: Factory/Track reject zero-size data columns,
-	// so it has to be added via an Editor migration (comp.Add has no such
-	// restriction), in a second Setup-phase system run after the seed.
-	var sensorComp goke.Comp[collisions.Sensor]
-	addSensor := goke.SystemFn{
-		OnInit: func(si *goke.SysInit) {
-			sensorEditor = qA.NewEditorBuilder(&sensorComp).Build()
-		},
-		OnUpdate: func(cb *goke.CmdBuf, _ time.Duration) {
-			qA.All()
-			for qA.Next() {
-				buf := qA.BeginMigrate(cb)
-				for _, id := range qA.Cursor().IDs {
-					buf.Add(id)
-				}
-				buf.Commit(sensorEditor)
+			if walker.left() != 100 || town.left() != 105 {
+				t.Errorf("walker at %v, town at %v — want neither pushed", walker.left(), town.left())
 			}
-		},
-	}
-
-	runNarrowPhase(t, space, seed, addSensor)
-
-	if p := findPos(t, qA, posA, idA); p.TopLeft.X != 100 {
-		t.Errorf("expected a sensor contact to never physically push A, TopLeft.X = %v, want 100", p.TopLeft.X)
-	}
-
-	// Being told is the whole point of a sensor, so the contact is still
-	// published — with no impulse, since none was exchanged.
-	got := contactsBy(t, contactsQ, contactsComp)[idA]
-	if len(got) != 1 {
-		t.Fatalf("sensor A recorded %d contacts, want 1", len(got))
-	}
-	if got[0].Other != idB || got[0].Impact != 0 {
-		t.Errorf("sensor A recorded %+v, want a contact with %v at zero impact", got[0], idB)
+			if math.Abs(walker.speedX()-4) > epsilon {
+				t.Errorf("the walker moves at %v, want its 4 untouched", walker.speedX())
+			}
+			for who, th := range map[string]*thing{"walker": walker, "town": town} {
+				if len(th.contacts) != 1 || th.contacts[0].Impact != 0 {
+					t.Errorf("%s contacts = %+v, want exactly one, at zero impact", who, th.contacts)
+				}
+			}
+			if len(walker.contacts) == 1 && walker.contacts[0].Other != town.id {
+				t.Errorf("the walker struck %v, want the town %v", walker.contacts[0].Other, town.id)
+			}
+		})
 	}
 }
 
@@ -240,276 +210,161 @@ func TestNarrowPhase_SensorContact_RecordedButNeverPushed(t *testing.T) {
 // second pass has work the first could not have seen. Stop too eagerly and
 // the outer boxes stay inside each other.
 func TestNarrowPhase_KeepsIteratingWhileSeparationCreatesNewOverlap(t *testing.T) {
-	space := testSpace(t)
-	var idA, idB, idC uid.UID64
-	var posComp goke.Comp[world.Position]
-	var q *goke.Query
+	// Three 10-wide boxes overlapping 8 units each: a tight stack, so
+	// separating any pair pushes into the next.
+	a := &thing{x: 100, physics: elastic(1), touching: []int{1, 2}}
+	b := &thing{x: 102, physics: elastic(1), touching: []int{0, 2}}
+	c := &thing{x: 104, physics: elastic(1), touching: []int{0, 1}}
 
-	runNarrowPhase(t, space, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		var pos goke.Comp[world.Position]
-		var vel goke.Comp[world.Velocity]
-		var coll goke.Comp[collisions.Collision]
-
-		f := si.NewFactory(&pos, &vel, &coll)
-		f.Create(3)
-		f.Next()
-		slice := pos.Slice(&f.Cursor)
-		// Three 10-wide boxes overlapping 8 units each: a tight stack, so
-		// separating any pair pushes into the next.
-		slice[0] = posAt(100, 100, 10, 10)
-		slice[1] = posAt(102, 100, 10, 10)
-		slice[2] = posAt(104, 100, 10, 10)
-		idA, idB, idC = f.IDs[0], f.IDs[1], f.IDs[2]
-
-		touching := coll.Slice(&f.Cursor)
-		for i := range touching {
-			for j, id := range f.IDs {
-				if i != j {
-					touching[i].Touching[touching[i].TouchingCount] = id
-					touching[i].TouchingCount++
-				}
-			}
-		}
-		for i, id := range f.IDs {
-			space.Insert(id, slice[i].AABB)
-		}
-		space.Flush(nil)
-
-		posComp = pos
-		q = si.NewQueryBuilder(&pos).Build()
-	}})
-
-	a := findPos(t, q, posComp, idA)
-	b := findPos(t, q, posComp, idB)
-	c := findPos(t, q, posComp, idC)
+	narrowTick(t, a, b, c)
 
 	for _, pair := range []struct {
 		name string
-		l, r world.Position
+		l, r *thing
 	}{{"A/B", a, b}, {"B/C", b, c}, {"A/C", a, c}} {
 		// Resting exactly edge-to-edge is the right answer, so what is
 		// measured is depth, not whether the closed boxes touch.
-		if d := overlapDepth(pair.l, pair.r); d > 1e-6 {
-			t.Errorf("%s still overlap by %v after the solver ran: %v vs %v", pair.name, d, pair.l.AABB.AABB, pair.r.AABB.AABB)
+		if d := overlapDepth(pair.l.base.Pos, pair.r.base.Pos); d > 1e-6 {
+			t.Errorf("%s still overlap by %v after the solver ran", pair.name, d)
 		}
 	}
 }
 
-// A tick's contacts are settled in turn, not side by side. An entity squeezed
-// between two others has to come out of the tick moving, exactly as it would
-// have if each pair had been settled on its own; measuring both contacts
-// against the same starting velocities instead leaves their impulses
-// cancelling, and a row like this one stops dead — which is how clumps form.
-func TestNarrowPhase_SqueezedEntity_ImpulsesChainRatherThanCancel(t *testing.T) {
-	space := testSpace(t)
-	var ids [3]uid.UID64
-	var contactsComp goke.Comp[collisions.Contacts]
-	var q *goke.Query
+// A tick's contacts are settled in turn, each from what the one before left
+// behind. An entity squeezed between two others has to come out of the tick
+// moving; measured side by side against the same starting velocities, the two
+// impulses cancel and the whole row stops dead — which is how clumps form.
+func TestNarrowPhase_SqueezedEntity_BouncesOffBothNeighboursInTurn(t *testing.T) {
+	left := &thing{x: 93, delta: geom.NewVec(5, 0), physics: elastic(1), touching: []int{1}}
+	middle := &thing{x: 100, physics: elastic(1), touching: []int{0, 2}}
+	right := &thing{x: 107, delta: geom.NewVec(-5, 0), physics: elastic(1), touching: []int{1}}
 
-	runNarrowPhase(t, space, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		var pos goke.Comp[world.Position]
-		var vel goke.Comp[world.Velocity]
-		var coll goke.Comp[collisions.Collision]
-		f := si.NewFactory(&pos, &vel, &coll, &contactsComp)
-		f.Create(3)
-		f.Next()
-		positions := pos.Slice(&f.Cursor)
-		velocities := vel.Slice(&f.Cursor)
+	narrowTick(t, left, middle, right)
 
-		// A row of 10-wide boxes overlapping 3 units each, the outer two
-		// closing on the middle one, which stands still.
-		for i, x := range []float64{93, 100, 107} {
-			positions[i] = posAt(x, 100, 10, 10)
-			ids[i] = f.IDs[i]
-			space.Insert(f.IDs[i], positions[i].AABB)
+	// The row swaps velocities down the line, exactly as settling each pair on
+	// its own would: 5,0 -> 0,5 and then 5,-5 -> -5,5.
+	for i, want := range []float64{0, -5, 5} {
+		if got := []*thing{left, middle, right}[i].speedX(); math.Abs(got-want) > epsilon {
+			t.Errorf("entity %d leaves the tick at %v, want %v", i, got, want)
 		}
-		velocities[0].SetDelta(geom.NewVec(5, 0))
-		velocities[2].SetDelta(geom.NewVec(-5, 0))
-		space.Flush(nil)
-
-		touching := coll.Slice(&f.Cursor)
-		touching[0].Touching[0], touching[0].TouchingCount = f.IDs[1], 1
-		touching[1].Touching[0], touching[1].Touching[1], touching[1].TouchingCount = f.IDs[0], f.IDs[2], 2
-		touching[2].Touching[0], touching[2].TouchingCount = f.IDs[1], 1
-
-		q = si.NewQueryBuilder(&contactsComp).Build()
-	}})
-
-	byEntity := contactsBy(t, q, contactsComp)
-	middle := byEntity[ids[1]]
-	if len(middle) != 2 {
-		t.Fatalf("the middle entity recorded %d contacts, want 2", len(middle))
+	}
+	if len(middle.contacts) != 2 {
+		t.Fatalf("the middle entity recorded %d contacts, want 2", len(middle.contacts))
 	}
 	// Settling the first contact costs 5; the second is measured against what
 	// that one left behind, so it costs 10 rather than another 5.
 	for i, want := range []struct {
 		other  uid.UID64
 		impact float64
-	}{{ids[0], 5}, {ids[2], 10}} {
-		if middle[i].Other != want.other || math.Abs(middle[i].Impact-want.impact) > 1e-9 {
-			t.Errorf("contact %d = (%v, impact %v), want (%v, %v)", i, middle[i].Other, middle[i].Impact, want.other, want.impact)
-		}
-	}
-
-	// Which is the row swapping velocities down the line, rather than everyone
-	// stopping where they stand.
-	for i, start := range []float64{5, 0, -5} {
-		got := start
-		for _, c := range byEntity[ids[i]] {
-			got += c.Impact * c.Normal.X // every entity here weighs DefaultMass
-		}
-		if want := []float64{0, -5, 5}[i]; math.Abs(got-want) > 1e-9 {
-			t.Errorf("entity %d leaves the tick at %v, want %v", i, got, want)
+	}{{left.id, 5}, {right.id, 10}} {
+		if got := middle.contacts[i]; got.Other != want.other || math.Abs(got.Impact-want.impact) > epsilon {
+			t.Errorf("contact %d = (%v, impact %v), want (%v, %v)", i, got.Other, got.Impact, want.other, want.impact)
 		}
 	}
 }
 
-// Chaining is about a tick's later contacts, so a pair on its own must settle
-// for exactly what the two sides brought to it.
-func TestNarrowPhase_LonePair_SettlesOnItsOwnVelocities(t *testing.T) {
-	space := testSpace(t)
-	var idA uid.UID64
-	var contactsComp goke.Comp[collisions.Contacts]
-	var q *goke.Query
+// The classic head-on case: equal weights trade velocities along the contact
+// axis and keep whatever they had across it.
+func TestNarrowPhase_EqualMasses_ExchangeVelocitiesAlongTheNormal(t *testing.T) {
+	a := &thing{x: 100, delta: geom.NewVec(5, 2), physics: elastic(1), touching: []int{1}}
+	b := &thing{x: 107, delta: geom.NewVec(-5, 2), physics: elastic(1)}
 
-	runNarrowPhase(t, space, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		var pos goke.Comp[world.Position]
-		var vel goke.Comp[world.Velocity]
-		var coll goke.Comp[collisions.Collision]
-		f := si.NewFactory(&pos, &vel, &coll, &contactsComp)
-		f.Create(2)
-		f.Next()
-		positions := pos.Slice(&f.Cursor)
-		velocities := vel.Slice(&f.Cursor)
-		positions[0] = posAt(100, 100, 10, 10)
-		positions[1] = posAt(107, 100, 10, 10)
-		velocities[0].SetDelta(geom.NewVec(5, 0))
-		velocities[1].SetDelta(geom.NewVec(-5, 0))
-		idA = f.IDs[0]
+	narrowTick(t, a, b)
 
-		touching := coll.Slice(&f.Cursor)
-		touching[0].Touching[0], touching[0].TouchingCount = f.IDs[1], 1
-
-		q = si.NewQueryBuilder(&contactsComp).Build()
-	}})
-
-	// -(1+1) * (5 - -5) / (1 + 1), closing head-on at equal weight.
-	got := contactsBy(t, q, contactsComp)[idA]
-	if len(got) != 1 {
-		t.Fatalf("recorded %d contacts, want 1", len(got))
+	if math.Abs(a.speedX()+5) > epsilon || math.Abs(b.speedX()-5) > epsilon {
+		t.Errorf("X = (%v, %v), want (-5, 5) swapped", a.speedX(), b.speedX())
 	}
-	if math.Abs(got[0].Impact-10) > 1e-9 {
-		t.Errorf("impact = %v, want 10", got[0].Impact)
+	if ay, by := a.base.Vel.Delta().Y, b.base.Vel.Delta().Y; math.Abs(ay-2) > epsilon || math.Abs(by-2) > epsilon {
+		t.Errorf("Y = (%v, %v), want both left at 2 — nothing acts across the normal", ay, by)
 	}
 }
 
-// Each side's material comes from its own components, and only a side that
-// carries none falls back: A is heavy and barely springy, B carries a
-// meaningless Mass and no Restitution at all. Both show up in the one number
-// the pair publishes.
-func TestNarrowPhase_Material_ReadPerSideWithFallbacks(t *testing.T) {
-	space := testSpace(t)
-	var idA uid.UID64
-	var contactsComp goke.Comp[collisions.Contacts]
-	var q *goke.Query
+// The impulse is shared out by weight, so a heavy side barely deflects while
+// the light one is thrown back — momentum and energy are what pin it down.
+func TestNarrowPhase_HeavyAgainstLight_ConservesMomentumAndEnergy(t *testing.T) {
+	const heavyMass, lightMass = 9, 1
+	heavy := &thing{x: 100, delta: geom.NewVec(2, 0), physics: elastic(heavyMass), touching: []int{1}}
+	light := &thing{x: 107, delta: geom.NewVec(-2, 0), physics: elastic(lightMass)}
 
-	runNarrowPhase(t, space, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		var posA goke.Comp[world.Position]
-		var velA goke.Comp[world.Velocity]
-		var collA goke.Comp[collisions.Collision]
-		var massA goke.Comp[collisions.Mass]
-		var restitutionA goke.Comp[collisions.Restitution]
-		fa := si.NewFactory(&posA, &velA, &collA, &massA, &restitutionA, &contactsComp)
-		fa.Create(1)
-		fa.Next()
-		posA.Slice(&fa.Cursor)[0] = posAt(100, 100, 10, 10)
-		velA.Slice(&fa.Cursor)[0].SetDelta(geom.NewVec(5, 0)) // closing on B
-		massA.Slice(&fa.Cursor)[0] = collisions.Mass{Value: 4}
-		restitutionA.Slice(&fa.Cursor)[0] = collisions.Restitution{Value: 0.5}
-		idA = fa.IDs[0]
+	narrowTick(t, heavy, light)
 
-		var posB goke.Comp[world.Position]
-		var velB goke.Comp[world.Velocity]
-		var massB goke.Comp[collisions.Mass]
-		fb := si.NewFactory(&posB, &velB, &massB)
-		fb.Create(1)
-		fb.Next()
-		posB.Slice(&fb.Cursor)[0] = posAt(105, 100, 10, 10)
-		velB.Slice(&fb.Cursor)[0].SetDelta(geom.NewVec(-5, 0))
-		massB.Slice(&fb.Cursor)[0] = collisions.Mass{Value: 0} // meaningless -> DefaultMass
-
-		coll := collA.Slice(&fa.Cursor)
-		coll[0].Touching[0] = fb.IDs[0]
-		coll[0].TouchingCount = 1
-
-		q = si.NewQueryBuilder(&contactsComp).Build()
-	}})
-
-	// -(1 + min(0.5, 1)) * -10 / (1/4 + 1/DefaultMass) = 12, where reading
-	// either side's material as a default would have given 10.
-	got := contactsBy(t, q, contactsComp)[idA]
-	if len(got) != 1 {
-		t.Fatalf("A recorded %d contacts, want 1", len(got))
+	h, l := heavy.speedX(), light.speedX()
+	if got, want := heavyMass*h+lightMass*l, float64(heavyMass*2+lightMass*-2); math.Abs(got-want) > epsilon {
+		t.Errorf("momentum = %v, want %v", got, want)
 	}
-	if math.Abs(got[0].Impact-12) > 1e-9 {
-		t.Errorf("impact = %v, want 12 (mass 4 and restitution 0.5 on A, defaults on B)", got[0].Impact)
+	if got, want := heavyMass*h*h+lightMass*l*l, float64(heavyMass*4+lightMass*4); math.Abs(got-want) > epsilon {
+		t.Errorf("kinetic energy (x2) = %v, want %v", got, want)
+	}
+	if h <= 0 || l <= 0 {
+		t.Errorf("heavy moves at %v, light at %v — want the heavy one carrying on and the light one thrown back", h, l)
+	}
+}
+
+// A pair bounces by the softer of its two sides, all the way down to not at all.
+func TestNarrowPhase_Restitution_DampsTheBounce(t *testing.T) {
+	cases := map[string]struct {
+		restitutionA, restitutionB float64
+		wantA, wantB               float64
+	}{
+		"perfectly elastic":   {1, 1, 4, -3},
+		"half, from A":        {0.5, 1, 2.25, -1.25},
+		"half, from B":        {1, 0.5, 2.25, -1.25},
+		"perfectly inelastic": {0, 1, 0.5, 0.5},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			a := &thing{x: 107, delta: geom.NewVec(-3, 0), physics: &collisions.Physics{Restitution: c.restitutionA}, touching: []int{1}}
+			b := &thing{x: 100, delta: geom.NewVec(4, 0), physics: &collisions.Physics{Restitution: c.restitutionB}}
+
+			narrowTick(t, a, b)
+
+			if math.Abs(a.speedX()-c.wantA) > epsilon || math.Abs(b.speedX()-c.wantB) > epsilon {
+				t.Errorf("speeds = (%v, %v), want (%v, %v)", a.speedX(), b.speedX(), c.wantA, c.wantB)
+			}
+		})
+	}
+}
+
+// Each side's material is its own: A is heavy and only half springy, B names no
+// Mass at all and so weighs DefaultMass. Both show up in the one number the pair
+// publishes — -(1 + min(0.5, 1)) * -10 / (1/4 + 1/DefaultMass) = 12, where
+// reading either side's Physics wrongly would have given 10.
+func TestNarrowPhase_Material_IsReadPerSide(t *testing.T) {
+	a := &thing{x: 100, delta: geom.NewVec(5, 0), physics: &collisions.Physics{Mass: 4, Restitution: 0.5}, touching: []int{1}}
+	b := &thing{x: 105, delta: geom.NewVec(-5, 0), physics: &collisions.Physics{Restitution: 1}}
+
+	narrowTick(t, a, b)
+
+	if len(a.contacts) != 1 || math.Abs(a.contacts[0].Impact-12) > epsilon {
+		t.Errorf("contacts = %+v, want one at impact 12", a.contacts)
 	}
 }
 
 // A confirmed contact is published to both sides that asked for it, naming the
-// other entity and how hard the two met — this is what game logic reads a tick
-// later instead of digging through the solver.
+// other entity, how hard the two met, and which way each of them left.
 func TestNarrowPhase_Contacts_PublishedToBothSides(t *testing.T) {
-	space := testSpace(t)
-	var idA, idB uid.UID64
-	var contactsComp goke.Comp[collisions.Contacts]
-	var q *goke.Query
+	a := &thing{x: 100, delta: geom.NewVec(5, 0), physics: elastic(1), touching: []int{1}}
+	b := &thing{x: 105, delta: geom.NewVec(-5, 0), physics: elastic(1)}
 
-	runNarrowPhase(t, space, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		var posA goke.Comp[world.Position]
-		var velA goke.Comp[world.Velocity]
-		var collA goke.Comp[collisions.Collision]
-		fa := si.NewFactory(&posA, &velA, &collA, &contactsComp)
-		fa.Create(1)
-		fa.Next()
-		posA.Slice(&fa.Cursor)[0] = posAt(100, 100, 10, 10)
-		velA.Slice(&fa.Cursor)[0].SetDelta(geom.NewVec(5, 0)) // closing on B
-		idA = fa.IDs[0]
+	narrowTick(t, a, b)
 
-		var posB goke.Comp[world.Position]
-		var velB goke.Comp[world.Velocity]
-		var contactsB goke.Comp[collisions.Contacts]
-		fb := si.NewFactory(&posB, &velB, &contactsB)
-		fb.Create(1)
-		fb.Next()
-		posB.Slice(&fb.Cursor)[0] = posAt(105, 100, 10, 10) // overlaps A by 5px on X
-		velB.Slice(&fb.Cursor)[0].SetDelta(geom.NewVec(-5, 0))
-		idB = fb.IDs[0]
-
-		coll := collA.Slice(&fa.Cursor)
-		coll[0].Touching[0] = idB
-		coll[0].TouchingCount = 1
-
-		q = si.NewQueryBuilder(&contactsComp).Build()
-	}})
-
-	byEntity := contactsBy(t, q, contactsComp)
 	for _, side := range []struct {
-		self, other uid.UID64
-	}{{idA, idB}, {idB, idA}} {
-		got := byEntity[side.self]
-		if len(got) != 1 {
-			t.Fatalf("entity %v recorded %d contacts, want 1", side.self, len(got))
+		self, other *thing
+		leaves      float64
+	}{{a, b, -1}, {b, a, 1}} {
+		if len(side.self.contacts) != 1 {
+			t.Fatalf("entity %v recorded %d contacts, want 1", side.self.id, len(side.self.contacts))
 		}
-		if got[0].Other != side.other {
-			t.Errorf("entity %v recorded a contact with %v, want %v", side.self, got[0].Other, side.other)
+		got := side.self.contacts[0]
+		if got.Other != side.other.id {
+			t.Errorf("entity %v recorded a contact with %v, want %v", side.self.id, got.Other, side.other.id)
 		}
-		if got[0].Impact <= 0 {
-			t.Errorf("entity %v recorded impact %v, want the closing speed to register", side.self, got[0].Impact)
+		if math.Abs(got.Impact-10) > epsilon {
+			t.Errorf("entity %v recorded impact %v, want 10", side.self.id, got.Impact)
 		}
-	}
-	if byEntity[idA][0].Impact != byEntity[idB][0].Impact {
-		t.Errorf("sides disagree on the impulse: %v vs %v", byEntity[idA][0].Impact, byEntity[idB][0].Impact)
+		if got.Normal.X != side.leaves || got.Normal.Y != 0 {
+			t.Errorf("entity %v was told to leave along %v, want (%v, 0) — away from the other", side.self.id, got.Normal, side.leaves)
+		}
 	}
 }
 
@@ -518,15 +373,14 @@ func TestNarrowPhase_Contacts_PublishedToBothSides(t *testing.T) {
 func TestNarrowPhase_Contacts_DoNotSurviveTheNextTick(t *testing.T) {
 	space := testSpace(t)
 	ecs := goke.New()
-	var contactsComp goke.Comp[collisions.Contacts]
+	var struck goke.Comp[collisions.Collision]
 	var q *goke.Query
 
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		seedContactReporter(t, si, space, posAt(100, 100, 10, 10), geom.NewVec(5, 0), &contactsComp)
-		var other goke.Comp[collisions.Contacts]
-		seedContactReporter(t, si, space, posAt(105, 100, 10, 10), geom.NewVec(-5, 0), &other)
+		seedPhysical(t, si, space, posAt(100, 100, 10, 10), geom.NewVec(5, 0))
+		seedPhysical(t, si, space, posAt(105, 100, 10, 10), geom.NewVec(-5, 0))
 		space.Flush(nil)
-		q = si.NewQueryBuilder(&contactsComp).Build()
+		q = si.NewQueryBuilder(&struck).Build()
 	}})
 
 	broad := ecs.RegSys(collisions.NewBroadPhase(space, testProbeMargin))
@@ -539,55 +393,42 @@ func TestNarrowPhase_Contacts_DoNotSurviveTheNextTick(t *testing.T) {
 	})
 
 	ecs.Tick(time.Millisecond)
-	if got := countContacts(t, q, contactsComp); got != 2 {
+	if got := countContacts(q, struck); got != 2 {
 		t.Fatalf("%d contacts recorded across both entities on the overlapping tick, want 2", got)
 	}
 
 	// The solver pushed them apart, so this tick confirms nothing — and last
 	// tick's contacts must be gone rather than read a second time.
 	ecs.Tick(time.Millisecond)
-	if got := countContacts(t, q, contactsComp); got != 0 {
+	if got := countContacts(q, struck); got != 0 {
 		t.Errorf("%d contacts left after a tick with no contact, want 0", got)
 	}
 }
 
-// seedContactReporter spawns a collidable entity that records what it strikes, moving at delta.
-func seedContactReporter(t *testing.T, si *goke.SysInit, space *gokg.Space, pos world.Position, delta geom.Vec, contacts *goke.Comp[collisions.Contacts]) uid.UID64 {
+// seedPhysical spawns a physical, collidable entity moving at delta.
+func seedPhysical(t *testing.T, si *goke.SysInit, space *gokg.Space, pos world.Position, delta geom.Vec) uid.UID64 {
 	t.Helper()
-	var posComp goke.Comp[world.Position]
-	var velComp goke.Comp[world.Velocity]
+	var baseComp goke.Comp[world.Base]
 	var collComp goke.Comp[collisions.Collision]
-	f := si.NewFactory(&posComp, &velComp, &collComp, contacts)
+	var physicsComp goke.Comp[collisions.Physics]
+	f := si.NewFactory(&baseComp, &collComp, &physicsComp)
 	f.Create(1)
 	f.Next()
-	posComp.Slice(&f.Cursor)[0] = pos
-	velComp.Slice(&f.Cursor)[0].SetDelta(delta)
+	baseComp.Slice(&f.Cursor)[0].Pos = pos
+	baseComp.Slice(&f.Cursor)[0].Vel.SetDelta(delta)
+	physicsComp.Slice(&f.Cursor)[0] = collisions.Physics{Restitution: 1}
 	id := f.IDs[0]
 	space.Insert(id, pos.AABB)
 	space.SetCapabilities(id, collisions.CanCollide)
 	return id
 }
 
-// contactsBy collects what each entity q matches recorded this tick.
-func contactsBy(t *testing.T, q *goke.Query, comp goke.Comp[collisions.Contacts]) map[uid.UID64][]collisions.Contact {
-	t.Helper()
-	found := map[uid.UID64][]collisions.Contact{}
-	q.All()
-	for q.Next() {
-		cur := q.Cursor()
-		slice := comp.Slice(cur)
-		for i, id := range cur.IDs {
-			found[id] = append(found[id], slice[i].All()...)
-		}
-	}
-	return found
-}
-
-func countContacts(t *testing.T, q *goke.Query, comp goke.Comp[collisions.Contacts]) int {
-	t.Helper()
+func countContacts(q *goke.Query, comp goke.Comp[collisions.Collision]) int {
 	var n int
-	for _, contacts := range contactsBy(t, q, comp) {
-		n += len(contacts)
+	for q.All(); q.Next(); {
+		for _, c := range comp.Slice(q.Cursor()) {
+			n += len(c.Contacts())
+		}
 	}
 	return n
 }

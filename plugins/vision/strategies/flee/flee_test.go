@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/plugins/vision"
 	"github.com/kjkrol/gokebiten/plugins/vision/strategies/flee"
 	"github.com/kjkrol/gokebiten/plugins/world"
@@ -30,11 +31,12 @@ func (c *installCtx) Setup(providers ...goke.SetupProvider) {
 func (c *installCtx) RegSys(f func() goke.System) goke.Runnable { return c.ecs.RegSys(f()) }
 func (c *installCtx) ECS() *goke.ECS                            { return c.ecs }
 
-// body is a test entity: where it is, and which way it is going — a zero dir
-// is something standing still.
+// body is a test entity: where it is, which way it is going (a zero dir is
+// something standing still), and whether it is marked as a Threat.
 type body struct {
-	x, y float64
-	dir  geom.Vec
+	x, y  float64
+	dir   geom.Vec
+	scary bool
 }
 
 func at(d body) world.Position {
@@ -61,7 +63,9 @@ func runWith(t *testing.T, tune func(*flee.Behavior), runner body, facing geom.V
 	if tune != nil {
 		tune(behavior)
 	}
-	w.RegisterBehavior(behavior)
+	if err := v.RegisterBehavior(plugin.Between[flee.Skittish, plugin.Anything](behavior.Steer, plugin.Asking[flee.Threat]())); err != nil {
+		t.Fatalf("RegisterBehavior: %v", err)
+	}
 
 	ctx := &installCtx{ecs: goke.New()}
 	if err := w.Install(ctx); err != nil {
@@ -78,37 +82,48 @@ func runWith(t *testing.T, tune func(*flee.Behavior), runner body, facing geom.V
 			Velocity: k.Const(world.Velocity{Dir: facing, Value: 1}),
 			Components: []world.ComponentTemplate{
 				k.Const(vision.Sight{Facing: facing, HalfAngle: math.Pi / 2.5, Radius: 600}),
-				k.Const(vision.Sighted{}),
 				k.Const(world.Steering{}),
 				k.Const(flee.Skittish{}),
 			},
 		}
 	})
+	moving := func(d body) world.Velocity {
+		if d.dir == (geom.Vec{}) {
+			return world.Velocity{}
+		}
+		return world.Velocity{Dir: d.dir, Value: 1}
+	}
 	dict.Define("threat", func(k world.Kind[body]) world.EntKind {
-		return world.EntKind{Position: k.Load(at), Velocity: k.Load(func(d body) world.Velocity {
-			if d.dir == (geom.Vec{}) {
-				return world.Velocity{}
-			}
-			return world.Velocity{Dir: d.dir, Value: 1}
-		})}
+		return world.EntKind{Position: k.Load(at), Velocity: k.Load(moving)}
+	})
+	dict.Define("predator", func(k world.Kind[body]) world.EntKind {
+		return world.EntKind{
+			Position:   k.Load(at),
+			Velocity:   k.Load(moving),
+			Components: []world.ComponentTemplate{k.Const(flee.Threat{})},
+		}
 	})
 
 	w.Seed(dict.Entry("runner", runner))
 	for _, th := range threats {
-		w.Seed(dict.Entry("threat", th))
+		kind := "threat"
+		if th.scary {
+			kind = "predator"
+		}
+		w.Seed(dict.Entry(kind, th))
 	}
 	if err := w.Populate(); err != nil {
 		t.Fatalf("Populate: %v", err)
 	}
 
-	var vel goke.Comp[world.Velocity]
+	var base goke.Comp[world.Base]
 	var query *goke.Query
 	var systems []goke.System
 	for _, produce := range ctx.pending {
 		systems = append(systems, produce()...)
 	}
 	systems = append(systems, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		query = si.NewQueryBuilder(&vel).Include(goke.Include[flee.Skittish]()).Build()
+		query = si.NewQueryBuilder(&base).Include(goke.Include[flee.Skittish]()).Build()
 	}})
 	ctx.ecs.Setup(systems...)
 
@@ -118,8 +133,8 @@ func runWith(t *testing.T, tune func(*flee.Behavior), runner body, facing geom.V
 	var out geom.Vec
 	query.All()
 	for query.Next() {
-		for _, got := range vel.Slice(query.Cursor()) {
-			out = got.Dir
+		for _, got := range base.Slice(query.Cursor()) {
+			out = got.Vel.Dir
 		}
 	}
 	return out
@@ -195,5 +210,40 @@ func TestFlee_TurnsAwayFromWhatIsComingAtIt(t *testing.T) {
 
 	if math.Abs(heading(got)-heading(closing)) > 1e-6 {
 		t.Errorf("heading %.4f rad, want %.4f — straight away from what is closing in", heading(got), heading(closing))
+	}
+}
+
+// A Threat is not judged on its course: the moment one is in view it is run
+// from, however harmlessly it happens to be drifting.
+func TestFlee_AlwaysRunsFromAThreatInSight(t *testing.T) {
+	east := geom.NewVec(1.0, 0.0)
+	// The same bearing that a harmless neighbour is ignored at, 65 degrees off
+	// the runner's course — see TestFlee_IgnoresWhatItMerelyPassesBy.
+	away := geom.NewVec(-100, -214)
+	norm := math.Hypot(away.X, away.Y)
+	away = geom.NewVec(away.X/norm, away.Y/norm)
+
+	got := run(t, body{x: 500, y: 500}, east, body{x: 600, y: 714, scary: true})
+
+	if math.Abs(heading(got)-heading(away)) > 1e-6 {
+		t.Errorf("heading %.4f rad, want %.4f — straight away from the threat", heading(got), heading(away))
+	}
+}
+
+// With a threat in view nothing else gets a say: a neighbour dead ahead would
+// bend the escape sideways, and flight has to be straight away from the threat.
+func TestFlee_AThreatOutweighsEverythingElseInSight(t *testing.T) {
+	east := geom.NewVec(1.0, 0.0)
+	away := geom.NewVec(-100, -214)
+	norm := math.Hypot(away.X, away.Y)
+	away = geom.NewVec(away.X/norm, away.Y/norm)
+
+	got := run(t, body{x: 500, y: 500}, east,
+		body{x: 600, y: 714, scary: true},
+		body{x: 560, y: 500}, // much nearer, and square on the runner's course
+	)
+
+	if math.Abs(heading(got)-heading(away)) > 1e-6 {
+		t.Errorf("heading %.4f rad, want %.4f — straight away from the threat, the neighbour ignored", heading(got), heading(away))
 	}
 }

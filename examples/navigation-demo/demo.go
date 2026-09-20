@@ -145,6 +145,9 @@ func (s *mainStage) registerUnitKinds() {
 					WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
 				k.Const(selection.Selected{}),
 				collisions.Collidable(space),
+				// Physics with no restitution: units are pushed out of each
+				// other without rebounding, and navigation sets their course.
+				k.Const(collisions.Physics{}),
 			},
 		}
 	}

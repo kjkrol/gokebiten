@@ -12,28 +12,28 @@ import (
 
 // despawnWorld spawns n entities at the test position, indexed in the space the
 // way a real spawn leaves them, and returns their ids with a live Position query.
-func despawnWorld(t *testing.T, wm *module, n int) ([]uid.UID64, *goke.ECS, *goke.Query, *goke.Comp[Position]) {
+func despawnWorld(t *testing.T, wm *module, n int) ([]uid.UID64, *goke.ECS, *goke.Query, *goke.Comp[Base]) {
 	t.Helper()
 	wm.populate(EntKind{Position: Const(spawnerTestPos()), Velocity: Const(Velocity{})}, make([]any, n))
 
-	pos := new(goke.Comp[Position])
+	base := new(goke.Comp[Base])
 	var q *goke.Query
 	var ids []uid.UID64
 	ecs := goke.New()
 	ecs.Setup(append(wm.SetupSystems(), goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		q = si.NewQueryBuilder(pos).Build()
+		q = si.NewQueryBuilder(base).Build()
 		q.All()
 		for q.Next() {
 			cursor := q.Cursor()
-			boxes := pos.Slice(cursor)
+			bases := base.Slice(cursor)
 			for i, id := range cursor.IDs {
 				ids = append(ids, id)
-				wm.space.Insert(id, boxes[i].AABB)
+				wm.space.Insert(id, bases[i].Pos.AABB)
 			}
 		}
 		wm.space.Flush(nil)
 	}})...)
-	return ids, ecs, q, pos
+	return ids, ecs, q, base
 }
 
 // run ticks ecs once with act as its whole plan — despawning needs a CmdBuf,

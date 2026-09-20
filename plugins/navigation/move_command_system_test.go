@@ -33,7 +33,7 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 	selSys := selection.NewSelectionSystem(selState, nil, cam)
 
 	var cell goke.Comp[board.Cell]
-	var pos goke.Comp[world.Position]
+	var pos goke.Comp[world.Base]
 	var order goke.Comp[MoveOrder]
 	var readQuery *goke.Query
 	var selectedID, otherID uid.UID64
@@ -51,7 +51,7 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 		orders := order.Slice(&f.Cursor)
 		for i := range ids {
 			cells[i] = board.Cell{ID: start}
-			positions[i] = world.Position{AABB: board.CellAABB(grid, start, 8)}
+			positions[i].Pos = world.Position{AABB: board.CellAABB(grid, start, 8)}
 			orders[i] = MoveOrder{Target: oldTarget, Path: Path{Length: 1}}
 		}
 
@@ -123,7 +123,7 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 	selSys := selection.NewSelectionSystem(selState, nil, cam)
 
 	var cell goke.Comp[board.Cell]
-	var pos goke.Comp[world.Position]
+	var pos goke.Comp[world.Base]
 	var order goke.OptComp[MoveOrder]
 	var readQuery *goke.Query
 	var idleID uid.UID64
@@ -138,7 +138,7 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 		cells := cell.Slice(&f.Cursor)
 		positions := pos.Slice(&f.Cursor)
 		cells[0] = board.Cell{ID: start}
-		positions[0] = world.Position{AABB: board.CellAABB(grid, start, 8)}
+		positions[0].Pos = world.Position{AABB: board.CellAABB(grid, start, 8)}
 
 		readQuery = si.NewQueryBuilder().Optional(&order).Build()
 		selSys.Init(si)
@@ -220,7 +220,7 @@ func TestCommandSystem_Update_UnreachableTargetLeavesInFlightEntityUntouched(t *
 	selSys := selection.NewSelectionSystem(selState, nil, cam)
 
 	var cell goke.Comp[board.Cell]
-	var pos goke.Comp[world.Position]
+	var pos goke.Comp[world.Base]
 	var order goke.Comp[MoveOrder]
 	var readQuery *goke.Query
 	var movingID uid.UID64
@@ -236,7 +236,7 @@ func TestCommandSystem_Update_UnreachableTargetLeavesInFlightEntityUntouched(t *
 		positions := pos.Slice(&f.Cursor)
 		orders := order.Slice(&f.Cursor)
 		cells[0] = board.Cell{ID: start}
-		positions[0] = world.Position{AABB: board.CellAABB(grid, start, 8)}
+		positions[0].Pos = world.Position{AABB: board.CellAABB(grid, start, 8)}
 		orders[0] = MoveOrder{Target: oldTarget, Path: Path{Length: 1}}
 
 		readQuery = si.NewQueryBuilder(&order).Build()

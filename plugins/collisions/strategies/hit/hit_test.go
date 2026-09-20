@@ -5,58 +5,70 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/plugins/collisions"
 	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/hit"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/uid"
+	"github.com/kjkrol/gokg"
+	"github.com/kjkrol/gokg/geom"
+	"github.com/kjkrol/gokg/plane"
+	gokgspatial "github.com/kjkrol/gokg/spatial"
 )
 
 const fallback = time.Second
 
-// entity is the pair of components the behavior works on, as one test fixture.
+// entity is one collidable box that keeps a Mark, at x along a row.
 type entity struct {
-	mark     hit.Mark
-	contacts collisions.Contacts
+	x    float64
+	mark hit.Mark
 }
 
-func run(t *testing.T, b *hit.Behavior, entities ...entity) []hit.Mark {
+// run hosts the hit behavior in the real collision engine, ticks it twice —
+// contacts are read the tick after they happen — and returns the marks in order.
+func run(t *testing.T, entities ...entity) []hit.Mark {
 	t.Helper()
-	var markComp goke.Comp[hit.Mark]
-	var contactsComp goke.Comp[collisions.Contacts]
-	var q *goke.Query
+	space, err := gokg.NewSpace(gokg.Config{
+		Width: 1000, Height: 1000,
+		BucketSize: gokgspatial.ResolutionFrom(64), BucketCapacity: 16, OpsBufferSize: 64,
+	})
+	if err != nil {
+		t.Fatalf("gokg.NewSpace: %v", err)
+	}
 
 	ecs := goke.New()
-	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		for _, e := range entities {
-			f := si.NewFactory(&markComp, &contactsComp)
-			f.Create(1)
-			f.Next()
-			markComp.Slice(&f.Cursor)[0] = e.mark
-			contactsComp.Slice(&f.Cursor)[0] = e.contacts
-		}
-		q = si.NewQueryBuilder(&markComp).Build()
-	}})
+	engine := collisions.New(space, ecs, 10)
+	if err := engine.RegisterBehavior(plugin.Each[hit.Mark](hit.Show(fallback))); err != nil {
+		t.Fatalf("RegisterBehavior: %v", err)
+	}
 
-	handle := ecs.RegSys(b)
-	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
-		ctx.Run(handle, d)
-		ctx.Sync()
-	})
+	var marks goke.Comp[hit.Mark]
+	var q *goke.Query
+	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		var base goke.Comp[world.Base]
+		var coll goke.Comp[collisions.Collision]
+		f := si.NewFactory(&base, &coll, &marks)
+		f.Create(len(entities))
+		f.Next()
+		for i, e := range entities {
+			box := plane.NewAABB(geom.NewVec(e.x, 100), 10, 10)
+			base.Slice(&f.Cursor)[i].Pos = world.Position{AABB: box}
+			marks.Slice(&f.Cursor)[i] = e.mark
+			space.Insert(f.IDs[i], box)
+			space.SetCapabilities(f.IDs[i], collisions.CanCollide)
+		}
+		space.Flush(nil)
+		q = si.NewQueryBuilder(&marks).Build()
+	}})
+	engine.RegSystems(ecs)
+	ecs.SetPlan(engine.RunPlan)
+	ecs.Tick(time.Millisecond)
 	ecs.Tick(time.Millisecond)
 
 	var got []hit.Mark
-	q.All()
-	for q.Next() {
-		got = append(got, markComp.Slice(q.Cursor())...)
+	for q.All(); q.Next(); {
+		got = append(got, marks.Slice(q.Cursor())...)
 	}
 	return got
-}
-
-func struck() collisions.Contacts {
-	var c collisions.Contacts
-	c.Items[0] = collisions.Contact{Other: uid.UID64(1), Impact: 3}
-	c.Count = 1
-	return c
 }
 
 // An entity's own Duration wins; the behavior's is what an entity that sets
@@ -65,10 +77,7 @@ func TestBehavior_MarksForTheEntitysOwnDuration(t *testing.T) {
 	const own = 250 * time.Millisecond
 	before := time.Now()
 
-	got := run(t, hit.New(fallback),
-		entity{mark: hit.Mark{Duration: own}, contacts: struck()},
-		entity{contacts: struck()},
-	)
+	got := run(t, entity{x: 100, mark: hit.Mark{Duration: own}}, entity{x: 105})
 
 	if len(got) != 2 {
 		t.Fatalf("got %d marks, want 2", len(got))
@@ -87,20 +96,20 @@ func TestBehavior_MarksForTheEntitysOwnDuration(t *testing.T) {
 func TestBehavior_NoContact_LeavesAFreshMarkAlone(t *testing.T) {
 	fresh := time.Now().Add(time.Hour).UnixNano()
 
-	got := run(t, hit.New(fallback), entity{mark: hit.Mark{ExpiresAtNano: fresh}})
+	got := run(t, entity{x: 100, mark: hit.Mark{ExpiresAtNano: fresh}})
 
 	if len(got) != 1 || got[0].ExpiresAtNano != fresh {
-		t.Errorf("mark = %+v, want the untouched stamp %v", got[0], fresh)
+		t.Errorf("mark = %+v, want the untouched stamp %v", got, fresh)
 	}
 }
 
-// Clearing the lapsed stamp here is what lets a renderer read Active instead
-// of asking the clock per entity.
+// Clearing the lapsed stamp in the behavior's own pass is what lets a renderer
+// read Active instead of asking the clock per entity.
 func TestBehavior_NoContact_ClearsALapsedMark(t *testing.T) {
-	got := run(t, hit.New(fallback), entity{mark: hit.Mark{ExpiresAtNano: time.Now().Add(-time.Hour).UnixNano()}})
+	got := run(t, entity{x: 100, mark: hit.Mark{ExpiresAtNano: time.Now().Add(-time.Hour).UnixNano()}})
 
 	if len(got) != 1 || got[0].Active() {
-		t.Errorf("mark = %+v, want it cleared once its time had passed", got[0])
+		t.Errorf("mark = %+v, want it cleared once its time had passed", got)
 	}
 }
 

@@ -55,8 +55,7 @@ type navigationSystem struct {
 
 	query *goke.Query
 	cell  goke.Comp[board.Cell]
-	pos   goke.Comp[world.Position]
-	vel   goke.Comp[world.Velocity]
+	base  goke.Comp[world.Base]
 	order goke.OptComp[MoveOrder]
 
 	cellEnteredAdd goke.Comp[CellEntered]
@@ -89,7 +88,7 @@ func newNavigationSystem(pathFinder *pathFinder, grid board.Grid, terrain board.
 func (s *navigationSystem) BindSpace(space *gokg.Space) { s.space = space }
 
 func (s *navigationSystem) Init(si *goke.SysInit) {
-	s.query = si.NewQueryBuilder(&s.cell, &s.pos, &s.vel).
+	s.query = si.NewQueryBuilder(&s.cell, &s.base).
 		Optional(&s.order).
 		Build()
 	s.arrivedEditor = s.query.NewEditorBuilder().Remove(goke.Remove[MoveOrder]()).Build()
@@ -114,8 +113,7 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 		}
 
 		cells := s.cell.Slice(cursor)
-		positions := s.pos.Slice(cursor)
-		velocities := s.vel.Slice(cursor)
+		bases := s.base.Slice(cursor)
 		snap := s.query.ChunkSnapshot()
 
 		var enteredIDs []uid.UID64
@@ -130,7 +128,7 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 			p := &orders[i].Path
 			leg := &orders[i].Leg
 			current := cells[i].ID
-			actual, ok := s.grid.CellAt(board.Center(positions[i]))
+			actual, ok := s.grid.CellAt(board.Center(bases[i].Pos))
 			if !ok {
 				actual = current
 			}
@@ -173,7 +171,7 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 			if !leg.Active && (p.Length == 0 || p.Index >= p.Length) && cells[i].ID != target {
 				newPath, found := s.pathFinder.findPath(id, cells[i].ID, target)
 				if !found {
-					velocities[i].Value = 0
+					bases[i].Vel.Value = 0
 					orders[i].Waited += d
 					if orders[i].Waited < targetWaitTimeout {
 						continue
@@ -201,7 +199,7 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 			if !leg.Active && waypoint != cells[i].ID {
 				reserved, ok := s.reserveLeg(cells[i].ID, waypoint, id)
 				if !ok {
-					velocities[i].Value = 0
+					bases[i].Vel.Value = 0
 					p.Length = 0
 					continue
 				}
@@ -209,7 +207,7 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 			}
 
 			want := s.grid.CellCenter(waypoint)
-			have := board.Center(positions[i])
+			have := board.Center(bases[i].Pos)
 			dx, dy := want.X-have.X, want.Y-have.Y
 			if s.space != nil {
 				dx = shortestAxisDelta(have.X, want.X, s.space.Width, s.space.Toroidal)
@@ -217,17 +215,17 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 			}
 			dist := math.Hypot(dx, dy)
 			if dist > arrivalEpsilon {
-				velocities[i].Dir = geom.NewVec(dx/dist, dy/dist)
-				velocities[i].Value = s.speed
+				bases[i].Vel.Dir = geom.NewVec(dx/dist, dy/dist)
+				bases[i].Vel.Value = s.speed
 				continue
 			}
 
-			velocities[i].Value = 0
+			bases[i].Vel.Value = 0
 
 			// Close enough to the waypoint: step the rest of the way exactly,
 			// which a continuous world can do without rounding first.
 			if s.space != nil && (dx != 0 || dy != 0) {
-				s.space.Translate(id, &positions[i].AABB, geom.NewVec(dx, dy))
+				s.space.Translate(id, &bases[i].Pos.AABB, geom.NewVec(dx, dy))
 				snapped = true
 			}
 

@@ -79,7 +79,7 @@ func TestRenderer_FanRebuildsTheAnglesFromTheIndex(t *testing.T) {
 func TestRenderer_QueryVisitsOnlyEntitiesWithAnOutline(t *testing.T) {
 	r := testRenderer(t, 2000, 2000, false, wholeWorld(2000, 2000))
 
-	var withOutline, withoutOutline goke.Comp[world.Position]
+	var withOutline, withoutOutline goke.Comp[world.Base]
 	var sight goke.Comp[Sight]
 	var outline goke.Comp[SightOutline]
 
@@ -117,7 +117,7 @@ func TestRenderer_DrawSkipsShortOutlinesAndOffscreenEntities(t *testing.T) {
 	drawn := 0
 	r.WithStyle(ConeStyleFn(func(*ebiten.Image, []ebiten.Vertex) { drawn++ }))
 
-	var pos goke.Comp[world.Position]
+	var pos goke.Comp[world.Base]
 	var sight goke.Comp[Sight]
 	var outline goke.Comp[SightOutline]
 
@@ -128,7 +128,7 @@ func TestRenderer_DrawSkipsShortOutlinesAndOffscreenEntities(t *testing.T) {
 		f := si.NewFactory(&pos, &sight, &outline)
 		f.Create(1)
 		for f.Next() {
-			pos.Slice(&f.Cursor)[0] = world.Position{AABB: plane.NewAABB(at, 10, 10)}
+			pos.Slice(&f.Cursor)[0].Pos = world.Position{AABB: plane.NewAABB(at, 10, 10)}
 			sight.Slice(&f.Cursor)[0] = Sight{Facing: geom.NewVec(1.0, 0.0), HalfAngle: 0.5, Radius: 100}
 			outline.Slice(&f.Cursor)[0] = o
 		}
@@ -164,7 +164,7 @@ func drawAt(t *testing.T, r *Renderer, x, y float64, radius float64) [][]ebiten.
 	t.Helper()
 	fans := recordFans(r)
 
-	var pos goke.Comp[world.Position]
+	var pos goke.Comp[world.Base]
 	var sight goke.Comp[Sight]
 	var outline goke.Comp[SightOutline]
 
@@ -179,7 +179,7 @@ func drawAt(t *testing.T, r *Renderer, x, y float64, radius float64) [][]ebiten.
 			f := si.NewFactory(&pos, &sight, &outline)
 			f.Create(1)
 			for f.Next() {
-				pos.Slice(&f.Cursor)[0] = world.Position{AABB: plane.NewAABB(geom.NewVec(x, y), 10, 10)}
+				pos.Slice(&f.Cursor)[0].Pos = world.Position{AABB: plane.NewAABB(geom.NewVec(x, y), 10, 10)}
 				sight.Slice(&f.Cursor)[0] = Sight{
 					Facing: geom.NewVec(1.0, 0.0), HalfAngle: math.Pi, Radius: radius,
 				}

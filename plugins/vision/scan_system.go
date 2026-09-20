@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/plugin"
+	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokg"
 	"github.com/kjkrol/gokg/raycast"
 	"github.com/kjkrol/uid"
@@ -12,7 +14,7 @@ import (
 
 var _ goke.System = (*ScanSystem)(nil)
 
-// ScanSystem fills every Sight-carrying entity's Sighted, and the outline of
+// ScanSystem fills in what every Sight-carrying entity sees, and the outline of
 // those that also carry SightOutline.
 //
 // Both come off one scan: gathering the candidates is what costs, so splitting
@@ -23,22 +25,68 @@ type ScanSystem struct {
 
 	query   *goke.Query
 	sight   goke.Comp[Sight]
-	sighted goke.Comp[Sighted]
+	base    goke.Comp[world.Base]
+	steer   goke.OptComp[world.Steering]
 	outline goke.OptComp[SightOutline]
+
+	// lookup resolves a sighted id back to the entity — the scan reports who and
+	// how far, not where it is or what it carries. One lookup serves every
+	// hosted behavior, where each used to keep a query of its own.
+	lookup     *goke.Query
+	lookupBase goke.Comp[world.Base]
+	lookupHot  bool
+
+	// host runs the Between behaviors registered with the plugin, inside this pass.
+	host *plugin.PairHost[Sighting]
+
+	// What the host is being run over: the observer in hand, everyone it sees,
+	// and the tags each of them carries. sightingOf is bound once, so handing it
+	// to the host allocates nothing per observer.
+	observer   Sighting
+	seen       []Seen
+	seenTags   []uint64
+	matched    []Seen
+	sightingOf func(matched []int) Sighting
 }
 
-func NewScanSystem(space *gokg.Space) *ScanSystem { return &ScanSystem{space: space} }
+// The two queries the scan offers its hosted behaviors, by index.
+const (
+	walked = iota // the observer, a chunk at a time
+	sought        // what it sees, one entity at a time
+)
+
+func NewScanSystem(space *gokg.Space) *ScanSystem {
+	return newScanSystem(space, &plugin.PairHost[Sighting]{})
+}
+
+func newScanSystem(space *gokg.Space, host *plugin.PairHost[Sighting]) *ScanSystem {
+	s := &ScanSystem{space: space, host: host}
+	s.sightingOf = s.sighting
+	return s
+}
 
 func (s *ScanSystem) Init(si *goke.SysInit) {
-	s.query = si.NewQueryBuilder(&s.sight, &s.sighted).Optional(&s.outline).Build()
+	walk := si.NewQueryBuilder(&s.sight, &s.base).Optional(&s.outline, &s.steer)
+	seek := si.NewQueryBuilder(&s.lookupBase)
+	s.host.Bind(walk, seek)
+	s.query, s.lookup = walk.Build(), seek.Build()
 }
 
-func (s *ScanSystem) Update(*goke.CmdBuf, time.Duration) {
+func (s *ScanSystem) Update(cb *goke.CmdBuf, d time.Duration) {
+	t := plugin.Tick{Cmd: cb, Now: time.Now(), Dt: d}
+	hosting := !s.host.Empty()
+	s.lookupHot = false
+
 	s.query.All()
 	for s.query.Next() {
 		cursor := s.query.Cursor()
 		sights := s.sight.Slice(cursor)
-		seen := s.sighted.Slice(cursor)
+		bases := s.base.Slice(cursor)
+		steers := s.steer.Slice(cursor)
+		var observerTags uint64
+		if hosting {
+			observerTags = s.host.InChunk(walked, cursor)
+		}
 
 		// Present asks about the archetype, not the entity, so the branch
 		// lifts out of the inner loop.
@@ -52,16 +100,55 @@ func (s *ScanSystem) Update(*goke.CmdBuf, time.Duration) {
 			// One View serves every observer in turn: Entities hands over
 			// values and Depths copies into the caller's buffer, so nothing a
 			// reader keeps points back into it.
-			if !s.space.Scan(id, cone(sight), &s.view) {
-				seen[i].Count = 0
-				continue
+			if s.space.Scan(id, cone(sight), &s.view) {
+				record(&sight.Seen, &s.view)
+				if outlines != nil {
+					trace(&outlines[i], &s.view, sight)
+				}
+			} else {
+				sight.Seen.Count = 0
 			}
-			record(&seen[i], &s.view)
-			if outlines != nil {
-				trace(&outlines[i], &s.view, sight)
+			if hosting {
+				s.observer = Sighting{Self: id, Base: &bases[i], Sight: sight}
+				if i < len(steers) {
+					s.observer.Steering = &steers[i]
+				}
+				s.gather(&sight.Seen)
+				s.host.DispatchGrouped(t, observerTags, s.seenTags, s.sightingOf)
 			}
 		}
 	}
+}
+
+// gather looks up everyone in found, keeping who is still there and the tags each carries.
+func (s *ScanSystem) gather(found *Sighted) {
+	s.seen, s.seenTags = s.seen[:0], s.seenTags[:0]
+	for k := range int(found.Count) {
+		id := found.IDs[k]
+		ok := s.lookupHot && s.lookup.SeekH(id)
+		if !ok {
+			ok = s.lookup.Seek(id)
+			s.lookupHot = ok
+		}
+		if !ok {
+			continue // gone since the scan
+		}
+		cursor := s.lookup.Cursor()
+		tags := s.host.At(sought, cursor)
+		s.seen = append(s.seen, Seen{ID: id, Base: s.lookupBase.At(cursor), Dist: found.Dists[k], TagSet: s.host.TagSet(tags)})
+		s.seenTags = append(s.seenTags, tags)
+	}
+}
+
+// sighting is the observer in hand, seeing just the entities a behavior asked for.
+func (s *ScanSystem) sighting(matched []int) Sighting {
+	s.matched = s.matched[:0]
+	for _, k := range matched {
+		s.matched = append(s.matched, s.seen[k])
+	}
+	out := s.observer
+	out.Seen = s.matched
+	return out
 }
 
 func cone(s *Sight) raycast.Cone {

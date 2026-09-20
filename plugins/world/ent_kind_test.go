@@ -176,7 +176,7 @@ func TestPopulate_KindsWithDifferentDataAndComponents(t *testing.T) {
 	}
 
 	var stat goke.Comp[spawnerStat]
-	var tagPos goke.Comp[Position]
+	var tagBase goke.Comp[Base]
 	var units int
 	var propX []float64
 	setupWorld(p.module, func(si *goke.SysInit) {
@@ -184,10 +184,10 @@ func TestPopulate_KindsWithDifferentDataAndComponents(t *testing.T) {
 		for uq.All(); uq.Next(); {
 			units += len(uq.Cursor().IDs)
 		}
-		pq := si.NewQueryBuilder(&tagPos).Include(goke.Include[spawnerTag]()).Build()
+		pq := si.NewQueryBuilder(&tagBase).Include(goke.Include[spawnerTag]()).Build()
 		for pq.All(); pq.Next(); {
-			for _, pos := range tagPos.Slice(pq.Cursor()) {
-				propX = append(propX, pos.TopLeft.X)
+			for _, b := range tagBase.Slice(pq.Cursor()) {
+				propX = append(propX, b.Pos.TopLeft.X)
 			}
 		}
 	})

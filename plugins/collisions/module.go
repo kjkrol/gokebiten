@@ -1,9 +1,12 @@
 package collisions
 
 import (
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokg"
 )
 
@@ -16,6 +19,9 @@ type module struct {
 	margin float64
 	ecs    *goke.ECS
 
+	pairs    *plugin.PairHost[Meeting]
+	entities *plugin.EachHost[Struck]
+
 	broadPhase  goke.Runnable
 	narrowPhase goke.Runnable
 	built       bool
@@ -26,7 +32,11 @@ type module struct {
 // call before ECS.Load, since systems register via RegSystems (see
 // [goke.Module]).
 func New(space *gokg.Space, ecs *goke.ECS, margin float64) *module {
-	return &module{space: space, margin: margin, ecs: ecs}
+	return newModule(space, ecs, margin, &plugin.PairHost[Meeting]{}, &plugin.EachHost[Struck]{})
+}
+
+func newModule(space *gokg.Space, ecs *goke.ECS, margin float64, pairs *plugin.PairHost[Meeting], entities *plugin.EachHost[Struck]) *module {
+	return &module{space: space, margin: margin, ecs: ecs, pairs: pairs, entities: entities}
 }
 
 // =================================================================
@@ -55,11 +65,7 @@ func (m *module) SetupSystems() []goke.System { return nil }
 func (m *module) LoadComps() []goke.CompToken {
 	return []goke.CompToken{
 		goke.LoadComp[Collision](),
-		goke.LoadComp[Contacts](),
-		goke.LoadComp[Mass](),
-		goke.LoadComp[Restitution](),
-		goke.LoadComp[Sensor](),
-		goke.LoadComp[Static](),
+		goke.LoadComp[Physics](),
 	}
 }
 
@@ -89,8 +95,31 @@ func (m *module) PostLoad() goke.System {
 // collisions-specific
 // =================================================================
 
+// RegisterBehavior hosts a plugin.Between behavior made for Meeting in the narrow
+// phase, or a plugin.Each one made for Struck in the broad phase.
+func (m *module) RegisterBehavior(behaviors ...plugin.Behavior) error {
+	return host(m.pairs, m.entities, behaviors)
+}
+
+// host hands each behavior to whichever of the two hosts takes it, stopping at the first neither does.
+func host(pairs *plugin.PairHost[Meeting], entities *plugin.EachHost[Struck], behaviors []plugin.Behavior) error {
+	for _, b := range behaviors {
+		err := pairs.Add(b)
+		if errors.Is(err, plugin.ErrUnhostedBehavior) {
+			err = entities.Add(b)
+		}
+		if errors.Is(err, plugin.ErrUnhostedBehavior) {
+			return fmt.Errorf("%w in collisions — it takes Between for Meeting and Each for Struck", err)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (m *module) build() {
-	m.broadPhase = m.ecs.RegSys(NewBroadPhase(m.space, m.margin))
-	m.narrowPhase = m.ecs.RegSys(NewNarrowPhase(m.space))
+	m.broadPhase = m.ecs.RegSys(newBroadPhase(m.space, m.margin, m.entities))
+	m.narrowPhase = m.ecs.RegSys(newNarrowPhase(m.space, m.pairs))
 	m.built = true
 }

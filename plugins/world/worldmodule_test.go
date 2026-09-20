@@ -12,10 +12,10 @@ func TestWorld_Populate_EndToEnd(t *testing.T) {
 	wm.populate(EntKind{Name: "dot", Position: Const(spawnerTestPos()), Velocity: Const(Velocity{})}, []any{nil, nil, nil})
 
 	ecs := goke.New()
-	var pos goke.Comp[Position]
+	var base goke.Comp[Base]
 	var q *goke.Query
 	systems := append(wm.SetupSystems(), goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		q = si.NewQueryBuilder(&pos).Build()
+		q = si.NewQueryBuilder(&base).Build()
 	}})
 	ecs.Setup(systems...)
 
@@ -26,10 +26,10 @@ func TestWorld_Populate_EndToEnd(t *testing.T) {
 	count := 0
 	q.All()
 	for q.Next() {
-		for _, p := range pos.Slice(q.Cursor()) {
+		for _, b := range base.Slice(q.Cursor()) {
 			count++
-			if p.TopLeft != spawnerTestPos().TopLeft {
-				t.Errorf("spawned entity position = %+v, want %+v", p.TopLeft, spawnerTestPos().TopLeft)
+			if b.Pos.TopLeft != spawnerTestPos().TopLeft {
+				t.Errorf("spawned entity position = %+v, want %+v", b.Pos.TopLeft, spawnerTestPos().TopLeft)
 			}
 		}
 	}

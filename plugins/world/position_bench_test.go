@@ -11,7 +11,7 @@ import (
 
 // benchWorld spawns n entities and returns the module plus an ECS wired to run
 // its tick — the pass every game pays for on every entity, every tick.
-func benchWorld(b *testing.B, n int) (*goke.ECS, *module, *goke.Query, *goke.Comp[Position]) {
+func benchWorld(b *testing.B, n int) (*goke.ECS, *module, *goke.Query, *goke.Comp[Base]) {
 	b.Helper()
 
 	wm := NewPlugin(Config{
@@ -33,15 +33,15 @@ func benchWorld(b *testing.B, n int) (*goke.ECS, *module, *goke.Query, *goke.Com
 		}, []any{nil})
 	}
 
-	pos := new(goke.Comp[Position])
+	base := new(goke.Comp[Base])
 	var query *goke.Query
 	ecs := goke.New()
 	ecs.Setup(append(wm.SetupSystems(), goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		query = si.NewQueryBuilder(pos).Build()
+		query = si.NewQueryBuilder(base).Build()
 	}})...)
 	wm.RegSystems(ecs)
 	ecs.SetPlan(wm.RunPlan)
-	return ecs, wm, query, pos
+	return ecs, wm, query, base
 }
 
 // Benchmark_PositionScan is the renderer's access pattern: walk every entity's
@@ -49,15 +49,15 @@ func benchWorld(b *testing.B, n int) (*goke.ECS, *module, *goke.Query, *goke.Com
 func Benchmark_PositionScan(b *testing.B) {
 	for _, n := range []int{1000, 5000} {
 		b.Run(entityCount(n), func(b *testing.B) {
-			_, _, query, pos := benchWorld(b, n)
+			_, _, query, base := benchWorld(b, n)
 			var sink float64
 			b.ReportAllocs()
 			for b.Loop() {
 				query.All()
 				for query.Next() {
 					cursor := query.Cursor()
-					for _, p := range pos.Slice(cursor) {
-						sink += p.TopLeft.X
+					for _, e := range base.Slice(cursor) {
+						sink += e.Pos.TopLeft.X
 					}
 				}
 			}

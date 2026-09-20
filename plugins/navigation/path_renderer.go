@@ -41,8 +41,7 @@ type PathRenderer struct {
 	space   *gokg.Space
 
 	query *goke.Query
-	pos   goke.Comp[world.Position]
-	vel   goke.Comp[world.Velocity]
+	base  goke.Comp[world.Base]
 	cell  goke.Comp[board.Cell]
 	order goke.Comp[MoveOrder]
 }
@@ -56,7 +55,7 @@ func NewPathRenderer(cam camera.Camera, grid board.Grid, atlas render.AtlasSourc
 func (r *PathRenderer) BindSpace(space *gokg.Space) { r.space = space }
 
 func (r *PathRenderer) Init(si *goke.SysInit) {
-	r.query = si.NewQueryBuilder(&r.pos, &r.vel, &r.cell, &r.order).
+	r.query = si.NewQueryBuilder(&r.base, &r.cell, &r.order).
 		Include(goke.Include[selection.Selected]()).
 		Build()
 }
@@ -67,13 +66,12 @@ func (r *PathRenderer) Draw(screen *ebiten.Image) {
 		r.query.All()
 		for r.query.Next() {
 			cursor := r.query.Cursor()
-			positions := r.pos.Slice(cursor)
-			velocities := r.vel.Slice(cursor)
+			bases := r.base.Slice(cursor)
 			cells := r.cell.Slice(cursor)
 			orders := r.order.Slice(cursor)
 			for i := range cursor.IDs {
-				center := board.Center(positions[i])
-				r.drawPath(center, velocities[i].Dir, pathCells(cells[i], orders[i]))
+				center := board.Center(bases[i].Pos)
+				r.drawPath(center, bases[i].Vel.Dir, pathCells(cells[i], orders[i]))
 			}
 		}
 	}

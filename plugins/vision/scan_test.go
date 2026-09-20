@@ -68,7 +68,7 @@ func scene(t *testing.T, spawns ...spawn) ([]uid.UID64, []vision.Sighted, []visi
 	for i, s := range spawns {
 		comps := []world.ComponentTemplate{}
 		if s.sight != nil {
-			comps = append(comps, world.Const(*s.sight), world.Const(vision.Sighted{}))
+			comps = append(comps, world.Const(*s.sight))
 			if s.outline {
 				comps = append(comps, world.Const(vision.SightOutline{}))
 			}
@@ -86,7 +86,7 @@ func scene(t *testing.T, spawns ...spawn) ([]uid.UID64, []vision.Sighted, []visi
 		t.Fatalf("Populate: %v", err)
 	}
 
-	var sightedComp goke.Comp[vision.Sighted]
+	var sightComp goke.Comp[vision.Sight]
 	var outlineComp goke.OptComp[vision.SightOutline]
 	var query *goke.Query
 	var systems []goke.System
@@ -94,7 +94,7 @@ func scene(t *testing.T, spawns ...spawn) ([]uid.UID64, []vision.Sighted, []visi
 		systems = append(systems, produce()...)
 	}
 	systems = append(systems, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		query = si.NewQueryBuilder(&sightedComp).Optional(&outlineComp).Build()
+		query = si.NewQueryBuilder(&sightComp).Optional(&outlineComp).Build()
 	}})
 	ctx.ecs.Setup(systems...)
 
@@ -110,14 +110,14 @@ func scene(t *testing.T, spawns ...spawn) ([]uid.UID64, []vision.Sighted, []visi
 	query.All()
 	for query.Next() {
 		cursor := query.Cursor()
-		got := sightedComp.Slice(cursor)
+		got := sightComp.Slice(cursor)
 		var outs []vision.SightOutline
 		if outlineComp.Present(cursor) {
 			outs = outlineComp.Slice(cursor)
 		}
 		for i, id := range cursor.IDs {
 			ids = append(ids, id)
-			seen = append(seen, got[i])
+			seen = append(seen, got[i].Seen)
 			if outs != nil {
 				outlines = append(outlines, outs[i])
 			}
@@ -140,7 +140,7 @@ func TestScan_ReportsWhatIsInTheConeNearestFirst(t *testing.T) {
 	)
 
 	if len(seen) != 1 {
-		t.Fatalf("%d entities carry Sighted, want 1", len(seen))
+		t.Fatalf("%d entities carry Sight, want 1", len(seen))
 	}
 	if seen[0].Count != 2 {
 		t.Fatalf("saw %d entities, want 2", seen[0].Count)

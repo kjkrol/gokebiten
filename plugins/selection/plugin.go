@@ -1,6 +1,7 @@
 package selection
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/kjkrol/goke/v3"
@@ -62,3 +63,11 @@ func (p *Plugin) EventHandler() control.EventHandler { return NewDefaultEventHan
 
 // Serializable is a no-op — selection has nothing to persist.
 func (p *Plugin) Serializable() plugin.Serializable { return nil }
+
+// RegisterBehavior reports ErrUnhostedBehavior — selection hosts no behaviors.
+func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
+	for _, b := range behaviors {
+		return fmt.Errorf("%w: %T in %s", plugin.ErrUnhostedBehavior, b, p.Name())
+	}
+	return nil
+}

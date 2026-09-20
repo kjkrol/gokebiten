@@ -1,72 +1,44 @@
-// Package debug is a ready-made world.Behavior: it logs every contact, for
-// when a collision is easier to read than to watch.
+// Package debug is a ready-made reaction to contacts: it logs them, for when a
+// collision is easier to read than to watch.
 //
-// Register it with world.Plugin.RegisterBehavior; only entities carrying
-// collisions.Contacts are logged, and each pair is logged once however many of
-// its two sides recorded it.
+// Hand Log to plugin.Between and register that with
+// collisions.Plugin.RegisterBehavior — Between[plugin.Anything, plugin.Anything]
+// to log every confirmed contact once, or a pair of tags to log just those. It
+// rides the narrow phase's own pass, at the cost of no query of its own.
 package debug
 
 import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
-	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/plugins/collisions"
-	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/uid"
 )
 
-// Formatter renders one recorded contact as a log line.
-type Formatter func(self uid.UID64, c collisions.Contact) string
+// Formatter renders one contact as a log line.
+type Formatter func(m collisions.Meeting) string
 
-func defaultFormat(self uid.UID64, c collisions.Contact) string {
-	return fmt.Sprintf("collision: %v <-> %v (impact %.2f)", self, c.Other, c.Impact)
+func defaultFormat(m collisions.Meeting) string {
+	return fmt.Sprintf("collision: %v <-> %v (impact %.2f)", m.Self, m.Other, m.Impact)
 }
 
-var _ world.Behavior = (*Behavior)(nil)
-
-// Behavior writes a line per contact. Zero-config prints to stdout; use
-// WithWriter/WithFormat for somewhere else, or for more of the contact.
-type Behavior struct {
+type config struct {
 	w      io.Writer
 	format Formatter
-
-	query    *goke.Query
-	contacts goke.Comp[collisions.Contacts]
 }
 
-type Option func(*Behavior)
+type Option func(*config)
 
-func WithWriter(w io.Writer) Option { return func(b *Behavior) { b.w = w } }
-func WithFormat(f Formatter) Option { return func(b *Behavior) { b.format = f } }
+func WithWriter(w io.Writer) Option { return func(c *config) { c.w = w } }
+func WithFormat(f Formatter) Option { return func(c *config) { c.format = f } }
 
-func New(opts ...Option) *Behavior {
-	b := &Behavior{w: os.Stdout, format: defaultFormat}
+// Log writes a line per contact it is handed — to stdout in the default format,
+// unless WithWriter or WithFormat say otherwise.
+func Log(opts ...Option) func(plugin.Tick, collisions.Meeting) {
+	c := &config{w: os.Stdout, format: defaultFormat}
 	for _, opt := range opts {
-		opt(b)
+		opt(c)
 	}
-	return b
-}
-
-func (b *Behavior) Init(si *goke.SysInit) {
-	b.query = si.NewQueryBuilder(&b.contacts).Build()
-}
-
-func (b *Behavior) Update(*goke.CmdBuf, time.Duration) {
-	b.query.All()
-	for b.query.Next() {
-		cursor := b.query.Cursor()
-		contacts := b.contacts.Slice(cursor)
-		for i, self := range cursor.IDs {
-			for _, c := range contacts[i].All() {
-				// The lower index owns the pair, so a contact both sides
-				// recorded is reported once.
-				if self.Index() < c.Other.Index() {
-					fmt.Fprintln(b.w, b.format(self, c))
-				}
-			}
-		}
-	}
+	return func(_ plugin.Tick, m collisions.Meeting) { fmt.Fprintln(c.w, c.format(m)) }
 }

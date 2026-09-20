@@ -41,13 +41,12 @@ func posAt(x, y, w, h float64) world.Position {
 // they have to do the template's half themselves.
 func seedBroadPhaseEntity(t *testing.T, si *goke.SysInit, space *gokg.Space, pos world.Position) uid.UID64 {
 	t.Helper()
-	var posComp goke.Comp[world.Position]
-	var velComp goke.Comp[world.Velocity]
+	var baseComp goke.Comp[world.Base]
 	var collComp goke.Comp[collisions.Collision]
-	f := si.NewFactory(&posComp, &velComp, &collComp)
+	f := si.NewFactory(&baseComp, &collComp)
 	f.Create(1)
 	f.Next()
-	posComp.Slice(&f.Cursor)[0] = pos
+	baseComp.Slice(&f.Cursor)[0].Pos = pos
 	id := f.IDs[0]
 	space.Insert(id, pos.AABB)
 	space.SetCapabilities(id, collisions.CanCollide)
@@ -59,12 +58,11 @@ func seedBroadPhaseEntity(t *testing.T, si *goke.SysInit, space *gokg.Space, pos
 // spatial index that should never be treated as a collision candidate.
 func seedNonCollidableEntity(t *testing.T, si *goke.SysInit, space *gokg.Space, pos world.Position) uid.UID64 {
 	t.Helper()
-	var posComp goke.Comp[world.Position]
-	var velComp goke.Comp[world.Velocity]
-	f := si.NewFactory(&posComp, &velComp)
+	var baseComp goke.Comp[world.Base]
+	f := si.NewFactory(&baseComp)
 	f.Create(1)
 	f.Next()
-	posComp.Slice(&f.Cursor)[0] = pos
+	baseComp.Slice(&f.Cursor)[0].Pos = pos
 	id := f.IDs[0]
 	space.Insert(id, pos.AABB)
 	return id
@@ -73,14 +71,12 @@ func seedNonCollidableEntity(t *testing.T, si *goke.SysInit, space *gokg.Space, 
 // seedMovingCollidableEntity is seedBroadPhaseEntity plus a starting Velocity, for driving it through world.MoveSystem.
 func seedMovingCollidableEntity(t *testing.T, si *goke.SysInit, space *gokg.Space, pos world.Position, vel world.Velocity) uid.UID64 {
 	t.Helper()
-	var posComp goke.Comp[world.Position]
-	var velComp goke.Comp[world.Velocity]
+	var baseComp goke.Comp[world.Base]
 	var collComp goke.Comp[collisions.Collision]
-	f := si.NewFactory(&posComp, &velComp, &collComp)
+	f := si.NewFactory(&baseComp, &collComp)
 	f.Create(1)
 	f.Next()
-	posComp.Slice(&f.Cursor)[0] = pos
-	velComp.Slice(&f.Cursor)[0] = vel
+	baseComp.Slice(&f.Cursor)[0] = world.Base{Pos: pos, Vel: vel}
 	id := f.IDs[0]
 	space.Insert(id, pos.AABB)
 	space.SetCapabilities(id, collisions.CanCollide)

@@ -66,7 +66,7 @@ type Renderer struct {
 	toroidal       bool
 
 	query *goke.Query
-	pos   goke.Comp[world.Position]
+	base  goke.Comp[world.Base]
 	sight goke.Comp[Sight]
 	out   goke.Comp[SightOutline]
 
@@ -94,22 +94,22 @@ func (r *Renderer) WithStyle(style ConeStyle) *Renderer {
 }
 
 func (r *Renderer) Init(si *goke.SysInit) {
-	r.query = si.NewQueryBuilder(&r.pos, &r.sight, &r.out).Build()
+	r.query = si.NewQueryBuilder(&r.base, &r.sight, &r.out).Build()
 }
 
 func (r *Renderer) Draw(screen *ebiten.Image) {
 	r.query.All()
 	for r.query.Next() {
 		cursor := r.query.Cursor()
-		positions := r.pos.Slice(cursor)
+		bases := r.base.Slice(cursor)
 		sights := r.sight.Slice(cursor)
 		outlines := r.out.Slice(cursor)
 
 		for i := range cursor.IDs {
-			if outlines[i].Count < 2 || !r.camera.Visible(positions[i].AABB.AABB) {
+			if outlines[i].Count < 2 || !r.camera.Visible(bases[i].Pos.AABB.AABB) {
 				continue
 			}
-			r.drawCone(screen, &positions[i], &sights[i], &outlines[i])
+			r.drawCone(screen, &bases[i].Pos, &sights[i], &outlines[i])
 		}
 	}
 }

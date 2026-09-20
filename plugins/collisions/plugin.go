@@ -11,10 +11,13 @@ import (
 )
 
 // Plugin wires the collision engine into a Game — optional, borrows world.Plugin's own Space.
-// Must never import collisions/strategies/*; a game registers those as world behaviors.
+// Must never import collisions/strategies/*; a game registers those with RegisterBehavior.
 type Plugin struct {
 	worldPlugin *world.Plugin
 	module      *module
+
+	pairs    plugin.PairHost[Meeting]
+	entities plugin.EachHost[Struck]
 }
 
 var _ plugin.Plugin = (*Plugin)(nil)
@@ -36,7 +39,7 @@ func (p *Plugin) Install(ctx plugin.Installer) error {
 	// Two entities closing head-on shut 2*MaxStep of gap per tick, so that is
 	// exactly how far the broad phase has to see — taken from world rather
 	// than guessed, so it follows the entity size instead of contradicting it.
-	p.module = New(space, ctx.ECS(), 2*p.worldPlugin.MaxStep())
+	p.module = newModule(space, ctx.ECS(), 2*p.worldPlugin.MaxStep(), &p.pairs, &p.entities)
 	ctx.UseModule(p.module)
 	return nil
 }
@@ -55,3 +58,9 @@ func (p *Plugin) EventHandler() control.EventHandler { return nil }
 
 // Serializable is a no-op — collisions has nothing to persist.
 func (p *Plugin) Serializable() plugin.Serializable { return nil }
+
+// RegisterBehavior hosts a plugin.Between behavior made for Meeting in the narrow
+// phase, or a plugin.Each one made for Struck in the broad phase — before Use.
+func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
+	return host(&p.pairs, &p.entities, behaviors)
+}

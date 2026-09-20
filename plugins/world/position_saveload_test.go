@@ -22,13 +22,13 @@ func TestPosition_RoundTrip(t *testing.T) {
 	path := t.TempDir() + "/save.bin"
 
 	ecs := goke.New()
-	var pos goke.Comp[world.Position]
+	var base goke.Comp[world.Base]
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		f := si.NewFactory(&pos)
+		f := si.NewFactory(&base)
 		f.Create(1)
 		f.Next()
-		p := pos.Slice(&f.Cursor)
-		p[0] = world.Position{AABB: plane.NewAABB(geom.NewVec(12, 34), 5, 6)}
+		p := base.Slice(&f.Cursor)
+		p[0].Pos = world.Position{AABB: plane.NewAABB(geom.NewVec(12, 34), 5, 6)}
 	}})
 
 	ecs.Pause()
@@ -37,25 +37,25 @@ func TestPosition_RoundTrip(t *testing.T) {
 	}
 
 	ecs2 := goke.New()
-	if err := ecs2.Load(path, goke.LoadComp[world.Position]()); err != nil {
+	if err := ecs2.Load(path, goke.LoadComp[world.Base]()); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	var pos2 goke.Comp[world.Position]
+	var base2 goke.Comp[world.Base]
 	var q *goke.Query
 	ecs2.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		q = si.NewQueryBuilder(&pos2).Build()
+		q = si.NewQueryBuilder(&base2).Build()
 	}})
 	q.All()
 	found := false
 	for q.Next() {
-		p := pos2.Slice(q.Cursor())
+		p := base2.Slice(q.Cursor())
 		for i := range p {
 			found = true
-			if p[i].TopLeft.X != 12 || p[i].TopLeft.Y != 34 {
-				t.Errorf("TopLeft = %+v, want (12,34)", p[i].TopLeft)
+			if p[i].Pos.TopLeft.X != 12 || p[i].Pos.TopLeft.Y != 34 {
+				t.Errorf("TopLeft = %+v, want (12,34)", p[i].Pos.TopLeft)
 			}
-			if p[i].Size.X != 5 || p[i].Size.Y != 6 {
-				t.Errorf("Size = %+v, want (5,6)", p[i].Size)
+			if p[i].Pos.Size.X != 5 || p[i].Pos.Size.Y != 6 {
+				t.Errorf("Size = %+v, want (5,6)", p[i].Pos.Size)
 			}
 		}
 	}

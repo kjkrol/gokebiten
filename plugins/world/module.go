@@ -89,10 +89,8 @@ func (w *module) SetupSystems() []goke.System { return w.seeds }
 // LoadComps lists the component types world owns — see [goke.CompProvider].
 func (w *module) LoadComps() []goke.CompToken {
 	return []goke.CompToken{
-		goke.LoadComp[Position](),
+		goke.LoadComp[Base](),
 		goke.LoadComp[Appearance](),
-		goke.LoadComp[Velocity](),
-		goke.LoadComp[Type](),
 		goke.LoadComp[Steering](),
 	}
 }
@@ -106,15 +104,15 @@ func (w *module) PostLoad() goke.System {
 	return goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		w.remapTypes(si)
 
-		var pos goke.Comp[Position]
-		query := si.NewQueryBuilder(&pos).Build()
+		var base goke.Comp[Base]
+		query := si.NewQueryBuilder(&base).Build()
 		query.All()
 		count := 0
 		for query.Next() {
 			cursor := query.Cursor()
-			positions := pos.Slice(cursor)
+			bases := base.Slice(cursor)
 			for i, id := range cursor.IDs {
-				w.space.Insert(id, positions[i].AABB)
+				w.space.Insert(id, bases[i].Pos.AABB)
 			}
 			count += len(cursor.IDs)
 		}
@@ -123,7 +121,7 @@ func (w *module) PostLoad() goke.System {
 	}}
 }
 
-// remapTypes rewrites every loaded Type.ID through the saved dictionary, so a
+// remapTypes rewrites every loaded Base.TypeID through the saved dictionary, so a
 // world keeps its kinds even when the game's Define order changed since the
 // save. EntKindDict.order is this build's mapping and gob never touches it;
 // EntKindDict.saved is what the save brought in.
@@ -144,17 +142,17 @@ func (w *module) remapTypes(si *goke.SysInit) {
 		return
 	}
 
-	var typ goke.Comp[Type]
-	query := si.NewQueryBuilder(&typ).Build()
+	var base goke.Comp[Base]
+	query := si.NewQueryBuilder(&base).Build()
 	query.All()
 	for query.Next() {
 		cursor := query.Cursor()
-		types := typ.Slice(cursor)
+		bases := base.Slice(cursor)
 		for i := range cursor.IDs {
-			if int(types[i].ID) >= len(lut) {
-				panic(fmt.Sprintf("world: loaded entity carries TypeID %d, beyond the %d the save named", types[i].ID, len(lut)))
+			if int(bases[i].TypeID) >= len(lut) {
+				panic(fmt.Sprintf("world: loaded entity carries TypeID %d, beyond the %d the save named", bases[i].TypeID, len(lut)))
 			}
-			types[i].ID = lut[types[i].ID]
+			bases[i].TypeID = lut[bases[i].TypeID]
 		}
 	}
 }
@@ -186,7 +184,6 @@ func (w *module) populate(kind EntKind, data []any) {
 	count := len(data)
 	extras := []entityExtras{
 		Const(Appearance{SpriteID: kind.SpriteID}).adder(),
-		Const(Type{ID: kind.TypeID}).adder(),
 	}
 	for _, c := range kind.Components {
 		extras = append(extras, c.adder())
@@ -196,9 +193,8 @@ func (w *module) populate(kind EntKind, data []any) {
 		w.reserve(count)
 		w.telemetry.Count += count
 
-		var posComp goke.Comp[Position]
-		var velComp goke.Comp[Velocity]
-		comps := []goke.Addable{&posComp, &velComp}
+		var baseComp goke.Comp[Base]
+		comps := []goke.Addable{&baseComp}
 		for _, e := range extras {
 			comps = append(comps, e.Components()...)
 		}
@@ -207,14 +203,12 @@ func (w *module) populate(kind EntKind, data []any) {
 		factory.Create(count)
 		index := 0
 		for factory.Next() {
-			positions := posComp.Slice(&factory.Cursor)
-			velocities := velComp.Slice(&factory.Cursor)
+			bases := baseComp.Slice(&factory.Cursor)
 			for i, id := range factory.IDs {
 				d := data[index]
 				pos := kind.Position.resolve(d, id)
 				w.validateSize(id, pos)
-				positions[i] = pos
-				velocities[i] = kind.Velocity.resolve(d, id)
+				bases[i] = Base{Pos: pos, Vel: kind.Velocity.resolve(d, id), TypeID: kind.TypeID}
 				w.space.Insert(id, pos.AABB)
 				for _, e := range extras {
 					e.Init(&factory.Cursor, i, d, id)

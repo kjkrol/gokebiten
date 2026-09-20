@@ -4,37 +4,29 @@ import (
 	"math"
 	"testing"
 
-	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokg/geom"
 )
 
-// movingSide is a side that can take an impulse; its velocity is passed to
-// impactOf separately, the way the narrow phase passes what the tick left it.
-func movingSide(mass, restitution float64) contactSide {
-	return contactSide{Vel: &world.Velocity{}, Mass: mass, Restitution: restitution}
-}
-
-// immovableSide is what a Static entity resolves to: no Velocity to read and infinite mass.
-func immovableSide() contactSide {
-	return contactSide{Mass: math.Inf(1), Restitution: FullRestitution}
-}
-
 func TestImpactOf(t *testing.T) {
-	const full = FullRestitution
+	elastic := func(mass float64) Physics { return Physics{Mass: mass, Restitution: 1} }
+	wall := Physics{Mass: math.Inf(1), Restitution: 1}
+
 	cases := map[string]struct {
-		a, b           contactSide
+		a, b           Physics
 		deltaA, deltaB geom.Vec
 		n              geom.Vec
 		want           float64
 	}{
-		"equal masses, head-on":    {movingSide(1, full), movingSide(1, full), geom.NewVec(-3, 0), geom.NewVec(4, 0), geom.NewVec(1, 0), 7},
-		"already separating":       {movingSide(1, full), movingSide(1, full), geom.NewVec(3, 0), geom.NewVec(-4, 0), geom.NewVec(1, 0), 0},
-		"across the other axis":    {movingSide(1, full), movingSide(1, full), geom.NewVec(0, -3), geom.NewVec(0, 4), geom.NewVec(0, 1), 7},
-		"heavy into light":         {movingSide(9, full), movingSide(1, full), geom.NewVec(2, 0), geom.NewVec(-2, 0), geom.NewVec(-1, 0), 7.2},
-		"into an immovable side":   {movingSide(1, full), immovableSide(), geom.NewVec(3, 4), geom.Vec{}, geom.NewVec(-1, 0), 6},
-		"immovable into immovable": {immovableSide(), immovableSide(), geom.Vec{}, geom.Vec{}, geom.NewVec(1, 0), 0},
-		"half the bounce":          {movingSide(1, 0.5), movingSide(1, full), geom.NewVec(-3, 0), geom.NewVec(4, 0), geom.NewVec(1, 0), 5.25},
-		"no bounce at all":         {movingSide(1, 0), movingSide(1, full), geom.NewVec(-3, 0), geom.NewVec(4, 0), geom.NewVec(1, 0), 3.5},
+		"equal masses, head-on":    {elastic(1), elastic(1), geom.NewVec(-3, 0), geom.NewVec(4, 0), geom.NewVec(1, 0), 7},
+		"already separating":       {elastic(1), elastic(1), geom.NewVec(3, 0), geom.NewVec(-4, 0), geom.NewVec(1, 0), 0},
+		"across the other axis":    {elastic(1), elastic(1), geom.NewVec(0, -3), geom.NewVec(0, 4), geom.NewVec(0, 1), 7},
+		"heavy into light":         {elastic(9), elastic(1), geom.NewVec(2, 0), geom.NewVec(-2, 0), geom.NewVec(-1, 0), 7.2},
+		"into an immovable side":   {elastic(1), wall, geom.NewVec(3, 4), geom.Vec{}, geom.NewVec(-1, 0), 6},
+		"immovable into immovable": {wall, wall, geom.Vec{}, geom.Vec{}, geom.NewVec(1, 0), 0},
+		"half the bounce":          {Physics{Mass: 1, Restitution: 0.5}, elastic(1), geom.NewVec(-3, 0), geom.NewVec(4, 0), geom.NewVec(1, 0), 5.25},
+		"no bounce at all":         {Physics{Mass: 1}, elastic(1), geom.NewVec(-3, 0), geom.NewVec(4, 0), geom.NewVec(1, 0), 3.5},
+		"unnamed mass is default":  {Physics{Restitution: 1}, elastic(1), geom.NewVec(-3, 0), geom.NewVec(4, 0), geom.NewVec(1, 0), 7},
+		"restitution past its end": {Physics{Mass: 1, Restitution: 5}, elastic(1), geom.NewVec(-3, 0), geom.NewVec(4, 0), geom.NewVec(1, 0), 7},
 	}
 
 	for name, c := range cases {

@@ -10,7 +10,6 @@ import (
 type TerrainSpeedModifier struct {
 	grid    Grid
 	terrain Terrain
-	pos     goke.OptComp[world.Position]
 }
 
 var _ world.SpeedModifier = (*TerrainSpeedModifier)(nil)
@@ -19,14 +18,10 @@ func NewTerrainSpeedModifier(grid Grid, terrain Terrain) *TerrainSpeedModifier {
 	return &TerrainSpeedModifier{grid: grid, terrain: terrain}
 }
 
-func (t *TerrainSpeedModifier) Bind(qb *goke.QueryBuilder) { qb.Optional(&t.pos) }
+func (t *TerrainSpeedModifier) Bind(*goke.QueryBuilder) {}
 
-func (t *TerrainSpeedModifier) Apply(cur *goke.Cursor, i int, acc float64) float64 {
-	positions := t.pos.Slice(cur)
-	if positions == nil {
-		return acc
-	}
-	cell, ok := t.grid.CellAt(Center(positions[i]))
+func (t *TerrainSpeedModifier) Apply(_ *goke.Cursor, _ int, base *world.Base, acc float64) float64 {
+	cell, ok := t.grid.CellAt(Center(base.Pos))
 	if !ok {
 		return acc
 	}

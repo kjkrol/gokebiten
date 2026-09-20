@@ -9,6 +9,8 @@ import (
 	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/plugins/vision/strategies/hunt"
 	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gokg/geom"
+	"github.com/kjkrol/gokg/plane"
 	"github.com/kjkrol/uid"
 )
 
@@ -96,7 +98,7 @@ func buildStage(t *testing.T) (*goke.ECS, *mainStage) {
 }
 
 // A catch has to cost the prey its life, and that takes the whole chain: the
-// hunter carrying Contacts and a sensor body, the eat behaviour registered, and
+// hunter with no physical body, the eat behaviour registered, and
 // world.Despawn clearing both the ECS and the index. Leave out any one of them
 // and the demo still runs, still builds, and the hunter merely drifts through
 // everyone forever — so this stages a catch rather than waiting for one.
@@ -133,7 +135,7 @@ func placeOnPrey(t *testing.T, stage *mainStage, view bodyView) uid.UID64 {
 	view.prey.All()
 	for view.prey.Next() && !found {
 		cursor := view.prey.Cursor()
-		target, caught, found = view.preyPos.Slice(cursor)[0], cursor.IDs[0], true
+		target, caught, found = view.preyBase.Slice(cursor)[0].Pos, cursor.IDs[0], true
 	}
 	if !found {
 		t.Fatal("no prey to place the hunter on")
@@ -142,7 +144,7 @@ func placeOnPrey(t *testing.T, stage *mainStage, view bodyView) uid.UID64 {
 	view.hunters.All()
 	for view.hunters.Next() {
 		cursor := view.hunters.Cursor()
-		view.hunterPos.Slice(cursor)[0] = target
+		view.hunterBase.Slice(cursor)[0].Pos = target
 		stage.world.Space().Reindex(cursor.IDs[0], target.AABB)
 	}
 	stage.world.Space().Flush(nil)
@@ -151,17 +153,94 @@ func placeOnPrey(t *testing.T, stage *mainStage, view bodyView) uid.UID64 {
 
 // bodyView is a live view of the hunters, the prey, and where each of them is.
 type bodyView struct {
-	hunters, prey      *goke.Query
-	hunterPos, preyPos *goke.Comp[world.Position]
+	hunters, prey        *goke.Query
+	hunterBase, preyBase *goke.Comp[world.Base]
 }
 
 func bodies(ecs *goke.ECS) bodyView {
-	view := bodyView{hunterPos: new(goke.Comp[world.Position]), preyPos: new(goke.Comp[world.Position])}
+	view := bodyView{
+		hunterBase: new(goke.Comp[world.Base]),
+		preyBase:   new(goke.Comp[world.Base]),
+	}
 	ecs.RegSys(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		view.hunters = si.NewQueryBuilder(view.hunterPos).Include(goke.Include[hunt.Predator]()).Build()
-		view.prey = si.NewQueryBuilder(view.preyPos).Include(goke.Include[hunt.Prey]()).Build()
+		view.hunters = si.NewQueryBuilder(view.hunterBase).Include(goke.Include[hunt.Predator]()).Build()
+		view.prey = si.NewQueryBuilder(view.preyBase).Include(goke.Include[hunt.Prey]()).Build()
 	}})
 	return view
+}
+
+// A prey that sees the hunter has to turn and run — with the demo's own
+// Steering, reflex and all. A renewed request used to restart the reflex
+// countdown every time it ran out, so a prey looking straight at the hunter
+// held its course into its jaws for as long as it kept looking.
+func TestStage_PreyTurnsAwayFromTheHunterItSees(t *testing.T) {
+	ecs, stage := buildStage(t)
+	view := bodies(ecs)
+
+	// Close enough that nothing on the spawn grid can stand in between and
+	// hide the hunter, far enough that it cannot reach the prey in the ticks
+	// below even closing head-on.
+	watched, course := placeHunterAhead(t, stage, view, 60)
+
+	const ticks = 14 // a reflex of 3, then 11 steps of 0.12 rad: past 70 degrees
+	for range ticks {
+		ecs.Tick(time.Second / TPS)
+	}
+
+	now, alive := headingOf(view, watched)
+	if !alive {
+		t.Fatalf("the watched prey was gone within %d ticks — it never got the chance to run", ticks)
+	}
+	if along := now.X*course.X + now.Y*course.Y; along > 0.5 {
+		t.Errorf("heading %v after %d ticks of looking at the hunter, started %v — want it well into turning away", now, ticks, course)
+	}
+}
+
+// placeHunterAhead puts the hunter dead ahead of the first prey, inside its
+// cone, and returns that prey's id and the course it was holding.
+func placeHunterAhead(t *testing.T, stage *mainStage, view bodyView, distance float64) (uid.UID64, geom.Vec) {
+	t.Helper()
+	var watched uid.UID64
+	var from world.Position
+	var course geom.Vec
+	found := false
+	view.prey.All()
+	for view.prey.Next() && !found {
+		cursor := view.prey.Cursor()
+		seen := view.preyBase.Slice(cursor)[0]
+		watched, from, course, found = cursor.IDs[0], seen.Pos, seen.Vel.Dir, true
+	}
+	if !found {
+		t.Fatal("no prey to put the hunter in front of")
+	}
+
+	ahead := plane.NewAABB(geom.NewVec(
+		float64(from.TopLeft.X)+course.X*distance,
+		float64(from.TopLeft.Y)+course.Y*distance,
+	), RectSize, RectSize)
+	spot := world.Position{AABB: stage.world.Space().WrapAABB(ahead.AABB)}
+
+	view.hunters.All()
+	for view.hunters.Next() {
+		cursor := view.hunters.Cursor()
+		view.hunterBase.Slice(cursor)[0].Pos = spot
+		stage.world.Space().Reindex(cursor.IDs[0], spot.AABB)
+	}
+	stage.world.Space().Flush(nil)
+	return watched, course
+}
+
+func headingOf(view bodyView, id uid.UID64) (geom.Vec, bool) {
+	view.prey.All()
+	for view.prey.Next() {
+		cursor := view.prey.Cursor()
+		for i, got := range cursor.IDs {
+			if got == id {
+				return view.preyBase.Slice(cursor)[i].Vel.Dir, true
+			}
+		}
+	}
+	return geom.Vec{}, false
 }
 
 func ids(q *goke.Query) map[uid.UID64]bool {

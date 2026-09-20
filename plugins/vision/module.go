@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokg"
 )
 
@@ -15,7 +16,9 @@ type module struct {
 	runnable goke.Runnable
 }
 
-func newModule(space *gokg.Space) *module { return &module{sys: NewScanSystem(space)} }
+func newModule(space *gokg.Space, host *plugin.PairHost[Sighting]) *module {
+	return &module{sys: newScanSystem(space, host)}
+}
 
 // =================================================================
 // goke.Module contract
@@ -42,7 +45,6 @@ func (m *module) SetupSystems() []goke.System { return nil }
 func (m *module) LoadComps() []goke.CompToken {
 	return []goke.CompToken{
 		goke.LoadComp[Sight](),
-		goke.LoadComp[Sighted](),
 		goke.LoadComp[SightOutline](),
 	}
 }

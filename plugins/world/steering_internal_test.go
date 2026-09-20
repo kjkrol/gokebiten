@@ -28,11 +28,11 @@ func steerTicks(t *testing.T, st Steering, start geom.Vec, n int) []geom.Vec {
 		Components: []ComponentTemplate{Const(st)},
 	}, []any{nil})
 
-	var vel goke.Comp[Velocity]
+	var base goke.Comp[Base]
 	var query *goke.Query
 	ecs := goke.New()
 	ecs.Setup(append(wm.SetupSystems(), goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		query = si.NewQueryBuilder(&vel).Build()
+		query = si.NewQueryBuilder(&base).Build()
 	}})...)
 	wm.RegSystems(ecs)
 	ecs.SetPlan(wm.RunPlan)
@@ -42,8 +42,8 @@ func steerTicks(t *testing.T, st Steering, start geom.Vec, n int) []geom.Vec {
 		ecs.Tick(time.Second / 60)
 		query.All()
 		for query.Next() {
-			for _, v := range vel.Slice(query.Cursor()) {
-				out = append(out, v.Dir)
+			for _, b := range base.Slice(query.Cursor()) {
+				out = append(out, b.Vel.Dir)
 			}
 		}
 	}
@@ -63,8 +63,8 @@ func TestSteering_RequestIsRefusedWhileStillReacting(t *testing.T) {
 	if s.Request(north) {
 		t.Error("second Request taken while the first was still being reacted to")
 	}
-	if s.Want != east {
-		t.Errorf("Want = %v, want the first request kept", s.Want)
+	if s.Pending != east {
+		t.Errorf("Pending = %v, want the first request kept", s.Pending)
 	}
 }
 
@@ -81,7 +81,7 @@ func TestSteering_RequestNormalisesWhateverItIsHanded(t *testing.T) {
 }
 
 func TestSteering_ReflexHoldsTheTurnBack(t *testing.T) {
-	dirs := steerTicks(t, Steering{Want: east, Reflex: 2, Delay: 2}, north, 3)
+	dirs := steerTicks(t, Steering{Pending: east, Reflex: 2, Delay: 2}, north, 3)
 
 	if dirs[0] != north || dirs[1] != north {
 		t.Errorf("headings %v, %v during the reflex window, want both still north", dirs[0], dirs[1])
@@ -139,5 +139,72 @@ func TestSteering_StationaryEntityTakesTheHeadingWhole(t *testing.T) {
 func TestSteering_LeavesHeadingAloneWithNoRequest(t *testing.T) {
 	if dirs := steerTicks(t, Steering{}, north, 2); dirs[0] != north || dirs[1] != north {
 		t.Errorf("headings %v, want north throughout", dirs)
+	}
+}
+
+// asking is a behavior that renews the same request every tick, the way any
+// behavior watching a lasting stimulus does.
+type asking struct {
+	towards geom.Vec
+	query   *goke.Query
+	steer   goke.Comp[Steering]
+}
+
+func (a *asking) Init(si *goke.SysInit) { a.query = si.NewQueryBuilder(&a.steer).Build() }
+
+func (a *asking) Update(*goke.CmdBuf, time.Duration) {
+	a.query.All()
+	for a.query.Next() {
+		steers := a.steer.Slice(a.query.Cursor())
+		for i := range steers {
+			steers[i].Request(a.towards)
+		}
+	}
+}
+
+// A stimulus that lasts renews its request every tick, and each renewal used
+// to restart the reflex countdown — so an entity with any Reflex at all stood
+// frozen on its course for as long as it kept seeing what it should turn from.
+func TestSteering_LastingStimulusStillTurnsTheEntity(t *testing.T) {
+	wm := testWorld()
+	wm.RegisterBehavior(&asking{towards: north})
+	wm.populate(EntKind{
+		Position:   Const(Position{AABB: plane.NewAABB(geom.NewVec(500, 500), 10, 10)}),
+		Velocity:   Const(Velocity{Dir: east, Value: 1}),
+		Components: []ComponentTemplate{Const(Steering{Reflex: 3, TurnRate: 0.12})},
+	}, []any{nil})
+
+	var base goke.Comp[Base]
+	var query *goke.Query
+	ecs := goke.New()
+	ecs.Setup(append(wm.SetupSystems(), goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		query = si.NewQueryBuilder(&base).Build()
+	}})...)
+	wm.RegSystems(ecs)
+	ecs.SetPlan(wm.RunPlan)
+	for range 30 {
+		ecs.Tick(time.Second / 60)
+	}
+
+	query.All()
+	for query.Next() {
+		for _, b := range base.Slice(query.Cursor()) {
+			if b.Vel.Dir != north {
+				t.Errorf("heading %v after 30 ticks of being asked north, want north — a quarter turn takes 14", b.Vel.Dir)
+			}
+		}
+	}
+}
+
+// While a new request is still being reacted to, the entity goes on turning
+// towards the one before it rather than holding still.
+func TestSteering_KeepsActingOnTheLastDecisionWhileReacting(t *testing.T) {
+	const rate = 0.1
+	dirs := steerTicks(t, Steering{Want: east, Pending: north, Reflex: 3, Delay: 3, TurnRate: rate}, north, 2)
+
+	for i, d := range dirs {
+		if want := heading(north) - rate*float64(i+1); math.Abs(heading(d)-want) > 1e-9 {
+			t.Errorf("tick %d heading %.4f, want %.4f — still swinging east while north waits its turn", i+1, heading(d), want)
+		}
 	}
 }

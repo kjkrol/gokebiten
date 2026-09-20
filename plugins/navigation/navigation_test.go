@@ -35,7 +35,7 @@ type pushOnce struct {
 	size  uint32
 	armed bool
 
-	pos   goke.Comp[world.Position]
+	pos   goke.Comp[world.Base]
 	query *goke.Query
 }
 
@@ -50,7 +50,7 @@ func (p *pushOnce) Update(_ *goke.CmdBuf, _ time.Duration) {
 	for p.query.Next() {
 		positions := p.pos.Slice(p.query.Cursor())
 		for i := range positions {
-			positions[i] = world.Position{AABB: board.CellAABB(p.grid, p.to, p.size)}
+			positions[i].Pos = world.Position{AABB: board.CellAABB(p.grid, p.to, p.size)}
 		}
 	}
 }
@@ -69,19 +69,18 @@ func TestNavigationSystem_Update_DeviationTriggersRepath(t *testing.T) {
 	pusher.to = pushed
 
 	var cell goke.Comp[board.Cell]
-	var pos goke.Comp[world.Position]
-	var vel goke.Comp[world.Velocity]
+	var pos goke.Comp[world.Base]
 	var order goke.Comp[MoveOrder]
 	var q *goke.Query
 
 	ecs := goke.New()
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		f := si.NewFactory(&cell, &pos, &vel, &order)
+		f := si.NewFactory(&cell, &pos, &order)
 		f.Create(1)
 		f.Next()
 		id := f.Cursor.IDs[0]
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: start}
-		pos.Slice(&f.Cursor)[0] = world.Position{AABB: board.CellAABB(grid, start, 8)}
+		pos.Slice(&f.Cursor)[0].Pos = world.Position{AABB: board.CellAABB(grid, start, 8)}
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(start, id)
 
@@ -141,21 +140,20 @@ func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *te
 	expected, _ := grid.CellIndex(1, 0) // diagonal neighbor of previous
 
 	var cell goke.Comp[board.Cell]
-	var pos goke.Comp[world.Position]
-	var vel goke.Comp[world.Velocity]
+	var pos goke.Comp[world.Base]
 	var order goke.Comp[MoveOrder]
 	var q *goke.Query
 
 	ecs := goke.New()
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		f := si.NewFactory(&cell, &pos, &vel, &order)
+		f := si.NewFactory(&cell, &pos, &order)
 		f.Create(1)
 		f.Next()
 		id := f.Cursor.IDs[0]
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: previous}
 		// Mid diagonal step: position already sits inside a flanker cell — a
 		// normal artifact of sampling the move at discrete ticks, not a deviation.
-		pos.Slice(&f.Cursor)[0] = world.Position{AABB: plane.NewAABB(geom.NewVec(11, 11), 8, 8)}
+		pos.Slice(&f.Cursor)[0].Pos = world.Position{AABB: plane.NewAABB(geom.NewVec(11, 11), 8, 8)}
 		var mt MoveOrder
 		mt.Target = expected
 		mt.Path.Steps[0] = expected
@@ -202,24 +200,23 @@ func TestNavigationSystem_Update_ArrivalStopsEntity(t *testing.T) {
 	target := start // already at the target — arrives on the very first tick
 
 	var cell goke.Comp[board.Cell]
-	var pos goke.Comp[world.Position]
-	var vel goke.Comp[world.Velocity]
+	var pos goke.Comp[world.Base]
 	var order goke.Comp[MoveOrder]
 	var q *goke.Query
 
 	ecs := goke.New()
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		f := si.NewFactory(&cell, &pos, &vel, &order)
+		f := si.NewFactory(&cell, &pos, &order)
 		f.Create(1)
 		f.Next()
 		id := f.Cursor.IDs[0]
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: start}
-		pos.Slice(&f.Cursor)[0] = world.Position{AABB: board.CellAABB(grid, start, 8)}
-		vel.Slice(&f.Cursor)[0] = world.Velocity{Dir: geom.NewVec(1, 0), Value: 50} // was already moving in
+		pos.Slice(&f.Cursor)[0].Pos = world.Position{AABB: board.CellAABB(grid, start, 8)}
+		pos.Slice(&f.Cursor)[0].Vel = world.Velocity{Dir: geom.NewVec(1, 0), Value: 50} // was already moving in
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(start, id)
 
-		q = si.NewQueryBuilder(&cell, &vel).Build()
+		q = si.NewQueryBuilder(&cell, &pos).Build()
 	}})
 
 	steerHandle := ecs.RegSys(steer)
@@ -234,11 +231,11 @@ func TestNavigationSystem_Update_ArrivalStopsEntity(t *testing.T) {
 	found := false
 	for q.Next() {
 		cur := q.Cursor()
-		velocities := vel.Slice(cur)
+		velocities := pos.Slice(cur)
 		for i := range cur.IDs {
 			found = true
-			if velocities[i].Value != 0 {
-				t.Errorf("Velocity.Value = %v, want 0 after arriving at target", velocities[i].Value)
+			if velocities[i].Vel.Value != 0 {
+				t.Errorf("Velocity.Value = %v, want 0 after arriving at target", velocities[i].Vel.Value)
 			}
 		}
 	}
@@ -265,19 +262,18 @@ func TestNavigationSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
 	offCenter := world.Position{AABB: plane.NewAABB(geom.NewVec(20, 1), 8, 8)}
 
 	var cell goke.Comp[board.Cell]
-	var pos goke.Comp[world.Position]
-	var vel goke.Comp[world.Velocity]
+	var pos goke.Comp[world.Base]
 	var order goke.Comp[MoveOrder]
 	var q *goke.Query
 
 	ecs := goke.New()
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		f := si.NewFactory(&cell, &pos, &vel, &order)
+		f := si.NewFactory(&cell, &pos, &order)
 		f.Create(1)
 		f.Next()
 		id := f.Cursor.IDs[0]
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: target}
-		pos.Slice(&f.Cursor)[0] = offCenter
+		pos.Slice(&f.Cursor)[0].Pos = offCenter
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(target, id)
 		space.Insert(id, offCenter.AABB)
@@ -302,7 +298,7 @@ func TestNavigationSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
 		positions := pos.Slice(cur)
 		for i := range cur.IDs {
 			found = true
-			p := positions[i]
+			p := positions[i].Pos
 			gotX := float64(p.TopLeft.X) + float64(p.Size.X)/2
 			gotY := float64(p.TopLeft.Y) + float64(p.Size.Y)/2
 			if gotX != want.X || gotY != want.Y {
@@ -334,19 +330,18 @@ func TestNavigationSystem_Update_ArrivalGlidesSmoothlyToCellCenter(t *testing.T)
 	offCenter := world.Position{AABB: plane.NewAABB(geom.NewVec(17, 1), 8, 8)}
 
 	var cell goke.Comp[board.Cell]
-	var pos goke.Comp[world.Position]
-	var vel goke.Comp[world.Velocity]
+	var pos goke.Comp[world.Base]
 	var order goke.Comp[MoveOrder]
 	var q *goke.Query
 
 	ecs := goke.New()
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		f := si.NewFactory(&cell, &pos, &vel, &order)
+		f := si.NewFactory(&cell, &pos, &order)
 		f.Create(1)
 		f.Next()
 		id := f.Cursor.IDs[0]
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: target}
-		pos.Slice(&f.Cursor)[0] = offCenter
+		pos.Slice(&f.Cursor)[0].Pos = offCenter
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(target, id)
 		space.Insert(id, offCenter.AABB)
@@ -370,7 +365,7 @@ func TestNavigationSystem_Update_ArrivalGlidesSmoothlyToCellCenter(t *testing.T)
 			cur := q.Cursor()
 			positions := pos.Slice(cur)
 			for i := range cur.IDs {
-				p := positions[i]
+				p := positions[i].Pos
 				return float64(p.TopLeft.X) + float64(p.Size.X)/2, float64(p.TopLeft.Y) + float64(p.Size.Y)/2
 			}
 		}
@@ -432,20 +427,19 @@ func TestNavigationSystem_Update_ReproducesBoardDemoWallScenario(t *testing.T) {
 	steer.BindSpace(space)
 
 	var cell goke.Comp[board.Cell]
-	var pos goke.Comp[world.Position]
-	var vel goke.Comp[world.Velocity]
+	var pos goke.Comp[world.Base]
 	var order goke.Comp[MoveOrder]
 	var q *goke.Query
 
 	ecs := goke.New()
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		f := si.NewFactory(&cell, &pos, &vel, &order)
+		f := si.NewFactory(&cell, &pos, &order)
 		f.Create(1)
 		f.Next()
 		id := f.Cursor.IDs[0]
 		startPos := world.Position{AABB: board.CellAABB(grid, start, entitySize)}
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: start}
-		pos.Slice(&f.Cursor)[0] = startPos
+		pos.Slice(&f.Cursor)[0].Pos = startPos
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(start, id)
 		space.Insert(id, startPos.AABB)
@@ -487,7 +481,7 @@ func TestNavigationSystem_Update_ReproducesBoardDemoWallScenario(t *testing.T) {
 					replans++
 					if havePrev {
 						t.Logf("tick %d: INVALIDATED — actual(new cell)=%v, prevCell=%v, prevExpected=%v, pos=%v",
-							tick, cells[i].ID, prevCellID, prevExpected, positions[i].TopLeft)
+							tick, cells[i].ID, prevCellID, prevExpected, positions[i].Pos.TopLeft)
 					}
 					t.Logf("tick %d: path changed (len %d -> %d) steps=%v", tick, len(lastSteps), len(steps), steps)
 					lastSteps = steps

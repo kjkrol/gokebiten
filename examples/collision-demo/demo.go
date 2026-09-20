@@ -13,8 +13,8 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/game"
+	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/plugins/collisions"
-	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/elastic"
 	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/hit"
 	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/stats"
 	"github.com/kjkrol/gokebiten/plugins/world"
@@ -123,8 +123,7 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 					Velocity: k.Load(func(b body) world.Velocity { return b.vel }),
 					Components: []world.ComponentTemplate{
 						collisions.Collidable(s.world.Space()),
-						k.Const(collisions.Contacts{}),
-						k.Const(elastic.Bouncy{}),
+						k.Const(collisions.Physics{Restitution: 1}),
 						k.Const(hit.Mark{Duration: hitDuration}),
 					},
 				}
@@ -133,10 +132,13 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	}
 	kinds.Define(hitKind, func(world.Kind[struct{}]) world.EntKind { return world.EntKind{} })
 
-	s.world.RegisterBehavior(elastic.New())
-	s.world.RegisterBehavior(stats.New(&s.collisionStats))
-	s.world.RegisterBehavior(hit.New(hitDuration))
 	s.collisions = collisions.NewPlugin(s.world)
+	if err := s.collisions.RegisterBehavior(
+		plugin.Between[plugin.Anything, plugin.Anything](stats.Count(&s.collisionStats)),
+		plugin.Each[hit.Mark](hit.Show(hitDuration)),
+	); err != nil {
+		return err
+	}
 	s.state = &State{}
 	if err := ctx.Use(s.collisions); err != nil {
 		return err

@@ -46,8 +46,8 @@ func TestStage_EntitiesBounceOffEachOther(t *testing.T) {
 
 // velocities is a read-only view of every entity's Velocity, registered after
 // the Stage's own single Setup — which is why it goes in through RegSys.
-func velocities(ecs *goke.ECS) (*goke.Query, *goke.Comp[world.Velocity]) {
-	vel := new(goke.Comp[world.Velocity])
+func velocities(ecs *goke.ECS) (*goke.Query, *goke.Comp[world.Base]) {
+	vel := new(goke.Comp[world.Base])
 	var q *goke.Query
 	ecs.RegSys(goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		q = si.NewQueryBuilder(vel).Build()
@@ -56,14 +56,14 @@ func velocities(ecs *goke.ECS) (*goke.Query, *goke.Comp[world.Velocity]) {
 }
 
 // headings is every entity's current direction of travel, by id.
-func headings(q *goke.Query, vel *goke.Comp[world.Velocity]) map[uid.UID64]geom.Vec {
+func headings(q *goke.Query, vel *goke.Comp[world.Base]) map[uid.UID64]geom.Vec {
 	found := map[uid.UID64]geom.Vec{}
 	q.All()
 	for q.Next() {
 		cursor := q.Cursor()
 		velocities := vel.Slice(cursor)
 		for i, id := range cursor.IDs {
-			found[id] = velocities[i].Dir
+			found[id] = velocities[i].Vel.Dir
 		}
 	}
 	return found

@@ -42,11 +42,12 @@ func (a *ecsAccessor) Install(ctx plugin.Installer) error {
 func (a *ecsAccessor) SetupSystems() []goke.System {
 	return []goke.System{goke.SystemFn{OnInit: a.setup}}
 }
-func (a *ecsAccessor) RunPlan(goke.RunCtx, time.Duration) {}
-func (a *ecsAccessor) WithRenderer(render.AtlasSource)    {}
-func (a *ecsAccessor) Renderer() render.Renderer          { return nil }
-func (a *ecsAccessor) EventHandler() control.EventHandler { return nil }
-func (a *ecsAccessor) Serializable() plugin.Serializable  { return nil }
+func (a *ecsAccessor) RunPlan(goke.RunCtx, time.Duration)        {}
+func (a *ecsAccessor) WithRenderer(render.AtlasSource)           {}
+func (a *ecsAccessor) Renderer() render.Renderer                 { return nil }
+func (a *ecsAccessor) EventHandler() control.EventHandler        { return nil }
+func (a *ecsAccessor) Serializable() plugin.Serializable         { return nil }
+func (a *ecsAccessor) RegisterBehavior(...plugin.Behavior) error { return plugin.ErrUnhostedBehavior }
 
 // saveLoadTestGame wires newTestWorldPlugin + ecsAccessor for the round-trip test below.
 type saveLoadTestGame struct {

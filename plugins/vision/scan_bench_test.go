@@ -30,7 +30,6 @@ func benchScan(b *testing.B, n int, outlines bool) {
 
 	comps := []world.ComponentTemplate{
 		world.Const(vision.Sight{Facing: geom.NewVec(1.0, 0.0), HalfAngle: math.Pi / 6, Radius: 200}),
-		world.Const(vision.Sighted{}),
 	}
 	if outlines {
 		comps = append(comps, world.Const(vision.SightOutline{}))

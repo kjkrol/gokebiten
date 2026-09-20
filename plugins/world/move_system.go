@@ -17,8 +17,7 @@ type MoveSystem struct {
 	space     *gokg.Space
 	maxDelta  float64
 	moveQuery *goke.Query
-	pos       goke.Comp[Position]
-	vel       goke.Comp[Velocity]
+	base      goke.Comp[Base]
 }
 
 // NewMoveSystem builds world's movement system, capping per-tick displacement
@@ -28,7 +27,7 @@ func NewMoveSystem(space *gokg.Space, maxDelta float64) *MoveSystem {
 }
 
 func (s *MoveSystem) Init(si *goke.SysInit) {
-	s.moveQuery = si.NewQueryBuilder(&s.pos, &s.vel).Build()
+	s.moveQuery = si.NewQueryBuilder(&s.base).Build()
 }
 
 func (s *MoveSystem) Update(_ *goke.CmdBuf, d time.Duration) {
@@ -37,10 +36,9 @@ func (s *MoveSystem) Update(_ *goke.CmdBuf, d time.Duration) {
 	s.moveQuery.All()
 	for s.moveQuery.Next() {
 		cursor := s.moveQuery.Cursor()
-		pos := s.pos.Slice(cursor)
-		vel := s.vel.Slice(cursor)
+		bases := s.base.Slice(cursor)
 		for i, id := range cursor.IDs {
-			rate := vel[i].Delta()
+			rate := bases[i].Vel.Delta()
 			step := geom.NewVec(rate.X*dt, rate.Y*dt)
 
 			if s.maxDelta > 0 {
@@ -50,7 +48,7 @@ func (s *MoveSystem) Update(_ *goke.CmdBuf, d time.Duration) {
 				continue
 			}
 
-			s.space.Translate(id, &pos[i].AABB, step)
+			s.space.Translate(id, &bases[i].Pos.AABB, step)
 			moved = true
 		}
 	}

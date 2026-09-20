@@ -32,7 +32,7 @@ type harness struct {
 	sys       *SelectionSystem
 	handler   *DefaultEventHandler
 	ecs       *goke.ECS
-	pos       goke.Comp[world.Position]
+	pos       goke.Comp[world.Base]
 	selectedQ *goke.Query
 	handle    goke.Runnable
 	pending   []pendingSeed
@@ -82,7 +82,7 @@ func (h *harness) start() {
 				spec := h.pending[i]
 				*spec.id = id
 				aabb := plane.NewAABB(geom.NewVec(spec.x, spec.y), spec.size, spec.size)
-				positions[j] = world.Position{AABB: aabb}
+				positions[j].Pos = world.Position{AABB: aabb}
 				h.space.Insert(id, aabb)
 				i++
 			}

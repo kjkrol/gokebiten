@@ -11,8 +11,8 @@ func TestCollisions_LoadComps_ListsOwnedComponents(t *testing.T) {
 	p := collisions.New(testSpace(t), goke.New(), testProbeMargin)
 
 	tokens := p.LoadComps()
-	if len(tokens) != 6 {
-		t.Fatalf("LoadComps() returned %d tokens, want 6", len(tokens))
+	if len(tokens) != 2 {
+		t.Fatalf("LoadComps() returned %d tokens, want 2", len(tokens))
 	}
 }
 

@@ -27,8 +27,7 @@ func testSpace(t *testing.T) *gokg.Space {
 
 // testHandles bundles the component handles a test needs to read back after ticking.
 type testHandles struct {
-	pos *goke.Comp[world.Position]
-	vel *goke.Comp[world.Velocity]
+	base *goke.Comp[world.Base]
 }
 
 // newTestWorld seeds one entity with the given starting Velocity and
@@ -40,19 +39,18 @@ func newTestWorld(t *testing.T, vel world.Velocity, maxDelta float64) (*goke.ECS
 	space := testSpace(t)
 
 	ecs := goke.New()
-	var pos goke.Comp[world.Position]
-	var velComp goke.Comp[world.Velocity]
+	var base goke.Comp[world.Base]
 	var q *goke.Query
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		f := si.NewFactory(&pos, &velComp)
+		f := si.NewFactory(&base)
 		f.Create(1)
 		f.Next()
-		positions := pos.Slice(&f.Cursor)
-		velocities := velComp.Slice(&f.Cursor)
-		positions[0] = world.Position{AABB: plane.NewAABB(geom.NewVec(0, 0), 5, 5)}
-		velocities[0] = vel
+		base.Slice(&f.Cursor)[0] = world.Base{
+			Pos: world.Position{AABB: plane.NewAABB(geom.NewVec(0, 0), 5, 5)},
+			Vel: vel,
+		}
 
-		q = si.NewQueryBuilder(&pos, &velComp).Build()
+		q = si.NewQueryBuilder(&base).Build()
 	}})
 
 	sys := world.NewMoveSystem(space, maxDelta)
@@ -62,17 +60,16 @@ func newTestWorld(t *testing.T, vel world.Velocity, maxDelta float64) (*goke.ECS
 		ctx.Sync()
 	})
 
-	return ecs, q, testHandles{pos: &pos, vel: &velComp}
+	return ecs, q, testHandles{base: &base}
 }
 
 func readFirst(t *testing.T, q *goke.Query, h testHandles) (world.Position, world.Velocity) {
 	t.Helper()
 	q.All()
 	for q.Next() {
-		p := h.pos.Slice(q.Cursor())
-		v := h.vel.Slice(q.Cursor())
-		if len(p) > 0 {
-			return p[0], v[0]
+		b := h.base.Slice(q.Cursor())
+		if len(b) > 0 {
+			return b[0].Pos, b[0].Vel
 		}
 	}
 	t.Fatal("expected to find the seeded entity")

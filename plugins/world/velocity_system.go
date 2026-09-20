@@ -12,7 +12,7 @@ var _ goke.System = (*VelocitySystem)(nil)
 type VelocitySystem struct {
 	modifiers []SpeedModifier
 	query     *goke.Query
-	vel       goke.Comp[Velocity]
+	base      goke.Comp[Base]
 }
 
 func NewVelocitySystem(modifiers []SpeedModifier) *VelocitySystem {
@@ -20,7 +20,7 @@ func NewVelocitySystem(modifiers []SpeedModifier) *VelocitySystem {
 }
 
 func (s *VelocitySystem) Init(si *goke.SysInit) {
-	qb := si.NewQueryBuilder(&s.vel)
+	qb := si.NewQueryBuilder(&s.base)
 	for _, m := range s.modifiers {
 		m.Bind(qb)
 	}
@@ -34,13 +34,13 @@ func (s *VelocitySystem) Update(_ *goke.CmdBuf, _ time.Duration) {
 	s.query.All()
 	for s.query.Next() {
 		cursor := s.query.Cursor()
-		vel := s.vel.Slice(cursor)
+		bases := s.base.Slice(cursor)
 		for i := range cursor.IDs {
 			acc := 1.0
 			for _, m := range s.modifiers {
-				acc = m.Apply(cursor, i, acc)
+				acc = m.Apply(cursor, i, &bases[i], acc)
 			}
-			vel[i].Value = vel[i].Value * acc
+			bases[i].Vel.Value = bases[i].Vel.Value * acc
 		}
 	}
 }

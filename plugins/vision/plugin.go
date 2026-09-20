@@ -1,6 +1,7 @@
 package vision
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/kjkrol/goke/v3"
@@ -20,6 +21,8 @@ type Plugin struct {
 	module      *module
 	renderer    *Renderer
 	style       ConeStyle
+
+	sightings plugin.PairHost[Sighting]
 }
 
 var _ plugin.Plugin = (*Plugin)(nil)
@@ -36,7 +39,7 @@ func NewPlugin(worldPlugin *world.Plugin) *Plugin {
 func (p *Plugin) Name() string { return "gokebiten.vision" }
 
 func (p *Plugin) Install(ctx plugin.Installer) error {
-	p.module = newModule(p.worldPlugin.Space())
+	p.module = newModule(p.worldPlugin.Space(), &p.sightings)
 	ctx.UseModule(p.module)
 	return nil
 }
@@ -66,6 +69,17 @@ func (p *Plugin) EventHandler() control.EventHandler { return nil }
 // Serializable is a no-op — vision's components are saved as components, and it
 // keeps no state beside them.
 func (p *Plugin) Serializable() plugin.Serializable { return nil }
+
+// RegisterBehavior hosts a plugin.Between behavior made for Sighting in the
+// scan's own pass, run once a tick per observer — call before Use.
+func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
+	for _, b := range behaviors {
+		if err := p.sightings.Add(b); err != nil {
+			return fmt.Errorf("%w in %s — it takes Between for Sighting", err, p.Name())
+		}
+	}
+	return nil
+}
 
 // =================================================================
 // vision-specific

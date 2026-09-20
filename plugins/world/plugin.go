@@ -114,6 +114,20 @@ func (p *Plugin) EventHandler() control.EventHandler {
 // Serializable returns world's persistable state (its camera's Viewport/Zoom).
 func (p *Plugin) Serializable() plugin.Serializable { return &p.Res }
 
+// RegisterBehavior adds a world.Behavior to the decision pass world runs each
+// tick before movement, in registration order — so one consuming what earlier
+// ones decided sees it. Anything else is reported as ErrUnhostedBehavior.
+func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
+	for _, b := range behaviors {
+		system, ok := b.(Behavior)
+		if !ok {
+			return fmt.Errorf("%w: %T in %s", plugin.ErrUnhostedBehavior, b, p.Name())
+		}
+		p.module.RegisterBehavior(system)
+	}
+	return nil
+}
+
 // =================================================================
 // world-specific
 // =================================================================
@@ -163,11 +177,6 @@ func (p *Plugin) EntityRenderer() *Renderer { return p.renderer }
 
 // RegisterSpeedModifier adds m to the set VelocitySystem folds into every entity's Velocity.Value each tick.
 func (p *Plugin) RegisterSpeedModifier(m SpeedModifier) { p.module.RegisterSpeedModifier(m) }
-
-// RegisterBehavior adds b to the decision pass world runs each tick before
-// movement, in registration order — so a behavior consuming what earlier ones
-// decided must be registered after them. Call it from Stage.Init.
-func (p *Plugin) RegisterBehavior(b Behavior) { p.module.RegisterBehavior(b) }
 
 // EntKindDict returns this Plugin's registered set of EntKinds — call
 // Define to register kinds, Entry to build Seed's roster entries.

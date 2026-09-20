@@ -29,13 +29,13 @@ type typeStage struct {
 // typeProbe builds its query during the engine's one Setup call, so the test
 // can read components back once Init (and any PostLoad) has finished.
 type typeProbe struct {
-	typ   goke.Comp[world.Type]
+	base  goke.Comp[world.Base]
 	query *goke.Query
 }
 
 func (p *typeProbe) SetupSystems() []goke.System {
 	return []goke.System{goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		p.query = si.NewQueryBuilder(&p.typ).Build()
+		p.query = si.NewQueryBuilder(&p.base).Build()
 	}}}
 }
 
@@ -91,9 +91,9 @@ func onlyType(t *testing.T, g *typeStage) world.TypeID {
 	g.probe.query.All()
 	for g.probe.query.Next() {
 		cursor := g.probe.query.Cursor()
-		types := g.probe.typ.Slice(cursor)
+		bases := g.probe.base.Slice(cursor)
 		for i := range cursor.IDs {
-			got = types[i].ID
+			got = bases[i].TypeID
 			seen++
 		}
 	}

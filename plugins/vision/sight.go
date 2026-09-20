@@ -39,18 +39,17 @@ const (
 	MaxSamples = (arcMilli+gapMilli-1)/gapMilli + 1
 )
 
-// Sight is what an entity can take in: where it looks, how wide, how far.
-// Facing is its own, independent of which way the entity is moving, so a
-// sentry can stand still and look around while something else flies sideways
-// watching where it came from.
+// Sight is what an entity can take in — where it looks, how wide, how far — and
+// what the last scan found there. Facing is its own, whichever way the entity moves.
 type Sight struct {
 	Facing    geom.Vec // unit vector
 	HalfAngle float64  // radians either side of Facing
 	Radius    float64  // world units
+	Seen      Sighted  // nearest first
 }
 
-// Sighted is what the last scan found, nearest first — the seam every Behavior
-// reads. Count says how many of the arrays are in use.
+// Sighted is what one scan found, nearest first. Count says how many of the
+// arrays are in use.
 type Sighted struct {
 	IDs   [MaxSeen]uid.UID64
 	Dists [MaxSeen]float32
@@ -62,7 +61,7 @@ type Sighted struct {
 // only the reach is stored.
 //
 // Its presence is what marks an entity for outline work. An entity without it
-// is still scanned and still fills Sighted; it just costs nothing to draw and
+// is still scanned and still fills Sight.Seen; it just costs nothing to draw and
 // nothing to store.
 type SightOutline struct {
 	Depths [MaxSamples]float32

@@ -10,20 +10,21 @@ import (
 
 var _ goke.System = (*SteeringSystem)(nil)
 
-// SteeringSystem carries out standing Steering requests: it counts down each
-// entity's Reflex, then swings Velocity.Dir towards Want by no more than
-// TurnRate. It runs between the decision pass and movement, so a request made
-// this tick is acted on this tick once its Reflex has run out.
+// SteeringSystem carries out standing Steering requests: it swings Velocity.Dir
+// towards Want by no more than TurnRate, and counts down each entity's Reflex
+// until its Pending request takes Want's place. It runs between the decision
+// pass and movement, so a request made this tick is acted on this tick once
+// its Reflex has run out.
 type SteeringSystem struct {
 	query *goke.Query
 	steer goke.Comp[Steering]
-	vel   goke.Comp[Velocity]
+	base  goke.Comp[Base]
 }
 
 func NewSteeringSystem() *SteeringSystem { return &SteeringSystem{} }
 
 func (s *SteeringSystem) Init(si *goke.SysInit) {
-	s.query = si.NewQueryBuilder(&s.steer, &s.vel).Build()
+	s.query = si.NewQueryBuilder(&s.steer, &s.base).Build()
 }
 
 func (s *SteeringSystem) Update(*goke.CmdBuf, time.Duration) {
@@ -31,18 +32,19 @@ func (s *SteeringSystem) Update(*goke.CmdBuf, time.Duration) {
 	for s.query.Next() {
 		cursor := s.query.Cursor()
 		steers := s.steer.Slice(cursor)
-		vels := s.vel.Slice(cursor)
+		bases := s.base.Slice(cursor)
 
 		for i := range cursor.IDs {
 			st := &steers[i]
+			if st.Want.X != 0 || st.Want.Y != 0 {
+				bases[i].Vel.Dir = turnTowards(bases[i].Vel.Dir, st.Want, st.TurnRate)
+			}
 			if st.Delay > 0 {
 				st.Delay--
-				continue
+				if st.Delay == 0 {
+					st.Want = st.Pending
+				}
 			}
-			if st.Want.X == 0 && st.Want.Y == 0 {
-				continue
-			}
-			vels[i].Dir = turnTowards(vels[i].Dir, st.Want, st.TurnRate)
 		}
 	}
 }

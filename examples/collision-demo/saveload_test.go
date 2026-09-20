@@ -96,7 +96,7 @@ func TestSaveLoadCycle(t *testing.T) {
 	}
 	systems = append(systems,
 		goke.SystemFn{OnInit: func(si *goke.SysInit) {
-			var posQ goke.Comp[world.Position]
+			var posQ goke.Comp[world.Base]
 			var appQ goke.Comp[world.Appearance]
 			q := si.NewQueryBuilder(&posQ, &appQ).Build()
 			origAppearance = make(map[uint64]render.SpriteID)
@@ -158,7 +158,7 @@ func TestSaveLoadCycle(t *testing.T) {
 
 	var loadedCount int
 	postLoad = append(postLoad, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		var posQ goke.Comp[world.Position]
+		var posQ goke.Comp[world.Base]
 		var appQ goke.Comp[world.Appearance]
 		q := si.NewQueryBuilder(&posQ, &appQ).Build()
 		q.All()
