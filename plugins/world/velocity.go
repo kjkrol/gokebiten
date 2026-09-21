@@ -3,14 +3,11 @@ package world
 import (
 	"math"
 
-	"github.com/kjkrol/gokg/geom"
+	"github.com/kjkrol/aabbworld/geom"
 )
 
-// Velocity is an entity's current heading (Dir, a unit vector — zero when
-// stationary) and speed (Value, world-units/sec).
-//
-// There is no sub-unit remainder to carry any more: positions are continuous,
-// so an entity moving half a unit per tick moves half a unit per tick.
+// Velocity is an entity's heading (Dir, a unit vector, zero when stationary)
+// and speed (Value, world units a second).
 type Velocity struct {
 	Dir   geom.Vec
 	Value float64
@@ -21,7 +18,7 @@ func (v Velocity) Delta() geom.Vec {
 	return geom.NewVec(v.Dir.X*v.Value, v.Dir.Y*v.Value)
 }
 
-// SetDelta sets Dir/Value from a Cartesian per-axis rate — for producers/consumers that think in components, not direction+speed.
+// SetDelta sets Dir and Value from a per-axis rate.
 func (v *Velocity) SetDelta(d geom.Vec) {
 	mag := math.Hypot(d.X, d.Y)
 	if mag < 1e-9 {

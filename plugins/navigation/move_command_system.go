@@ -25,7 +25,7 @@ type moveCommandSystem struct {
 
 var _ goke.System = (*moveCommandSystem)(nil)
 
-// newMoveCommandSystem builds a moveCommandSystem issuing move orders via pathFinder, driven by state.
+// newMoveCommandSystem builds a moveCommandSystem issuing move orders via pathFinder.
 func newMoveCommandSystem(pathFinder *pathFinder, state *Resources) *moveCommandSystem {
 	return &moveCommandSystem{state: state, pathFinder: pathFinder}
 }
@@ -84,7 +84,7 @@ func (s *moveCommandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 	}
 }
 
-// pendingMove is one Selected entity awaiting a destination: where its next route starts, and the step it's finishing.
+// pendingMove is one Selected entity awaiting a destination.
 type pendingMove struct {
 	id   uid.UID64
 	from board.CellID

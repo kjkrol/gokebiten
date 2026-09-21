@@ -9,10 +9,8 @@ import (
 	"github.com/kjkrol/gokebiten/plugin"
 )
 
-// storage is a name-keyed registry of installed plugins' Serializable
-// state. Its only job is to hand Persistence.Save/Load a name-matched set
-// of persist targets, so a save survives plugins being added, removed, or
-// reordered between game versions instead of silently misreading bytes.
+// storage is a name-keyed registry of installed plugins' Serializable state,
+// so a save survives plugins being added, removed or reordered.
 type storage struct {
 	mu    sync.Mutex
 	items map[string]plugin.Serializable
@@ -41,9 +39,7 @@ func verifyPersisted(name string, v plugin.Serializable) {
 	}
 }
 
-// persisted returns each registered item's Persisted() targets, keyed by
-// its registration name — Save/Load match entries by this name, not by
-// position, so adding/removing a plugin never shifts anyone else's data.
+// persisted returns each registered item's Persisted() targets, keyed by registration name.
 func (s *storage) persisted() map[string][]any {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -53,20 +53,14 @@ func (m *MenuStage) Stack() game.Scenes { return m.stack }
 
 // =========================== Scene ===========================
 
-// menuScene shows the splash text and requests the gameplay Stage on
-// Enter. Since MenuStage has no HandleEvents of its own, this is also
-// where Escape-to-quit lives.
+// menuScene shows the splash text, enters the gameplay Stage on Enter and quits on Escape.
 type menuScene struct{ gameplayName string }
 
 var _ game.Scene = (*menuScene)(nil)
 
 func (m *menuScene) Name() string { return "menu" }
 
-func (m *menuScene) Layers() []func() render.Renderer {
-	return []func() render.Renderer{
-		func() render.Renderer { return &menuRenderer{} },
-	}
-}
+func (m *menuScene) Layers() []render.Renderer { return []render.Renderer{&menuRenderer{}} }
 
 func (m *menuScene) HandleEvents(events *control.InputEvents, runtime game.Runtime, composition game.Composition) {
 	for _, k := range events.KeyEvents {

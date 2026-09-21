@@ -1,13 +1,12 @@
 package main
 
 import (
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokg/geom"
 )
 
-// randomVelocity assigns a random velocity, X and Y independently drawn
-// from [-rng, rng]; an X component whose magnitude falls below deadZone is
-// clamped up to minSpeed so entities don't start nearly stationary.
+// randomVelocity draws X and Y independently from [-rng, rng];
+// an X below deadZone is raised to minSpeed.
 type randomVelocity struct {
 	rng, deadZone, minSpeed int32
 }

@@ -32,7 +32,7 @@ func (m *module) RegSystems(ecs *goke.ECS) {
 
 }
 
-// RunPlan runs nav's Update (and cmd's, if enabled) for this tick — call from your own Game.Loop closure.
+// RunPlan runs navigation, and commands if enabled, for this tick.
 func (m *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	ctx.Run(m.navSysRunnable, d)
 	ctx.Sync()
@@ -57,7 +57,7 @@ func (m *module) LoadComps() []goke.CompToken {
 // plugin.PostLoader contract
 // =================================================================
 
-// PostLoad rebuilds board.Occupancy from every loaded entity's Cell, plus every cell its in-progress Leg holds.
+// PostLoad rebuilds board.Occupancy from every loaded entity's Cell and in-progress Leg.
 func (m *module) PostLoad() goke.System {
 	return goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		var cell goke.Comp[board.Cell]

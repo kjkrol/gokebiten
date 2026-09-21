@@ -13,9 +13,8 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 )
 
-// Plugin moves entities along a MoveOrder's path across a board, re-pathing automatically
-// when terrain along the route changes. WithCommands adds right-click move orders for
-// Selected entities; WithRenderer draws the remaining route.
+// Plugin moves entities along a MoveOrder's path across a board, re-pathing when terrain changes.
+// WithCommands adds right-click move orders; WithRenderer draws the remaining route.
 type Plugin struct {
 	speed float64
 
@@ -35,9 +34,7 @@ type Plugin struct {
 
 var _ plugin.Plugin = (*Plugin)(nil)
 
-// NewPlugin builds a navigation plugin over boardPlugin/worldPlugin, moving
-// entities at speed world-units/sec before scaling — screen<->world
-// conversion (right-click targeting and route rendering) uses worldPlugin's Camera.
+// NewPlugin builds a navigation plugin moving entities at speed world units a second.
 func NewPlugin(speed float64, boardPlugin *board.Plugin, worldPlugin *world.Plugin) *Plugin {
 	return &Plugin{speed: speed, boardPlugin: boardPlugin, worldPlugin: worldPlugin, camera: worldPlugin.Camera()}
 }
@@ -65,12 +62,12 @@ func (p *Plugin) Install(ctx plugin.Installer) error {
 	return nil
 }
 
-// RunPlan runs the navigation system (and the command system, if enabled) for this tick — call before world's own RunPlan.
+// RunPlan runs navigation, and commands if enabled, for this tick; call before world's RunPlan.
 func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	p.module.RunPlan(ctx, d)
 }
 
-// WithRenderer builds this plugin's own PathRenderer, drawing the remaining route for every selected, en-route entity — call SetPathSprites first.
+// WithRenderer draws the remaining route of every selected entity; call SetPathSprites first.
 func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
 	p.pathRenderer = NewPathRenderer(p.camera, p.board, atlas, p.pathSprites)
 	p.pathRenderer.BindSpace(p.worldPlugin.Space())
@@ -84,7 +81,7 @@ func (p *Plugin) Renderer() render.Renderer {
 	return p.pathRenderer
 }
 
-// EventHandler returns the default right-click move-order control.EventHandler, or nil unless WithCommands was called.
+// EventHandler returns the right-click move-order handler, or nil without WithCommands.
 func (p *Plugin) EventHandler() control.EventHandler {
 	return NewDefaultCommandEventHandler(p.board, p.camera, p.res)
 }

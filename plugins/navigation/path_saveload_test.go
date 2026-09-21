@@ -8,10 +8,6 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/navigation"
 )
 
-// TestMoveTo_RoundTrip guards navigation.MoveOrder's nested Path (a fixed-size
-// array field) against goke's slice rejection — see
-// internal/comp.ValidateEncodable — confirming it actually survives
-// Save/Load rather than just satisfying RegComp.
 func TestMoveTo_RoundTrip(t *testing.T) {
 	path := t.TempDir() + "/save.bin"
 

@@ -21,7 +21,7 @@ func NewQuadBatch(atlas AtlasSource, cam camera.Camera) *QuadBatch {
 
 func (b *QuadBatch) Reset() { b.vertices = b.vertices[:0]; b.indices = b.indices[:0] }
 
-// AppendQuadUV appends one screen-space quad for the world-space box (x0,y0)-(x1,y1), sampling id's [u0,v0]-[u1,v1] UV sub-rect.
+// AppendQuadUV appends a quad for the world box (x0,y0)-(x1,y1), sampling id's UV sub-rect.
 func (b *QuadBatch) AppendQuadUV(x0, y0, x1, y1 float32, id SpriteID, u0, v0, u1, v1 float32) {
 	sx0, sy0, sx1, sy1 := b.atlas.UV(id)
 	spriteW, spriteH := sx1-sx0, sy1-sy0

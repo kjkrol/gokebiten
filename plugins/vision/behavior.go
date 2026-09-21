@@ -6,15 +6,8 @@ import (
 	"github.com/kjkrol/uid"
 )
 
-// Sighting is what a plugin.Between behavior hosted here is told, once a tick
-// for every observer carrying its first tag: the observer, and everything in
-// its view that carries the second — nearest first, and empty when there is
-// nothing of the kind to see.
-//
-// A sighting has a direction: Between[Predator, Prey] is a predator looking at
-// prey, never the prey looking back. Steering is nil for an observer that
-// cannot be steered; changing course goes through its Request. Seen belongs to
-// the host and is only good until the behavior returns.
+// Sighting is one observer and everything in its view carrying the behavior's second tag,
+// nearest first, possibly none. Steering is nil for an observer that cannot be steered.
 type Sighting struct {
 	Self     uid.UID64
 	Base     *world.Base

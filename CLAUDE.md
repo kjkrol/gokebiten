@@ -55,7 +55,7 @@ on Go 1.27.0.
 the plugin it concerns and run inside that plugin's own pass. `plugin.Between[A,
 B]` (a pair of tags) and `plugin.Each[T]` (one entity) build them; the tags join
 the host's queries as optional components, so a behavior costs no query. The
-func's payload type — `collisions.Meeting`, `collisions.Struck`,
+func's payload type — `collision.Meeting`, `collision.Struck`,
 `vision.Sighting` — is what says whose it is: a host refuses one made for another (`ErrUnhostedBehavior`), so
 registering in the wrong place is an error, never a silent no-op. A plugin
 hosts them with `plugin.PairHost[P]`/`plugin.EachHost[P]`. A `Stage` builds its plugins as its own struct fields
@@ -63,7 +63,7 @@ inside `Init` and installs each via `ctx.Use(p)`, which registers
 `p.Serializable()` (if any) and calls `p.Install`. There is no dependency
 retry mechanism: a plugin needing another plugin's *behavior* takes it as
 an explicit constructor argument (e.g.
-`collisions.NewPlugin(hitExpires, worldPlugin)`) rather than looking it
+`collision.NewPlugin(hitExpires, worldPlugin)`) rather than looking it
 up — the dependency's construction order in the caller's code, not `Use`
 registration order, is what matters. `Install` itself only queues ECS
 wiring (`ctx.UseModule`/`ctx.Setup`), flushed once via a single
@@ -79,16 +79,28 @@ Initial state follows the same optional-interface pattern as
 each plugin's own typed `Seed` (`world.Plugin.Seed(roster)`,
 `board.Plugin.Seed(layout)`), and the engine then calls `Populate()` on every
 tracked `plugin.Populator` — only when `Restore` loaded nothing. Entity kinds
-are registered in `Stage.Init` via `EntKindDict().Define(func(k world.Kind[P])
-world.EntKind {...})` — `P` is the kind's roster data type, every component is
-`Const` or `k.Load` from that data — and roster entries are built only through
-the dictionary, `EntKindDict().Entry(name, data)` (panics on an unknown kind or
-data that isn't its `P`), then passed to `world.Plugin.Seed`. The dictionary
-also tells `Persistence.Load` about every component type its kinds carry
-(`EntKindDict.LoadComps`), so a game's own tags and state (`hunt.Predator`,
-`hit.Mark`) survive a save without being registered anywhere else; the engine
-lists a type a kind shares with a module once. Cell kinds go
-through `board.Plugin.CellKindDict().Create`; both dictionaries issue `SpriteID`s.
+are defined in `Stage.Init` with the `plugins/world/kind` package:
+`prey := kind.Define[P](world.Kinds(), "prey", kind.Spec{...})` — a `Spec` is
+just the list of a kind's components, each `kind.Const(v)` (same for all) or
+`kind.Load(func(row P) T)` (read from that entity's row), `world.Position` and
+`world.Velocity` among them (one of each, or `Define` panics by name; so does a
+`Load` over a row type other than `P`). `Define` hands back the kind itself,
+`kind.Of[P]`: `prey.Entry(row)` builds a roster entry for `world.Plugin.Seed`
+— the row's type is checked by the compiler — and `prey.ID()`/`SpriteID()` say
+what its entities carry and are drawn from. `kind` never imports `world`
+(`world` imports it), which is why a kind's id is `kind.ID` and the registry,
+`world.Kinds`, sits behind the `kind.Registry` interface; it also issues atlas
+slots no kind owns (`NewSprite`) and tells `Persistence.Load` about
+every component type its kinds carry (`Kinds.LoadComps`), so a game's own tags
+and state (`behavior.Predator`, `behavior.HitMark`) survive a save without being registered
+anywhere else; the engine lists a type a kind shares with a module once. Cell
+kinds go through `board.Plugin.CellKindDict().Create`.
+
+A `render.Atlas` sizes nothing up front: `Register(size, draw)`/`RegisterAt(id,
+size, draw)` only record sprites, each at a texture size of its own (the drawn
+size is the entity's box; this is resolution), and `Close()` is what lays the
+sheet out and bakes it — so a slot issued late (`Kinds().NewSprite()`) is as
+welcome as an early one, as long as it comes before `Close`.
 
 Package layout: `render` (root) — `Renderer`/`AtlasSource`/`Atlas`/
 `CachedRenderer`/`QuadBatch`/`SolidBackground`/`TelemetryRenderer`, pure
@@ -125,26 +137,47 @@ shows how much of it is boilerplate vs. real behavior.
 - **`world`** — foundation a Stage installs by calling
   `ctx.UseWorld(cfg)` in `Init`, once (a second call panics); `cfg` sizes
   the space, toroidality, entity bounds and camera, and a Stage that never
-  calls it gets no world:
+  calls it gets no world. `SpaceCfg.Edges` (`aabbworld.Edges`) sets the edge rule
+  per axis — `aabbworld.Torus`, `WrapX`/`WrapY` alone, `OpenX`/`OpenY`, a closed
+  axis by default: a box stops whole at a closed edge, wraps at a wrapping one,
+  and may leave by an open one. An entity wholly past an open edge is dropped
+  from the index and handed, once, to `world.Plugin.OnExit(fn)` — despawned when
+  no handler is set; a sibling plugin that moves boxes itself (collision's solver)
+  reports through `world.Plugin.Tracked`:
   `Base` — the one component every entity carries, holding its `Position`,
   `Velocity` and `TypeID`, so a host hands it to whatever it hosts instead of
   anyone binding it twice — plus Appearance, entity spawning and `Despawn` (which clears
-  both the ECS and the index, so nothing goes on seeing a ghost), the shared
-  `*gokg.Space` index, per-tick movement, and the shared `camera.Camera` (a
-  root package, not a plugin of its own) exposed via `world.Plugin.Camera()`.
-- **`board`** — optional grid + terrain over `world`; depends on `world`.
-- **`collisions`** — optional broad/narrow-phase detection over `world`'s
-  space. An entity carrying `Physics` (`Mass`, `Restitution` 0–1) is pushed out
+  both the ECS and the index, so nothing goes on seeing a ghost),
+  `Attach(cb, id, v)`/`Detach[T](cb, id)` — the mid-game counterparts of a
+  kind's `k.Const`, for game logic that has a `plugin.Tick` and no `CompID`
+  (`Declare[T]()` in `Stage.Init` tells saves about a type only ever attached) — the shared
+  `*aabbworld.Space` index, per-tick movement — capped per entity at half its own
+  shorter side (`world.StepReach`, `Position.MaxStep`/`MaxSpeed`), so mixed
+  sizes share a world without the smallest slowing the rest — and the shared `camera.Camera` (a
+  root package, not a plugin of its own; it keeps its own window arithmetic —
+  wrapping on a wrapping axis, held inside the world on any other) exposed via
+  `world.Plugin.Camera()`.
+- **`board`** — optional grid + terrain over `world`; its grids wrap per axis,
+  following the world's `Edges` (`SetWrap(x, y)`). Depends on `world`.
+- **`collision`** — optional broad/narrow-phase detection over `world`'s
+  space. An entity collides exactly while it carries `Collider` —
+  `kind.Const(collision.Collider{})`, or `Attach`/`Detach` mid-game; the plugin
+  tells the index itself, either way. The broad phase is one `collide.BroadPhase(space, world.StepReach,
+  aabbworld.CanCollide, …)` a tick — every pair whose reaches touch, once — into a
+  `Candidates` list the narrow phase resolves by `Seek` and hands, as `collide.Pair`s, to a
+  `collide.NarrowPhase` whose `Separate` tests each exactly, pushes the overlapping apart and tells
+  the index where they came to rest — `Left()` names whoever it pushed out through an open edge
+  (both from `github.com/kjkrol/aabbworld/collide`). An entity carrying `Physics` (`Mass`, `Restitution` 0–1) is pushed out
   of overlaps and bounces — the bounce is the engine's own, an infinite `Mass`
   is a wall; one without `Physics` is only ever detected (a town, a trigger).
   Separation is always an even split. Reactions are behaviors hosted inside the
   engine's own passes: `plugin.Between[A, B]` of a `Meeting` per contact between
   two tags (narrow phase, `plugin.Anything` as the wildcard), `plugin.Each[T]`
   of a `Struck` per entity per tick (broad phase). A strategy exports a plain
-  function (`stats.Count`, `debug.Log`, `hit.Show`) — the tags it runs between
+  function of the flat `collision/behavior` package (`CountContacts`, `LogContacts`, `ShowHits`) — the tags it runs between
   are named where it is registered, `RegisterBehavior(plugin.Between[A, B](fn), ...)`.
-  `Collision` is the plugin's one aggregate: this tick's candidates plus what the
-  entity struck (`Collision.Contacts()`). Depends on `world`.
+  `Collider` is the plugin's one aggregate: this tick's candidates plus what the
+  entity struck (`Collider.Contacts()`). Depends on `world`.
 - **`navigation`** — pathfinding/movement toward a `MoveOrder` across a
   `board`. Depends on `board` and `world`.
 - **`selection`** — mouse click/drag → `Selected` tag on `world` entities.
@@ -156,8 +189,9 @@ shows how much of it is boilerplate vs. real behavior.
   a tick per observer carrying `A`, with everything in view carrying `B` — a
   directed pair, grouped by observer, empty included. A behavior tells its seen
   entities apart with `plugin.Asking[T]` + `Seen.Carries[T]()`, and steers only
-  through `Steering.Request`. Ready-made ones live under `vision/strategies/*`
-  as plain functions (`flee.Behavior.Steer`, `hunt.Chase`) — who flees or hunts
+  through `Steering.Request`. Ready-made ones live in the flat `vision/behavior`
+  package as plain functions (`Flee.Steer`, `Chase`); a file using both plugins'
+  behaviors imports them as `cbehavior`/`vbehavior` — who flees or hunts
   whom is the registration's to say. Depends on `world`.
 
 Each package has a `doc.go` describing the gameplay capability it adds.
@@ -184,7 +218,7 @@ is a plain helper function each of their `HandleEvents` calls, not an
 engine concept.
 
 Within one active `Stage`, `game.Scene` is what `Game.Draw`/`HandleEvents`
-used to be: `Name`, `Layers() []func() render.Renderer`, `HandleEvents`,
+used to be: `Name`, `Layers() []render.Renderer` (built once, on entering the Stage; the engine only calls `Draw` per frame), `HandleEvents`,
 `Focusable`. `Stage.Stack()` is the static, `Name()`-keyed registry of
 every `Scene` it can show (`game.NewStack(scenes...)`); `Stack.Composition()`
 (the only way to reach it — `Stage` has no accessor of its own) is the live

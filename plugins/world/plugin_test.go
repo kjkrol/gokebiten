@@ -1,6 +1,7 @@
 package world_test
 
 import (
+	"github.com/kjkrol/aabbworld"
 	"testing"
 
 	"github.com/kjkrol/gokebiten/plugins/world"
@@ -8,7 +9,7 @@ import (
 
 func TestPlugin_Res_PublishesConfig(t *testing.T) {
 	cfg := world.Config{
-		Space:    world.SpaceCfg{Width: 100, Height: 100, Toroidal: true},
+		Space:    world.SpaceCfg{Width: 100, Height: 100, Edges: aabbworld.Torus},
 		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
 	}
 	plugin := world.NewPlugin(cfg)

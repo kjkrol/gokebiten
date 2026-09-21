@@ -1,25 +1,32 @@
 package board
 
 import (
+	"github.com/kjkrol/aabbworld"
 	"testing"
 
 	"github.com/kjkrol/gokebiten/plugins/world"
 )
 
-func TestNewPlugin_SetsGridToroidalFromWorldConfig(t *testing.T) {
-	grid := DefaultGrids{}.Square(5, 5, 10).(*squareGrid)
-	if grid.Toroidal {
-		t.Fatal("expected DefaultGrids.Square to default Toroidal=false")
-	}
+func TestNewPlugin_SetsEachGridAxisFromTheWorldsEdges(t *testing.T) {
+	for _, tc := range []struct {
+		edges        aabbworld.Edges
+		wrapX, wrapY bool
+	}{
+		{0, false, false},
+		{aabbworld.Torus, true, true},
+		{aabbworld.WrapX | aabbworld.OpenY, true, false},
+		{aabbworld.WrapY, false, true},
+	} {
+		grid := DefaultGrids{}.Square(5, 5, 10).(*squareGrid)
+		worldPlugin := world.NewPlugin(world.Config{
+			Space:    world.SpaceCfg{Width: 100, Height: 100, Edges: tc.edges},
+			Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
+		})
+		NewPlugin(grid, &SingleOccupancy{}, worldPlugin)
 
-	worldPlugin := world.NewPlugin(world.Config{
-		Space:    world.SpaceCfg{Width: 100, Height: 100, Toroidal: true},
-		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
-	})
-	NewPlugin(grid, &SingleOccupancy{}, worldPlugin)
-
-	if !grid.Toroidal {
-		t.Error("expected NewPlugin to set grid.Toroidal to match world.Config.Space.Toroidal=true")
+		if grid.WrapX != tc.wrapX || grid.WrapY != tc.wrapY {
+			t.Errorf("edges %04b: grid wraps x=%v y=%v, want x=%v y=%v", tc.edges, grid.WrapX, grid.WrapY, tc.wrapX, tc.wrapY)
+		}
 	}
 }
 

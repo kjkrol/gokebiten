@@ -30,11 +30,6 @@ func (c *stubInstallCtx) RegSys(factory func() goke.System) goke.Runnable {
 }
 func (c *stubInstallCtx) ECS() *goke.ECS { return c.ecs }
 
-// TestPlugin_Install_WiresBoardForEventHandler guards against the exact
-// regression reported live: Install fetching *board.Board into a local
-// var but never assigning it to Plugin.board, leaving EventHandler's
-// DefaultCommandEventHandler holding a nil Grid that panics on the first
-// right-click.
 func TestPlugin_Install_WiresBoardForEventHandler(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(5, 5, 10)
 	worldPlugin := world.NewPlugin(world.Config{
@@ -53,7 +48,7 @@ func TestPlugin_Install_WiresBoardForEventHandler(t *testing.T) {
 	events := &control.InputEvents{}
 	events.AddClickEvent(25, 25, ebiten.MouseButtonRight, control.ActionPress)
 
-	navPlugin.EventHandler().HandleEvents(events) // must not panic — this is the exact crash site
+	navPlugin.EventHandler().HandleEvents(events)
 
 	if navPlugin.res.PendingTarget == nil {
 		t.Error("expected a right-click to set Resources.PendingTarget")

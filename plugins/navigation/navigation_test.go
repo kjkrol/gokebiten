@@ -5,30 +5,27 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kjkrol/aabbworld"
+	"github.com/kjkrol/aabbworld/geom"
+	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokg"
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
-	"github.com/kjkrol/gokg/spatial"
 )
 
-func testSpace(t *testing.T) *gokg.Space {
+func testSpace(t *testing.T) *aabbworld.Space {
 	t.Helper()
-	space, err := gokg.NewSpace(gokg.Config{
+	space, err := aabbworld.NewSpace(aabbworld.Config{
 		Width: 1000, Height: 1000,
-		BucketSize: spatial.ResolutionFrom(64), BucketCapacity: 16, OpsBufferSize: 64,
+		BucketSize: 64, BucketCapacity: 16, OpsBufferSize: 64,
 	})
 	if err != nil {
-		t.Fatalf("gokg.NewSpace: %v", err)
+		t.Fatalf("aabbworld.NewSpace: %v", err)
 	}
 	return space
 }
 
-// pushOnce jumps every entity's Position to a fixed cell the first time
-// it's armed and run — simulating a collision shove that bypasses
-// world.MoveSystem, so NavigationSystem must notice the mismatch on its own.
+// pushOnce jumps every entity's Position to a fixed cell the first time it is armed and run.
 type pushOnce struct {
 	grid  board.Grid
 	to    board.CellID
@@ -95,7 +92,7 @@ func TestNavigationSystem_Update_DeviationTriggersRepath(t *testing.T) {
 		ctx.Sync()
 	})
 
-	ecs.Tick(time.Second) // computes the initial start->target path
+	ecs.Tick(time.Second)
 
 	c, mt := readCellAndMoveOrder(t, q, &cell, &order)
 	if mt.Path.Length == 0 {
@@ -110,7 +107,7 @@ func TestNavigationSystem_Update_DeviationTriggersRepath(t *testing.T) {
 	}
 
 	pusher.armed = true
-	ecs.Tick(time.Second) // pusher jumps the entity ahead; navigation must notice and re-path
+	ecs.Tick(time.Second)
 
 	c, mt = readCellAndMoveOrder(t, q, &cell, &order)
 	if c.ID != pushed {
@@ -124,11 +121,6 @@ func TestNavigationSystem_Update_DeviationTriggersRepath(t *testing.T) {
 	}
 }
 
-// TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath guards
-// against a real bug: sampling a diagonal move at discrete ticks routinely
-// lands the entity's continuous position in one of the two cells flanking
-// the corner for a tick, before it reaches the actually-planned cell — that
-// must not invalidate the path, nor get recorded as the entity's cell.
 func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(5, 5, 10)
 	terrain := board.NewTerrainMap()
@@ -137,7 +129,7 @@ func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *te
 	steer := newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy, 20)
 
 	previous, _ := grid.CellIndex(0, 1)
-	expected, _ := grid.CellIndex(1, 0) // diagonal neighbor of previous
+	expected, _ := grid.CellIndex(1, 0)
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Base]
@@ -151,8 +143,6 @@ func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *te
 		f.Next()
 		id := f.Cursor.IDs[0]
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: previous}
-		// Mid diagonal step: position already sits inside a flanker cell — a
-		// normal artifact of sampling the move at discrete ticks, not a deviation.
 		pos.Slice(&f.Cursor)[0].Pos = world.Position{AABB: plane.NewAABB(geom.NewVec(11, 11), 8, 8)}
 		var mt MoveOrder
 		mt.Target = expected
@@ -185,10 +175,6 @@ func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *te
 	}
 }
 
-// TestNavigationSystem_Update_ArrivalStopsEntity guards against a real bug: on
-// arrival the "arrived" branch removed MoveOrder but never zeroed Velocity —
-// since the entity never matches this system's query again once MoveOrder is
-// gone, nothing ever stopped it, and it drifted off the board.
 func TestNavigationSystem_Update_ArrivalStopsEntity(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(5, 1, 10)
 	terrain := board.NewTerrainMap()
@@ -197,7 +183,7 @@ func TestNavigationSystem_Update_ArrivalStopsEntity(t *testing.T) {
 	steer := newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy, 20)
 
 	start, _ := grid.CellIndex(2, 0)
-	target := start // already at the target — arrives on the very first tick
+	target := start
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Base]
@@ -212,7 +198,7 @@ func TestNavigationSystem_Update_ArrivalStopsEntity(t *testing.T) {
 		id := f.Cursor.IDs[0]
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: start}
 		pos.Slice(&f.Cursor)[0].Pos = world.Position{AABB: board.CellAABB(grid, start, 8)}
-		pos.Slice(&f.Cursor)[0].Vel = world.Velocity{Dir: geom.NewVec(1, 0), Value: 50} // was already moving in
+		pos.Slice(&f.Cursor)[0].Vel = world.Velocity{Dir: geom.NewVec(1, 0), Value: 50}
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(start, id)
 
@@ -244,10 +230,6 @@ func TestNavigationSystem_Update_ArrivalStopsEntity(t *testing.T) {
 	}
 }
 
-// TestNavigationSystem_Update_ArrivalSnapsToCellCenter guards that an entity
-// arriving off-center (a natural consequence of continuous movement crossing
-// a cell boundary at an arbitrary point) ends up exactly centered — needed
-// for a board game, where units are expected to sit precisely on a cell.
 func TestNavigationSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(5, 1, 10)
 	terrain := board.NewTerrainMap()
@@ -258,7 +240,6 @@ func TestNavigationSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
 	steer.BindSpace(space)
 
 	target, _ := grid.CellIndex(2, 0)
-	// Within arrivalEpsilon of the target cell's true center (25,5) for a 10px cell at column 2.
 	offCenter := world.Position{AABB: plane.NewAABB(geom.NewVec(20, 1), 8, 8)}
 
 	var cell goke.Comp[board.Cell]
@@ -276,7 +257,7 @@ func TestNavigationSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
 		pos.Slice(&f.Cursor)[0].Pos = offCenter
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(target, id)
-		space.Insert(id, offCenter.AABB)
+		space.Insert(id, &offCenter.AABB)
 		space.Flush(nil)
 
 		q = si.NewQueryBuilder(&pos).Build()
@@ -311,11 +292,6 @@ func TestNavigationSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
 	}
 }
 
-// TestNavigationSystem_Update_ArrivalGlidesSmoothlyToCellCenter guards against
-// a real bug: switching waypoints on cell-boundary crossing (rather than
-// proximity to the cell's true center) made a large final correction happen
-// in a single tick, visibly popping the entity into place. Arrival must
-// glide in bounded steps and still land exactly on center.
 func TestNavigationSystem_Update_ArrivalGlidesSmoothlyToCellCenter(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(5, 1, 10)
 	terrain := board.NewTerrainMap()
@@ -326,7 +302,6 @@ func TestNavigationSystem_Update_ArrivalGlidesSmoothlyToCellCenter(t *testing.T)
 	steer.BindSpace(space)
 
 	target, _ := grid.CellIndex(2, 0)
-	// Off the true center (25,5), within the target cell, well beyond arrivalEpsilon.
 	offCenter := world.Position{AABB: plane.NewAABB(geom.NewVec(17, 1), 8, 8)}
 
 	var cell goke.Comp[board.Cell]
@@ -344,14 +319,14 @@ func TestNavigationSystem_Update_ArrivalGlidesSmoothlyToCellCenter(t *testing.T)
 		pos.Slice(&f.Cursor)[0].Pos = offCenter
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(target, id)
-		space.Insert(id, offCenter.AABB)
+		space.Insert(id, &offCenter.AABB)
 		space.Flush(nil)
 
 		q = si.NewQueryBuilder(&pos).Build()
 	}})
 
 	steerHandle := ecs.RegSys(steer)
-	moveHandle := ecs.RegSys(world.NewMoveSystem(space, 0))
+	moveHandle := ecs.RegSys(world.NewMoveSystem(space))
 	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(steerHandle, d)
 		ctx.Run(moveHandle, d)
@@ -394,12 +369,6 @@ func TestNavigationSystem_Update_ArrivalGlidesSmoothlyToCellCenter(t *testing.T)
 	}
 }
 
-// TestNavigationSystem_Update_ReproducesBoardDemoWallScenario reproduces the
-// board-demo wall scenario (24x16 grid, a full-height wall at column 12,
-// a unit routing from the left side to the right side) tick by tick over
-// simulated real time, to observe directly whether the entity's logical
-// Cell ever lands inside the wall and whether its Path changes shape
-// without any external deviation.
 func TestNavigationSystem_Update_ReproducesBoardDemoWallScenario(t *testing.T) {
 	const (
 		gridWidth, gridHeight, cellSize = uint32(24), uint32(16), uint32(32)
@@ -442,14 +411,14 @@ func TestNavigationSystem_Update_ReproducesBoardDemoWallScenario(t *testing.T) {
 		pos.Slice(&f.Cursor)[0].Pos = startPos
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(start, id)
-		space.Insert(id, startPos.AABB)
+		space.Insert(id, &startPos.AABB)
 		space.Flush(nil)
 
 		q = si.NewQueryBuilder(&cell, &pos, &order).Build()
 	}})
 
 	steerHandle := ecs.RegSys(steer)
-	moveHandle := ecs.RegSys(world.NewMoveSystem(space, 0))
+	moveHandle := ecs.RegSys(world.NewMoveSystem(space))
 	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(steerHandle, d)
 		ctx.Run(moveHandle, d)
@@ -541,7 +510,7 @@ func TestDirectionBetween(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := directionBetween(center, c.want, 1000, 1000, false); got != c.dir {
+			if got := directionBetween(center, c.want, 1000, 1000, 0); got != c.dir {
 				t.Errorf("directionBetween(%v, %v) = %v, want %v", center, c.want, got, c.dir)
 			}
 		})
@@ -550,10 +519,10 @@ func TestDirectionBetween(t *testing.T) {
 	t.Run("wraps through the seam instead of straight across the map", func(t *testing.T) {
 		have := geom.NewVec(95.0, 50.0)
 		want := geom.NewVec(5.0, 50.0)
-		if got := directionBetween(have, want, 100, 100, true); got != DirE {
+		if got := directionBetween(have, want, 100, 100, aabbworld.Torus); got != DirE {
 			t.Errorf("directionBetween(%v, %v, toroidal) = %v, want DirE (short hop east through the wrap)", have, want, got)
 		}
-		if got := directionBetween(have, want, 100, 100, false); got != DirW {
+		if got := directionBetween(have, want, 100, 100, 0); got != DirW {
 			t.Errorf("directionBetween(%v, %v, non-toroidal) = %v, want DirW (sanity: without wrap it's the long way west)", have, want, got)
 		}
 	})

@@ -11,10 +11,11 @@ import (
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/game"
 	"github.com/kjkrol/gokebiten/plugins/board"
-	"github.com/kjkrol/gokebiten/plugins/collisions"
+	"github.com/kjkrol/gokebiten/plugins/collision"
 	"github.com/kjkrol/gokebiten/plugins/navigation"
 	"github.com/kjkrol/gokebiten/plugins/selection"
 	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gokebiten/plugins/world/kind"
 	"github.com/kjkrol/gokebiten/render"
 	"github.com/kjkrol/uid"
 )
@@ -58,15 +59,16 @@ func (d *Demo) Stages() (map[string]game.Stage, string) {
 
 // =========================== Stage ===========================
 
-// mainStage wires the board/navigation/selection demo — its plugins are its own fields, built in Init.
+// mainStage wires the board/navigation/selection demo; its plugins are its own fields.
 type mainStage struct {
-	world      *world.Plugin
-	board      *board.Plugin
-	nav        *navigation.Plugin
-	collisions *collisions.Plugin
-	selection  *selection.Plugin
-	stack      game.Scenes
-	state      *State
+	world     *world.Plugin
+	board     *board.Plugin
+	nav       *navigation.Plugin
+	collision *collision.Plugin
+	selection *selection.Plugin
+	red, blue kind.Of[unit]
+	stack     game.Scenes
+	state     *State
 }
 
 var _ game.Stage = (*mainStage)(nil)
@@ -77,7 +79,7 @@ func (s *mainStage) Stack() game.Scenes { return s.stack }
 
 func (s *mainStage) Init(ctx game.Initializer) error {
 	s.world = ctx.UseWorld(world.Config{
-		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: false},
+		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight},
 		Entities: world.EntitiesCfg{MaxCount: MaxEntCount, MinSize: EntitySize, MaxSize: EntitySize},
 	})
 	s.world.WithCameraControls()
@@ -94,8 +96,8 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 		return err
 	}
 
-	s.collisions = collisions.NewPlugin(s.world)
-	if err := ctx.Use(s.collisions); err != nil {
+	s.collision = collision.NewPlugin(s.world)
+	if err := ctx.Use(s.collision); err != nil {
 		return err
 	}
 
@@ -105,7 +107,7 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 		return err
 	}
 
-	s.registerUnitKinds()
+	s.defineKinds()
 
 	main := &mainScene{stage: s}
 	stack, err := game.NewStack(main)
@@ -127,35 +129,6 @@ func (s *mainStage) registerCellKinds() {
 	)
 }
 
-// registerUnitKinds defines the "red"/"blue" unit kinds, each spawned from a unit roster entry.
-// unit is the roster data the "red"/"blue" kinds spawn from: where the unit starts and where it heads.
-type unit struct{ start, target board.CellID }
-
-func (s *mainStage) registerUnitKinds() {
-	brd := s.board.Res.Logic.Board
-	occupancy := s.board.Occupancy()
-	space := s.world.Space()
-	unitKind := func(k world.Kind[unit]) world.EntKind {
-		return world.EntKind{
-			Position: k.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(brd, u.start, EntitySize)} }),
-			Velocity: k.Const(world.Velocity{}),
-			Components: []world.ComponentTemplate{
-				k.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
-				k.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }).
-					WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
-				k.Const(selection.Selected{}),
-				collisions.Collidable(space),
-				// Physics with no restitution: units are pushed out of each
-				// other without rebounding, and navigation sets their course.
-				k.Const(collisions.Physics{}),
-			},
-		}
-	}
-	units := s.world.EntKindDict()
-	units.Define("red", unitKind)
-	units.Define("blue", unitKind)
-}
-
 func (s *mainStage) Restore(p game.Persistence) (bool, error) {
 	saves, err := p.List(saveBasePath)
 	if err != nil {
@@ -171,6 +144,29 @@ func (s *mainStage) Restore(p game.Persistence) (bool, error) {
 	return true, nil
 }
 
+// unit is the row the "red"/"blue" kinds spawn from: where the unit starts and where it heads.
+type unit struct{ start, target board.CellID }
+
+// defineKinds says what this game's entities are, fresh or restored.
+func (s *mainStage) defineKinds() {
+	brd := s.board.Res.Logic.Board
+	occupancy := s.board.Occupancy()
+	unitSpec := kind.Spec{
+		kind.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(brd, u.start, EntitySize)} }),
+		kind.Const(world.Velocity{}),
+		kind.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
+		kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }).
+			WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
+		kind.Const(selection.Selected{}),
+		kind.Const(collision.Collider{}),
+		kind.Const(collision.Physics{}),
+	}
+	kinds := s.world.Kinds()
+	s.red = kind.Define[unit](kinds, "red", unitSpec)
+	s.blue = kind.Define[unit](kinds, "blue", unitSpec)
+}
+
+// Spawn says who is there when the game starts fresh.
 func (s *mainStage) Spawn() error {
 	brd := s.board.Res.Logic.Board
 	cell := func(x, y uint32) board.CellID { c, _ := brd.CellIndex(x, y); return c }
@@ -181,17 +177,16 @@ func (s *mainStage) Spawn() error {
 	}
 	s.board.Seed(board.Layout{Default: "grass", Cells: walls})
 
-	units := s.world.EntKindDict()
 	s.world.Seed(
-		units.Entry("red", unit{start: cell(2, 4), target: cell(GridWidth-3, 4)}),
-		units.Entry("blue", unit{start: cell(2, 12), target: cell(GridWidth-3, 12)}),
+		s.red.Entry(unit{start: cell(2, 4), target: cell(GridWidth-3, 4)}),
+		s.blue.Entry(unit{start: cell(2, 12), target: cell(GridWidth-3, 12)}),
 	)
 	return nil
 }
 
 func (s *mainStage) Update(ctx goke.RunCtx, d time.Duration) {
 	s.world.RunPlan(ctx, d)
-	s.collisions.RunPlan(ctx, d)
+	s.collision.RunPlan(ctx, d)
 	s.nav.RunPlan(ctx, d)
 	s.selection.RunPlan(ctx, d)
 	ctx.Sync()
@@ -205,18 +200,12 @@ var _ game.Scene = (*mainScene)(nil)
 
 func (m *mainScene) Name() string { return "main" }
 
-func (m *mainScene) Layers() []func() render.Renderer {
+func (m *mainScene) Layers() []render.Renderer {
 	s := m.stage
 
-	entKinds := s.world.EntKindDict().All()
-	palette := map[string]color.RGBA{
-		"red":  {R: 220, G: 90, B: 90, A: 255},
-		"blue": {R: 90, G: 140, B: 220, A: 255},
-	}
-	worldAtlas := render.NewAtlas(EntitySize, len(entKinds))
-	for _, kind := range entKinds {
-		worldAtlas.RegisterAt(kind.SpriteID, render.Solid(palette[kind.Name]))
-	}
+	worldAtlas := render.NewAtlas()
+	worldAtlas.RegisterAt(s.red.SpriteID(), EntitySize, render.Solid(color.RGBA{R: 220, G: 90, B: 90, A: 255}))
+	worldAtlas.RegisterAt(s.blue.SpriteID(), EntitySize, render.Solid(color.RGBA{R: 90, G: 140, B: 220, A: 255}))
 	worldAtlas.Close()
 	s.world.WithRenderer(worldAtlas)
 
@@ -224,10 +213,10 @@ func (m *mainScene) Layers() []func() render.Renderer {
 	grass, _ := kinds.Get("grass")
 	wall, _ := kinds.Get("wall")
 	road, _ := kinds.Get("road")
-	boardAtlas := render.NewAtlas(CellSize, len(kinds.All()))
-	boardAtlas.RegisterAt(grass.SpriteID, render.Solid(color.RGBA{R: 60, G: 95, B: 60, A: 255}))
-	boardAtlas.RegisterAt(wall.SpriteID, render.Solid(color.RGBA{R: 40, G: 40, B: 40, A: 255}))
-	boardAtlas.RegisterAt(road.SpriteID, render.Solid(color.RGBA{R: 150, G: 130, B: 80, A: 255}))
+	boardAtlas := render.NewAtlas()
+	boardAtlas.RegisterAt(grass.SpriteID, CellSize, render.Solid(color.RGBA{R: 60, G: 95, B: 60, A: 255}))
+	boardAtlas.RegisterAt(wall.SpriteID, CellSize, render.Solid(color.RGBA{R: 40, G: 40, B: 40, A: 255}))
+	boardAtlas.RegisterAt(road.SpriteID, CellSize, render.Solid(color.RGBA{R: 150, G: 130, B: 80, A: 255}))
 	boardAtlas.Close()
 	s.board.WithRenderer(boardAtlas)
 
@@ -237,7 +226,7 @@ func (m *mainScene) Layers() []func() render.Renderer {
 
 	s.selection.WithRenderer(nil)
 
-	return []func() render.Renderer{s.board.Renderer, s.nav.Renderer, s.world.Renderer, s.selection.Renderer}
+	return []render.Renderer{s.board.Renderer(), s.nav.Renderer(), s.world.Renderer(), s.selection.Renderer()}
 }
 
 func (m *mainScene) HandleEvents(events *control.InputEvents, runtime game.Runtime, composition game.Composition) {

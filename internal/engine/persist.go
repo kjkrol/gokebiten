@@ -108,8 +108,7 @@ func filePath(basePath, label string) string {
 	return basePath + ".game." + label + ".save"
 }
 
-// saveResources gob-encodes groups (each a name and its own gob sub-stream)
-// into one length-prefixed frame so loadResources can match by name, not position.
+// saveResources gob-encodes groups into one frame, each under its own name.
 func saveResources(w io.Writer, groups map[string][]any) error {
 	encoded := make(map[string][]byte, len(groups))
 	for name, targets := range groups {
@@ -134,9 +133,7 @@ func saveResources(w io.Writer, groups map[string][]any) error {
 	return err
 }
 
-// loadResources restores groups from r, matching each by name — a name
-// absent from the saved data (e.g. a plugin added since the save was
-// written) is skipped, leaving its targets at their current values.
+// loadResources restores groups from r by name, leaving untouched any the save does not hold.
 func loadResources(r io.Reader, groups map[string][]any) error {
 	var n uint32
 	if err := binary.Read(r, binary.BigEndian, &n); err != nil {

@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"math/bits"
 
-	"github.com/kjkrol/gokg"
-	"github.com/kjkrol/gokg/spatial"
+	"github.com/kjkrol/aabbworld"
 )
 
-func buildSpace(cfg Config) *gokg.Space {
+func buildSpace(cfg Config) *aabbworld.Space {
 	const minCapacity, maxCapacity = 2.0, 8.0
 
 	worldArea := uint64(cfg.Space.Width) * uint64(cfg.Space.Height)
@@ -18,18 +18,18 @@ func buildSpace(cfg Config) *gokg.Space {
 
 	raw := math.Round(1.0 / math.Sqrt(density))
 	capacity := uint32(math.Max(minCapacity, math.Min(maxCapacity, raw)))
-	bucketResolution := spatial.ResolutionFrom(cfg.Entities.MaxSize * capacity)
+	bucketSide := uint32(1) << bits.Len32(cfg.Entities.MaxSize*capacity-1)
 
 	log.Printf("[world] maxEntities=%d, density=%.2f%%, capacity=%d → bucket=%dx%d, bucketCap=%d, opsBuffer=%d",
 		cfg.Entities.MaxCount, density*100, capacity,
-		bucketResolution.Side(), bucketResolution.Side(),
+		bucketSide, bucketSide,
 		capacity*capacity, cfg.Entities.MaxCount*8)
 
-	space, err := gokg.NewSpace(gokg.Config{
+	space, err := aabbworld.NewSpace(aabbworld.Config{
 		Width:          cfg.Space.Width,
 		Height:         cfg.Space.Height,
-		Toroidal:       cfg.Space.Toroidal,
-		BucketSize:     bucketResolution,
+		Edges:          cfg.Space.Edges,
+		BucketSize:     bucketSide,
 		BucketCapacity: int(capacity * capacity),
 		OpsBufferSize:  cfg.Entities.MaxCount * 8,
 	})

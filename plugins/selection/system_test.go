@@ -5,14 +5,13 @@ import (
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/kjkrol/aabbworld"
+	"github.com/kjkrol/aabbworld/geom"
+	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokg"
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
-	"github.com/kjkrol/gokg/spatial"
 	"github.com/kjkrol/uid"
 )
 
@@ -21,13 +20,11 @@ type pendingSeed struct {
 	id         *uid.UID64
 }
 
-// harness bundles everything a test needs to seed entities, drive System
-// through a tick, and read back Selected. goke allows exactly one Setup
-// call per ECS, so seed() only queues specs — start() performs the single
-// Setup that builds the query and spawns everything queued.
+// harness seeds entities, drives the system through a tick and reads Selected back;
+// seed only queues, start performs the single Setup.
 type harness struct {
 	t         *testing.T
-	space     *gokg.Space
+	space     *aabbworld.Space
 	state     *Resources
 	sys       *SelectionSystem
 	handler   *DefaultEventHandler
@@ -40,15 +37,15 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
-	space, err := gokg.NewSpace(gokg.Config{
+	space, err := aabbworld.NewSpace(aabbworld.Config{
 		Width: 1000, Height: 1000,
-		BucketSize: spatial.ResolutionFrom(64), BucketCapacity: 16, OpsBufferSize: 64,
+		BucketSize: 64, BucketCapacity: 16, OpsBufferSize: 64,
 	})
 	if err != nil {
-		t.Fatalf("gokg.NewSpace: %v", err)
+		t.Fatalf("aabbworld.NewSpace: %v", err)
 	}
 
-	cam := camera.NewFromSpace(1000, 1000, false)
+	cam := camera.NewFromSpace(1000, 1000, 0)
 
 	state := &Resources{}
 	sys := NewSelectionSystem(state, space, cam)
@@ -57,8 +54,7 @@ func newHarness(t *testing.T) *harness {
 	return &harness{t: t, space: space, state: state, sys: sys, handler: handler, ecs: goke.New()}
 }
 
-// seed queues an entity at world position (x,y) sized size x size — the
-// returned pointer is filled in once start() runs.
+// seed queues a size x size entity at (x,y); the returned id is filled in by start.
 func (h *harness) seed(x, y, size float64) *uid.UID64 {
 	id := new(uid.UID64)
 	h.pending = append(h.pending, pendingSeed{x: x, y: y, size: size, id: id})
@@ -83,7 +79,7 @@ func (h *harness) start() {
 				*spec.id = id
 				aabb := plane.NewAABB(geom.NewVec(spec.x, spec.y), spec.size, spec.size)
 				positions[j].Pos = world.Position{AABB: aabb}
-				h.space.Insert(id, aabb)
+				h.space.Insert(id, &aabb)
 				i++
 			}
 		}
@@ -165,7 +161,6 @@ func TestSystem_Update_DragSelectsEntitiesInsideBox_ReplacesOutside(t *testing.T
 	outside := h.seed(500, 500, 10)
 	h.start()
 
-	// pre-select outside so we can verify a non-additive drag drops it.
 	h.click(505, 505, false)
 	if !h.isSelected(*outside) {
 		t.Fatal("sanity check failed: expected outside entity to be selected first")
@@ -192,7 +187,7 @@ func TestSystem_Update_ShiftClickAddsToExistingSelection(t *testing.T) {
 		t.Fatal("sanity check failed: expected first entity to be selected")
 	}
 
-	h.click(205, 205, true) // shift held: additive
+	h.click(205, 205, true)
 
 	if !h.isSelected(*first) {
 		t.Error("expected the first selection to survive a Shift-click elsewhere")
@@ -202,10 +197,6 @@ func TestSystem_Update_ShiftClickAddsToExistingSelection(t *testing.T) {
 	}
 }
 
-// TestSystem_Update_DragAcrossMultipleTicks guards against a real usage
-// difference from the other tests here: a real mouse drag delivers Press
-// and Release in SEPARATE Game.Update calls (separate HandleEvents calls,
-// with a tick in between), not batched into one InputEvents like click()/drag() do.
 func TestSystem_Update_DragAcrossMultipleTicks(t *testing.T) {
 	h := newHarness(t)
 	id := h.seed(50, 50, 10)
@@ -214,7 +205,7 @@ func TestSystem_Update_DragAcrossMultipleTicks(t *testing.T) {
 	press := &control.InputEvents{}
 	press.AddClickEvent(40, 40, ebiten.MouseButtonLeft, control.ActionPress)
 	h.handler.HandleEvents(press)
-	h.ecs.Tick(time.Second) // nothing pending yet — press alone shouldn't select
+	h.ecs.Tick(time.Second)
 
 	if h.isSelected(*id) {
 		t.Fatal("sanity check failed: press alone (no release yet) should not select anything")
@@ -236,7 +227,7 @@ func TestSystem_Update_SelectByID_TagsExactlyGivenEntities(t *testing.T) {
 	other := h.seed(200, 200, 10)
 	h.start()
 
-	h.click(205, 205, false) // pre-select other, to confirm Select() replaces it
+	h.click(205, 205, false)
 	if !h.isSelected(*other) {
 		t.Fatal("sanity check failed: expected other to be selected first")
 	}
@@ -295,36 +286,32 @@ func TestSystem_DragBox_TracksLiveDragState(t *testing.T) {
 	}
 }
 
-// TestSelectionSystem_WorldBox_WrapsAcrossSeam guards the reported bug:
-// a drag-select box that straddles a toroidal camera's wrap seam must
-// wrap/fragment (via gokg's Space.WrapAABB) into the small region
-// actually dragged, not the huge (nearly whole-world) box that
-// independently-wrapped corners used to produce.
-func TestSelectionSystem_WorldBox_WrapsAcrossSeam(t *testing.T) {
-	space, err := gokg.NewSpace(gokg.Config{
-		Width: 1000, Height: 1000, Toroidal: true,
-		BucketSize: spatial.ResolutionFrom(64), BucketCapacity: 16, OpsBufferSize: 64,
+func TestSelectionSystem_WorldBox_SelectsOnBothSidesOfTheSeam(t *testing.T) {
+	space, err := aabbworld.NewSpace(aabbworld.Config{
+		Width: 1000, Height: 1000, Edges: aabbworld.Torus,
+		BucketSize: 64, BucketCapacity: 16, OpsBufferSize: 64,
 	})
 	if err != nil {
-		t.Fatalf("gokg.NewSpace: %v", err)
+		t.Fatalf("aabbworld.NewSpace: %v", err)
 	}
-	cam := camera.NewFromSpaceWithConfig(1000, 1000, true, camera.Config{ViewportWidth: 200, ViewportHeight: 200})
-	cam.MoveTo(950, 500) // view spans world 950..1150≡950..150 — straddles the wrap seam
+	before, after, elsewhere := uid.UID64(1), uid.UID64(2), uid.UID64(3)
+	space.Insert(before, ptr(plane.NewAABB(geom.NewVec(960, 502), 5, 5)))
+	space.Insert(after, ptr(plane.NewAABB(geom.NewVec(20, 502), 5, 5)))
+	space.Insert(elsewhere, ptr(plane.NewAABB(geom.NewVec(500, 502), 5, 5)))
+	space.Flush(nil)
 
+	cam := camera.NewFromSpaceWithConfig(1000, 1000, aabbworld.Torus, camera.Config{ViewportWidth: 200, ViewportHeight: 200})
+	cam.MoveTo(950, 500)
 	sys := &SelectionSystem{camera: cam, space: space}
 
-	// dragging the full width of the 200px viewport spans world 950..1150.
 	box := sys.worldBox(geom.NewVec(0, 0), geom.NewVec(200, 10))
-
-	frags := 0
-	box.VisitFragments(func(plane.FragPosition, geom.AABB) bool {
-		frags++
-		return true
-	})
-	if frags == 0 {
-		t.Fatal("expected worldBox to fragment when the drag spans the wrap seam")
-	}
 	if w := box.BottomRight.X - box.TopLeft.X; w > 200 {
-		t.Errorf("worldBox main-fragment width = %v, want <= 200 (not the whole-world box independent wrapping used to produce)", w)
+		t.Errorf("worldBox is %v wide, want the 200 that was dragged", w)
+	}
+
+	hit := map[uid.UID64]bool{}
+	space.Query(box, aabbworld.AnyCapability, func(id uid.UID64) { hit[id] = true })
+	if !hit[before] || !hit[after] || hit[elsewhere] || len(hit) != 2 {
+		t.Errorf("drag across the seam hit %v, want the entities either side of it and nothing else", hit)
 	}
 }

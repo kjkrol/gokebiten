@@ -9,15 +9,17 @@ import (
 	"slices"
 	"time"
 
+	"github.com/kjkrol/aabbworld"
+
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/game"
 	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/collisions"
-	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/hit"
-	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/stats"
+	"github.com/kjkrol/gokebiten/plugins/collision"
+	"github.com/kjkrol/gokebiten/plugins/collision/behavior"
 	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gokebiten/plugins/world/kind"
 	"github.com/kjkrol/gokebiten/render"
 )
 
@@ -28,19 +30,15 @@ const (
 
 	saveBasePath = "collision-demo"
 
-	// hitDuration is how long an entity keeps showing a collision — long
-	// enough to see at this tick rate, short enough to look like a flash.
-	hitDuration = 100 * time.Millisecond
+	// hitDuration is how long an entity keeps showing a collision.
+	hitDuration = 50 * time.Millisecond
 )
 
-// rng is where every random choice in this demo comes from. It is a variable
-// so a benchmark can pin the seed: comparing two builds is meaningless if they
-// start from different velocities.
+// rng is where every random choice in this demo comes from; a benchmark pins its seed.
 var rng = rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 
-// RectSize, FillPercent and the EntityCount they imply are variables rather
-// than constants so a benchmark can tick this same Stage at another scale —
-// the defaults are what the demo runs with.
+// RectSize, FillPercent and the EntityCount they imply are what the demo runs with;
+// a benchmark sets them to tick this same Stage at another scale.
 var (
 	RectSize    uint32 = 10
 	FillPercent        = 20.0
@@ -81,24 +79,26 @@ type State struct{ Saves int }
 const (
 	entityColors = 7
 	entityShapes = 4
-	hitKind      = "hit"
 )
 
-// body is a roster entry's Data for every entity kind: its starting position and velocity.
+// body is the row every entity kind spawns from: its starting position and velocity.
 type body struct {
 	pos world.Position
 	vel world.Velocity
 }
 
-// entityKindName names the EntKind drawn with color ci and shape si; hitKind only supplies the overlay sprite.
+// entityKindName names the kind drawn with color ci and shape si.
 func entityKindName(ci, si int) string { return fmt.Sprintf("entity-%d-%d", ci, si) }
 
 type mainStage struct {
-	world      *world.Plugin
-	collisions *collisions.Plugin
+	world     *world.Plugin
+	collision *collision.Plugin
+
+	// kinds is one kind per color and shape; hitSprite is the overlay's atlas slot, no kind's.
+	kinds [entityColors][entityShapes]kind.Of[body]
 
 	state          *State
-	collisionStats stats.Stats
+	collisionStats behavior.ContactStats
 
 	stack game.Scenes
 }
@@ -111,36 +111,20 @@ func (s *mainStage) Stack() game.Scenes { return s.stack }
 
 func (s *mainStage) Init(ctx game.Initializer) error {
 	s.world = ctx.UseWorld(world.Config{
-		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
+		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Edges: aabbworld.Torus},
 		Entities: world.EntitiesCfg{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize},
 	})
-	kinds := s.world.EntKindDict()
-	for ci := range entityColors {
-		for si := range entityShapes {
-			kinds.Define(entityKindName(ci, si), func(k world.Kind[body]) world.EntKind {
-				return world.EntKind{
-					Position: k.Load(func(b body) world.Position { return b.pos }),
-					Velocity: k.Load(func(b body) world.Velocity { return b.vel }),
-					Components: []world.ComponentTemplate{
-						collisions.Collidable(s.world.Space()),
-						k.Const(collisions.Physics{Restitution: 1}),
-						k.Const(hit.Mark{Duration: hitDuration}),
-					},
-				}
-			})
-		}
-	}
-	kinds.Define(hitKind, func(world.Kind[struct{}]) world.EntKind { return world.EntKind{} })
+	s.defineKinds()
 
-	s.collisions = collisions.NewPlugin(s.world)
-	if err := s.collisions.RegisterBehavior(
-		plugin.Between[plugin.Anything, plugin.Anything](stats.Count(&s.collisionStats)),
-		plugin.Each[hit.Mark](hit.Show(hitDuration)),
+	s.collision = collision.NewPlugin(s.world)
+	if err := s.collision.RegisterBehavior(
+		plugin.Between[plugin.Anything, plugin.Anything](behavior.CountContacts(&s.collisionStats)),
+		plugin.Each[behavior.HitMark](behavior.ShowHits(hitDuration)),
 	); err != nil {
 		return err
 	}
 	s.state = &State{}
-	if err := ctx.Use(s.collisions); err != nil {
+	if err := ctx.Use(s.collision); err != nil {
 		return err
 	}
 
@@ -170,13 +154,29 @@ func (s *mainStage) Restore(p game.Persistence) (bool, error) {
 	return true, nil
 }
 
+// defineKinds says what this game's entities are, fresh or restored.
+func (s *mainStage) defineKinds() {
+	kinds := s.world.Kinds()
+	for ci := range entityColors {
+		for si := range entityShapes {
+			s.kinds[ci][si] = kind.Define[body](kinds, entityKindName(ci, si), kind.Spec{
+				kind.Load(func(b body) world.Position { return b.pos }),
+				kind.Load(func(b body) world.Velocity { return b.vel }),
+				kind.Const(collision.Collider{}),
+				kind.Const(collision.Physics{Restitution: 1}),
+				kind.Const(behavior.HitMark{Duration: hitDuration}),
+			})
+		}
+	}
+}
+
+// Spawn says who is there when the game starts fresh.
 func (s *mainStage) Spawn() error {
 	placement := world.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize)
 	motion := newRandomVelocity(200, 50, 10)
-	kinds := s.world.EntKindDict()
-	entries := make([]world.Entry, EntityCount)
+	entries := make([]kind.Entry, EntityCount)
 	for i := range entries {
-		entries[i] = kinds.Entry(entityKindName(rng.IntN(entityColors), rng.IntN(entityShapes)),
+		entries[i] = s.kinds[rng.IntN(entityColors)][rng.IntN(entityShapes)].Entry(
 			body{pos: placement.Place(i, EntityCount), vel: motion.initialVelocity(i)})
 	}
 	s.world.Seed(entries...)
@@ -185,7 +185,7 @@ func (s *mainStage) Spawn() error {
 
 func (s *mainStage) Update(ctx goke.RunCtx, d time.Duration) {
 	s.world.RunPlan(ctx, d)
-	s.collisions.RunPlan(ctx, d)
+	s.collision.RunPlan(ctx, d)
 	ctx.Sync()
 }
 
@@ -200,49 +200,40 @@ var _ game.Scene = (*mainScene)(nil)
 
 func (m *mainScene) Name() string { return "main" }
 
-func (m *mainScene) Layers() []func() render.Renderer {
+func (m *mainScene) Layers() []render.Renderer {
 	s := m.stage
 
 	palette := [8]color.RGBA{
-		{R: 80, G: 120, B: 220, A: 255},  // blue
-		{R: 90, G: 200, B: 110, A: 255},  // green
-		{R: 80, G: 200, B: 210, A: 255},  // cyan
-		{R: 150, G: 100, B: 220, A: 255}, // purple
-		{R: 220, G: 210, B: 80, A: 255},  // yellow
-		{R: 230, G: 160, B: 60, A: 255},  // amber
-		{R: 60, G: 160, B: 150, A: 255},  // teal
-		{R: 220, G: 40, B: 40, A: 255},   // red — reserved for the hit sprite, not an entity color
+		{R: 80, G: 120, B: 220, A: 255},
+		{R: 90, G: 200, B: 110, A: 255},
+		{R: 80, G: 200, B: 210, A: 255},
+		{R: 150, G: 100, B: 220, A: 255},
+		{R: 220, G: 210, B: 80, A: 255},
+		{R: 230, G: 160, B: 60, A: 255},
+		{R: 60, G: 160, B: 150, A: 255},
+		{R: 220, G: 40, B: 40, A: 255},
 	}
-	kinds := s.world.EntKindDict()
-	atlas := render.NewAtlas(int(RectSize), len(kinds.All()))
+	hitSprite := s.world.Kinds().NewSprite()
+	atlas := render.NewAtlas()
 	shapes := [entityShapes]func(color.RGBA) render.SpriteDrawer{render.Solid, render.Border, render.Diamond, render.Cross}
 	for ci, c := range palette[:entityColors] {
 		for si, shape := range shapes {
-			kind, _ := kinds.Get(entityKindName(ci, si))
-			atlas.RegisterAt(kind.SpriteID, shape(c))
+			atlas.RegisterAt(s.kinds[ci][si].SpriteID(), int(RectSize), shape(c))
 		}
 	}
-	hitSprite, _ := kinds.Get(hitKind)
-	atlas.RegisterAt(hitSprite.SpriteID, render.Solid(palette[entityColors]))
+
+	atlas.RegisterAt(hitSprite, int(RectSize), render.Solid(palette[entityColors]))
 	atlas.Close()
 	s.world.WithRenderer(atlas)
 
-	return []func() render.Renderer{
-		func() render.Renderer {
-			return render.NewCachedRenderer(
-				render.SolidBackground{Color: color.RGBA{R: 50, G: 50, B: 50, A: 255}},
-				ScreenWidth, ScreenHeight,
-			)
-		},
-		func() render.Renderer {
-			return s.world.EntityRenderer().
-				WithStrategy(hit.Overlay(world.Appearance{SpriteID: hitSprite.SpriteID}))
-		},
-		func() render.Renderer {
-			kin := s.world.Res.Telemetry
-			entityCount := func() int { return kin.Count }
-			return render.NewTelemetryRenderer(&m.tps.Ticks, entityCount, &s.collisionStats.Counter)
-		},
+	entityCount := func() int { return s.world.Res.Telemetry.Count }
+	return []render.Renderer{
+		render.NewCachedRenderer(
+			render.SolidBackground{Color: color.RGBA{R: 50, G: 50, B: 50, A: 255}},
+			ScreenWidth, ScreenHeight,
+		),
+		s.world.EntityRenderer().WithStrategy(behavior.HitOverlay(world.Appearance{SpriteID: hitSprite})),
+		render.NewTelemetryRenderer(&m.tps.Ticks, entityCount, &s.collisionStats.Counter),
 	}
 }
 

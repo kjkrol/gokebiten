@@ -1,9 +1,9 @@
 package board
 
 import (
+	"github.com/kjkrol/aabbworld/geom"
+	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
 )
 
 // Board is a Grid paired with its TerrainMap — the single integration
@@ -20,7 +20,7 @@ func NewBoard(grid Grid, terrain *TerrainMap) *Board {
 	return &Board{Grid: grid, TerrainMap: terrain}
 }
 
-// CellAABB is the size x size world-pixel rectangle centered on c, the same placement plugins/navigation's NavigationSystem steps entities into.
+// CellAABB is the size x size world rectangle centred on c.
 func CellAABB(grid Grid, c CellID, size uint32) plane.AABB {
 	center := grid.CellCenter(c)
 	half := float64(size) / 2

@@ -2,14 +2,16 @@ package world
 
 import (
 	"fmt"
+	"reflect"
 	"time"
 
+	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugin"
+	"github.com/kjkrol/gokebiten/plugins/world/kind"
 	"github.com/kjkrol/gokebiten/render"
-	"github.com/kjkrol/gokg"
 	"github.com/kjkrol/uid"
 )
 
@@ -31,8 +33,8 @@ type Plugin struct {
 	Res      Resources
 	module   *module
 	renderer *Renderer
-	entKinds *EntKindDict
-	seeded   []Entry
+	kinds    *Kinds
+	seeded   []kind.Entry
 
 	cameraControls bool
 	scrollSpeed    int32
@@ -46,14 +48,13 @@ var _ plugin.Populator = (*Plugin)(nil)
 // Builtin marks Plugin as installed by the engine itself — see ctx.UseWorld.
 func (*Plugin) Builtin() {}
 
-// NewPlugin builds Plugin around a fresh world — Seed/Populate/Space are
-// usable immediately, before Install (e.g. in tests).
+// NewPlugin builds Plugin around a fresh world, usable before Install.
 func NewPlugin(cfg Config) *Plugin {
 	m := newModule(cfg)
-	cam := camera.NewFromSpaceWithConfig(cfg.Space.Width, cfg.Space.Height, cfg.Space.Toroidal, cfg.Camera)
-	dict := newEntKindDict()
-	m.entKinds = dict
-	return &Plugin{Res: Resources{Config: cfg, Telemetry: &m.telemetry, Camera: cam}, module: m, entKinds: dict}
+	cam := camera.NewFromSpaceWithConfig(cfg.Space.Width, cfg.Space.Height, cfg.Space.Edges, cfg.Camera)
+	kinds := newKinds()
+	m.kinds = kinds
+	return &Plugin{Res: Resources{Config: cfg, Telemetry: &m.telemetry, Camera: cam}, module: m, kinds: kinds}
 }
 
 // WithCameraControls enables the default wheel-zoom/middle-drag-pan/edge-scroll EventHandler.
@@ -79,8 +80,9 @@ func (p *Plugin) Restore() { p.Res.Camera.Restore() }
 func (p *Plugin) Name() string { return "gokebiten.world" }
 
 func (p *Plugin) Install(ctx plugin.Installer) error {
+	p.module.ecs = ctx.ECS()
 	ctx.UseModule(p.module)
-	ctx.Setup(p.entKinds) // joins the tracked resources, so the type dictionary is saved
+	ctx.Setup(p.kinds)
 	return nil
 }
 
@@ -102,8 +104,7 @@ func (p *Plugin) Renderer() render.Renderer {
 	return p.renderer
 }
 
-// EventHandler returns the default wheel-zoom/middle-drag-pan/edge-scroll
-// handler, or nil unless WithCameraControls was called.
+// EventHandler returns the zoom, pan and edge-scroll handler, or nil without WithCameraControls.
 func (p *Plugin) EventHandler() control.EventHandler {
 	if !p.cameraControls {
 		return nil
@@ -114,9 +115,7 @@ func (p *Plugin) EventHandler() control.EventHandler {
 // Serializable returns world's persistable state (its camera's Viewport/Zoom).
 func (p *Plugin) Serializable() plugin.Serializable { return &p.Res }
 
-// RegisterBehavior adds a world.Behavior to the decision pass world runs each
-// tick before movement, in registration order — so one consuming what earlier
-// ones decided sees it. Anything else is reported as ErrUnhostedBehavior.
+// RegisterBehavior adds world.Behaviors to the decision pass run before movement, in order.
 func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
 	for _, b := range behaviors {
 		system, ok := b.(Behavior)
@@ -133,51 +132,74 @@ func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
 // =================================================================
 
 // Seed adds entries to the entities spawned when this Stage starts fresh — see Populate.
-func (p *Plugin) Seed(entries ...Entry) { p.seeded = append(p.seeded, entries...) }
+func (p *Plugin) Seed(entries ...kind.Entry) { p.seeded = append(p.seeded, entries...) }
 
-// Populate spawns every seeded entity, erroring (and spawning nothing) on an unknown kind or Data a kind's templates reject.
+// Populate spawns every seeded entity, or none and an error on an unknown kind or a wrong row.
 func (p *Plugin) Populate() error {
 	var order []string
 	groups := make(map[string][]any)
 	for _, e := range p.seeded {
-		kind, ok := p.entKinds.Get(e.kind)
+		r, ok := p.kinds.entries[e.Kind()]
 		if !ok {
-			return fmt.Errorf("world: unknown EntKind %q", e.kind)
+			return fmt.Errorf("world: unknown kind %q", e.Kind())
 		}
-		if err := kind.validate(e.data); err != nil {
-			return err
+		if got := reflect.TypeOf(e.Row()); got != r.row {
+			return fmt.Errorf("world: kind %q: an entry carries a %v, its rows are %v", r.name, got, r.row)
 		}
-		if _, seen := groups[e.kind]; !seen {
-			order = append(order, e.kind)
+		if _, seen := groups[r.name]; !seen {
+			order = append(order, r.name)
 		}
-		groups[e.kind] = append(groups[e.kind], e.data)
+		groups[r.name] = append(groups[r.name], e.Row())
 	}
 	for _, name := range order {
-		kind, _ := p.entKinds.Get(name)
-		p.module.populate(kind, groups[name])
+		p.module.populate(p.kinds.entries[name], groups[name])
 	}
 	p.seeded = nil
 	return nil
 }
 
-// Despawn takes an entity out of the world: out of the ECS at the end of the
-// tick, and out of the shared spatial index, so nothing goes on seeing a ghost.
+// Attach gives id the component v from the next sync on, replacing one it already carries.
+func (p *Plugin) Attach[T any](cb *goke.CmdBuf, id uid.UID64, v T) {
+	cb.AddOne(id, compID[T](p), v)
+}
+
+// Detach takes T off id from the next sync on; an entity without it is left alone.
+func (p *Plugin) Detach[T any](cb *goke.CmdBuf, id uid.UID64) {
+	if reflect.TypeFor[T]() == reflect.TypeFor[Base]() {
+		panic("world: Detach[Base] — every entity carries a Base; Despawn the entity instead")
+	}
+	cb.RemoveCompOne(id, compID[T](p))
+}
+
+// Declare tells save files about T, a component only ever attached; call it in Stage.Init.
+func (p *Plugin) Declare[T any]() {
+	p.module.declared = append(p.module.declared, goke.LoadComp[T]())
+}
+
+func compID[T any](p *Plugin) goke.CompID {
+	if p.module.ecs == nil {
+		panic("world: Attach/Detach before the Plugin was installed")
+	}
+	return p.module.ecs.RegComp[T]()
+}
+
+// Despawn takes an entity out of the ECS at the end of the tick, and out of the spatial index.
 func (p *Plugin) Despawn(cb *goke.CmdBuf, id uid.UID64) { p.module.despawn(cb, id) }
 
+// OnExit sets what happens, once, to an entity leaving by an open edge; unset, it is despawned.
+func (p *Plugin) OnExit(fn func(t plugin.Tick, id uid.UID64)) { p.module.exits.onExit = fn }
+
+// Tracked takes the result of a Space.Translate or Reindex a sibling plugin made for id.
+func (p *Plugin) Tracked(t plugin.Tick, id uid.UID64, inside bool) { p.module.tracked(t, id, inside) }
+
 // Space returns world's shared spatial index — every Populate entity is kept in sync with it.
-func (p *Plugin) Space() *gokg.Space { return p.module.space }
+func (p *Plugin) Space() *aabbworld.Space { return p.module.space }
 
-// MaxStep is the furthest a single entity can move in one tick — the cap
-// MoveSystem applies. Two entities closing head-on therefore shut at most
-// 2*MaxStep of gap per tick, which is the reach a broad phase needs.
-func (p *Plugin) MaxStep() float64 { return p.module.maxStep() }
-
-// EntityRenderer returns the concrete entity renderer for further chaining (WithOverlay, WithModify, ...), or nil.
+// EntityRenderer returns the entity renderer for further chaining, or nil.
 func (p *Plugin) EntityRenderer() *Renderer { return p.renderer }
 
-// RegisterSpeedModifier adds m to the set VelocitySystem folds into every entity's Velocity.Value each tick.
+// RegisterSpeedModifier adds m to the factors folded into every entity's speed each tick.
 func (p *Plugin) RegisterSpeedModifier(m SpeedModifier) { p.module.RegisterSpeedModifier(m) }
 
-// EntKindDict returns this Plugin's registered set of EntKinds — call
-// Define to register kinds, Entry to build Seed's roster entries.
-func (p *Plugin) EntKindDict() *EntKindDict { return p.entKinds }
+// Kinds returns this Plugin's registry of entity kinds — what kind.Define registers with.
+func (p *Plugin) Kinds() *Kinds { return p.kinds }

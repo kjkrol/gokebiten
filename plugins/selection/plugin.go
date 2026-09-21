@@ -12,7 +12,7 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 )
 
-// Plugin wires selection into a Game — depends on worldPlugin and a Camera for screen<->world conversion.
+// Plugin wires selection into a Game; it depends on world and its Camera.
 type Plugin struct {
 	state       *Resources
 	worldPlugin *world.Plugin
@@ -23,8 +23,7 @@ type Plugin struct {
 
 var _ plugin.Plugin = (*Plugin)(nil)
 
-// NewPlugin builds the selection plugin over worldPlugin's shared spatial
-// index, using worldPlugin's Camera for click/drag hit-testing.
+// NewPlugin builds the selection plugin over worldPlugin's space and camera.
 func NewPlugin(worldPlugin *world.Plugin) *Plugin {
 	return &Plugin{state: &Resources{}, worldPlugin: worldPlugin, camera: worldPlugin.Camera()}
 }
@@ -44,8 +43,7 @@ func (p *Plugin) Install(ctx plugin.Installer) error {
 
 func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) { p.module.RunPlan(ctx, d) }
 
-// WithRenderer builds this plugin's own highlight renderer (outline for every Selected
-// entity,plus the drag marquee) — atlas is unused, selection draws primitives.
+// WithRenderer builds the highlight renderer; atlas is unused, selection draws primitives.
 func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
 	p.renderer = NewRenderer(p.camera, p.state)
 }
@@ -57,8 +55,7 @@ func (p *Plugin) Renderer() render.Renderer {
 	return p.renderer
 }
 
-// EventHandler returns the default left-click/drag control.EventHandler for selection
-// or write your own against Resources for a different binding scheme.
+// EventHandler returns the default left-click and drag handler for selection.
 func (p *Plugin) EventHandler() control.EventHandler { return NewDefaultEventHandler(p.state) }
 
 // Serializable is a no-op — selection has nothing to persist.

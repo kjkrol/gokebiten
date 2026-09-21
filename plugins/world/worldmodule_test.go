@@ -9,7 +9,7 @@ import (
 func TestWorld_Populate_EndToEnd(t *testing.T) {
 	wm := testWorld()
 
-	wm.populate(EntKind{Name: "dot", Position: Const(spawnerTestPos()), Velocity: Const(Velocity{})}, []any{nil, nil, nil})
+	wm.populate(testKind(spawnerTestPos(), Velocity{}), []any{nil, nil, nil})
 
 	ecs := goke.New()
 	var base goke.Comp[Base]
@@ -42,7 +42,6 @@ func TestWorld_RegSystems_IsIdempotent(t *testing.T) {
 	wm := testWorld()
 	ecs := goke.New()
 
-	// Must not panic or double-register systems when called more than once.
 	wm.RegSystems(ecs)
 	wm.RegSystems(ecs)
 }

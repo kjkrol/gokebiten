@@ -1,0 +1,61 @@
+package collision
+
+import (
+	"time"
+
+	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gokebiten/control"
+	"github.com/kjkrol/gokebiten/plugin"
+	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gokebiten/render"
+)
+
+// Plugin wires the collision engine into a Game — optional, borrows world.Plugin's own Space.
+// Must never import collision/behavior; a game registers those with RegisterBehavior.
+type Plugin struct {
+	worldPlugin *world.Plugin
+	module      *module
+
+	pairs    plugin.PairHost[Meeting]
+	entities plugin.EachHost[Struck]
+}
+
+var _ plugin.Plugin = (*Plugin)(nil)
+
+// NewPlugin builds the collision plugin over worldPlugin's shared spatial index.
+func NewPlugin(worldPlugin *world.Plugin) *Plugin {
+	return &Plugin{worldPlugin: worldPlugin}
+}
+
+// =================================================================
+// plugin.Plugin contract
+// =================================================================
+
+func (p *Plugin) Name() string { return "gokebiten.collision" }
+
+func (p *Plugin) Install(ctx plugin.Installer) error {
+	p.module = newModule(p.worldPlugin.Space(), ctx.ECS(), &p.pairs, &p.entities)
+	p.module.tracked = p.worldPlugin.Tracked
+	ctx.UseModule(p.module)
+	return nil
+}
+
+// RunPlan runs the collision engine for this tick — call from your own Game.Loop closure.
+func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) { p.module.RunPlan(ctx, d) }
+
+// WithRenderer is a no-op — collision has no render.Renderer of its own.
+func (p *Plugin) WithRenderer(render.AtlasSource) {}
+
+// Renderer is a no-op — collision has no render.Renderer of its own.
+func (p *Plugin) Renderer() render.Renderer { return nil }
+
+// EventHandler is a no-op — collision has no control.EventHandler of its own.
+func (p *Plugin) EventHandler() control.EventHandler { return nil }
+
+// Serializable is a no-op — collision has nothing to persist.
+func (p *Plugin) Serializable() plugin.Serializable { return nil }
+
+// RegisterBehavior hosts a plugin.Between of Meeting or a plugin.Each of Struck; call before Use.
+func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
+	return host(&p.pairs, &p.entities, behaviors)
+}

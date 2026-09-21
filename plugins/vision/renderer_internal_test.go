@@ -6,28 +6,33 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 
+	"github.com/kjkrol/aabbworld"
+	"github.com/kjkrol/aabbworld/geom"
+	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokg"
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
-	"github.com/kjkrol/gokg/spatial"
 )
 
-// spawn materialises n entities: Create stages them, and walking the factory is
-// what commits each batch — the same shape world.populate uses.
+// spawn materialises n entities from f.
 func spawn(f *goke.Factory, n int) {
 	f.Create(n)
 	for f.Next() {
 	}
 }
 
-func testSpace(t *testing.T, w, h uint32, toroidal bool) *gokg.Space {
+func torusIf(toroidal bool) aabbworld.Edges {
+	if toroidal {
+		return aabbworld.Torus
+	}
+	return 0
+}
+
+func testSpace(t *testing.T, w, h uint32, toroidal bool) *aabbworld.Space {
 	t.Helper()
-	space, err := gokg.NewSpace(gokg.Config{
-		Width: w, Height: h, Toroidal: toroidal,
-		BucketSize: spatial.Size256x256, BucketCapacity: 8,
+	space, err := aabbworld.NewSpace(aabbworld.Config{
+		Width: w, Height: h, Edges: torusIf(toroidal),
+		BucketSize: 256, BucketCapacity: 8,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -37,16 +42,13 @@ func testSpace(t *testing.T, w, h uint32, toroidal bool) *gokg.Space {
 
 func testRenderer(t *testing.T, w, h uint32, toroidal bool, view camera.AABB) *Renderer {
 	t.Helper()
-	return NewRenderer(camera.NewFromSpace(w, h, toroidal, view), testSpace(t, w, h, toroidal))
+	return NewRenderer(camera.NewFromSpace(w, h, torusIf(toroidal), view), testSpace(t, w, h, toroidal))
 }
 
 func wholeWorld(w, h uint32) camera.AABB {
 	return camera.AABB{TopLeft: geom.NewVec(0, 0), BottomRight: geom.NewVec(float64(w), float64(h))}
 }
 
-// fan has to put the stored reaches back where they were measured: sample i
-// belongs to the angle its index implies, which is the whole reason only the
-// reach is stored.
 func TestRenderer_FanRebuildsTheAnglesFromTheIndex(t *testing.T) {
 	r := testRenderer(t, 2000, 2000, false, wholeWorld(2000, 2000))
 	sight := Sight{Facing: geom.NewVec(1.0, 0.0), HalfAngle: math.Pi / 4, Radius: 400}
@@ -62,7 +64,6 @@ func TestRenderer_FanRebuildsTheAnglesFromTheIndex(t *testing.T) {
 		t.Errorf("fan starts at (%v,%v), want the observer's centre (505,505)", pts[0].DstX, pts[0].DstY)
 	}
 
-	// Three samples across a 90-degree cone: -45, 0, +45 degrees from Facing.
 	for i, want := range []struct{ angle, dist float64 }{
 		{-math.Pi / 4, 100}, {0, 200}, {math.Pi / 4, 300},
 	} {
@@ -74,8 +75,6 @@ func TestRenderer_FanRebuildsTheAnglesFromTheIndex(t *testing.T) {
 	}
 }
 
-// The renderer's query carries SightOutline, so it never enters the chunks of
-// entities that only perceive.
 func TestRenderer_QueryVisitsOnlyEntitiesWithAnOutline(t *testing.T) {
 	r := testRenderer(t, 2000, 2000, false, wholeWorld(2000, 2000))
 
@@ -104,10 +103,6 @@ func TestRenderer_QueryVisitsOnlyEntitiesWithAnOutline(t *testing.T) {
 	}
 }
 
-// Draw skips what it cannot usefully draw: an outline too short to form a fan,
-// and anything the camera is not looking at. A stub style lets this run without
-// a graphics context, which is also why the drawing primitives themselves stay
-// uncovered here.
 func TestRenderer_DrawSkipsShortOutlinesAndOffscreenEntities(t *testing.T) {
 	r := testRenderer(t, 4000, 4000, false, camera.AABB{
 		TopLeft:     geom.NewVec(0, 0),
@@ -148,8 +143,7 @@ func TestRenderer_DrawSkipsShortOutlinesAndOffscreenEntities(t *testing.T) {
 	}
 }
 
-// recordFans collects every fan the renderer hands to the style. The slice the
-// renderer passes is reused between calls, so each one has to be copied.
+// recordFans collects a copy of every fan the renderer hands to the style.
 func recordFans(r *Renderer) *[][]ebiten.Vertex {
 	var fans [][]ebiten.Vertex
 	r.WithStyle(ConeStyleFn(func(_ *ebiten.Image, pts []ebiten.Vertex) {
@@ -158,8 +152,7 @@ func recordFans(r *Renderer) *[][]ebiten.Vertex {
 	return &fans
 }
 
-// drawAt puts one entity with a full cone at (x, y) and draws it, returning
-// every fan that reached the style.
+// drawAt draws one entity with a full cone at (x, y) and returns every fan that reached the style.
 func drawAt(t *testing.T, r *Renderer, x, y float64, radius float64) [][]ebiten.Vertex {
 	t.Helper()
 	fans := recordFans(r)
@@ -192,10 +185,6 @@ func drawAt(t *testing.T, r *Renderer, x, y float64, radius float64) [][]ebiten.
 	return *fans
 }
 
-// The streak this whole change is about: before, two neighbouring samples on
-// opposite sides of the seam were each folded into the window separately, so
-// the edge between them ran across the screen. No edge of a fan may be longer
-// than the cone is wide.
 func TestRenderer_NoFanEdgeSpansTheScreen(t *testing.T) {
 	const radius = 200.0
 

@@ -4,12 +4,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/game"
 	"github.com/kjkrol/gokebiten/internal/engine"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokg/geom"
 )
 
 func testWorldConfig() world.Config {
@@ -64,9 +64,6 @@ func (g oneStageGame) Stages() (map[string]game.Stage, string) {
 	return map[string]game.Stage{g.stage.Name(): g.stage}, g.stage.Name()
 }
 
-// TestPlugin_SaveLoad_TerrainRoundTrip guards that board.Resources' TerrainMap
-// is saved/restored via Serializable, without the caller ever passing it to
-// Persistence.Save/Load explicitly.
 func TestPlugin_SaveLoad_TerrainRoundTrip(t *testing.T) {
 	basePath := t.TempDir() + "/save"
 	grid := board.DefaultGrids{}.Square(5, 5, 10)

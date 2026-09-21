@@ -70,7 +70,7 @@ func (s *Renderer) WithModify[T any](f func(Appearance, T) Appearance) *Renderer
 	return s.WithStrategy(modify[T](f))
 }
 
-// WithStrategy adds a modifier running strategy for every entity carrying T — the escape hatch for a custom AppearanceStrategy[T].
+// WithStrategy adds a modifier running strategy for every entity carrying T.
 func (s *Renderer) WithStrategy[T any](strategy AppearanceStrategy[T]) *Renderer {
 	return s.WithModifier(&conditionalApperanceStrategy[T]{Strategy: strategy})
 }

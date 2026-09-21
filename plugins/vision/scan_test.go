@@ -5,11 +5,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kjkrol/aabbworld/geom"
+	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugins/vision"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
+	"github.com/kjkrol/gokebiten/plugins/world/kind"
 	"github.com/kjkrol/uid"
 )
 
@@ -45,8 +46,7 @@ func at(x, y float64) world.Position {
 	return world.Position{AABB: plane.NewAABB(geom.NewVec(x, y), 10, 10)}
 }
 
-// scene installs world+vision, spawns everything, and ticks once. It returns
-// the observers' ids paired with what they saw.
+// scene installs world+vision, spawns everything, ticks once; returns observers and what they saw.
 func scene(t *testing.T, spawns ...spawn) ([]uid.UID64, []vision.Sighted, []vision.SightOutline) {
 	t.Helper()
 
@@ -64,23 +64,18 @@ func scene(t *testing.T, spawns ...spawn) ([]uid.UID64, []vision.Sighted, []visi
 		t.Fatalf("vision Install: %v", err)
 	}
 
-	dict := w.EntKindDict()
 	for i, s := range spawns {
-		comps := []world.ComponentTemplate{}
+		spec := kind.Spec{
+			kind.Load(func(d spawn) world.Position { return at(d.x, d.y) }),
+			kind.Const(world.Velocity{}),
+		}
 		if s.sight != nil {
-			comps = append(comps, world.Const(*s.sight))
+			spec = append(spec, kind.Const(*s.sight))
 			if s.outline {
-				comps = append(comps, world.Const(vision.SightOutline{}))
+				spec = append(spec, kind.Const(vision.SightOutline{}))
 			}
 		}
-		dict.Define(kindName(i), func(k world.Kind[spawn]) world.EntKind {
-			return world.EntKind{
-				Position:   k.Load(func(d spawn) world.Position { return at(d.x, d.y) }),
-				Velocity:   k.Const(world.Velocity{}),
-				Components: comps,
-			}
-		})
-		w.Seed(dict.Entry(kindName(i), s))
+		w.Seed(kind.Define[spawn](w.Kinds(), kindName(i), spec).Entry(s))
 	}
 	if err := w.Populate(); err != nil {
 		t.Fatalf("Populate: %v", err)
@@ -135,8 +130,8 @@ func eastward(half, radius float64) *vision.Sight {
 func TestScan_ReportsWhatIsInTheConeNearestFirst(t *testing.T) {
 	_, seen, _ := scene(t,
 		spawn{x: 500, y: 500, sight: eastward(math.Pi/4, 600)},
-		spawn{x: 900, y: 560}, // further, and off the near one's shadow
-		spawn{x: 700, y: 500}, // nearer
+		spawn{x: 900, y: 560},
+		spawn{x: 700, y: 500},
 	)
 
 	if len(seen) != 1 {
@@ -153,9 +148,9 @@ func TestScan_ReportsWhatIsInTheConeNearestFirst(t *testing.T) {
 func TestScan_IgnoresWhatFallsOutsideTheCone(t *testing.T) {
 	_, seen, _ := scene(t,
 		spawn{x: 500, y: 500, sight: eastward(math.Pi/8, 600)},
-		spawn{x: 700, y: 500}, // straight ahead
-		spawn{x: 500, y: 900}, // off to the side
-		spawn{x: 200, y: 500}, // behind
+		spawn{x: 700, y: 500},
+		spawn{x: 500, y: 900},
+		spawn{x: 200, y: 500},
 	)
 
 	if seen[0].Count != 1 {
@@ -178,8 +173,6 @@ func TestScan_KeepsAtMostMaxSeen(t *testing.T) {
 	}
 }
 
-// An entity without SightOutline is still scanned — the component marks what to
-// draw, not what to perceive.
 func TestScan_WorksWithoutAnOutline(t *testing.T) {
 	_, seen, outlines := scene(t,
 		spawn{x: 500, y: 500, sight: eastward(math.Pi/4, 600)},
@@ -232,9 +225,6 @@ func TestScan_OutlineNeverOverrunsItsBuffer(t *testing.T) {
 	}
 }
 
-// MaxSamples is derived, not chosen. Pinning it from both sides says what it
-// means without restating the arithmetic: enough to hold EdgeTolerance across
-// the widest cone the constants describe, and not one sample more.
 func TestMaxSamples_IsTheSmallestThatHoldsTheTolerance(t *testing.T) {
 	half := float64(vision.MaxHalfAngleMilli) / 1000
 	arc := vision.MaxSightRadius * 2 * half
@@ -247,8 +237,6 @@ func TestMaxSamples_IsTheSmallestThatHoldsTheTolerance(t *testing.T) {
 	}
 }
 
-// A cone the raycaster refuses — zero width, zero reach — leaves the entity
-// seeing nothing rather than keeping stale sightings.
 func TestScan_ClearsSightedWhenTheConeIsUnanswerable(t *testing.T) {
 	blind := &vision.Sight{Facing: geom.NewVec(1.0, 0.0), HalfAngle: 0, Radius: 0}
 	_, seen, _ := scene(t,

@@ -2,14 +2,13 @@ package world
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/render"
-	"github.com/kjkrol/gokg/geom"
 )
 
-// spriteBatch is render.QuadBatch plus toroidal-fragment-aware slicing —
-// a wrapped entity draws only the sliver of its sprite that actually
-// crossed the world edge, not a full duplicate.
+// spriteBatch is render.QuadBatch that draws a wrapped entity as the slices of its sprite
+// on either side of the world edge.
 type spriteBatch struct {
 	batch  *render.QuadBatch
 	camera camera.Camera
@@ -46,13 +45,7 @@ func (b *spriteBatch) drawQuad(pos Position, id render.SpriteID) {
 	})
 }
 
-// uvSpan is the slice of the sprite one image shows along one axis. An image
-// sitting at no shift holds the head of the sprite up to where the world edge
-// cut it; one shifted a world back holds the tail that carried on past it.
-//
-// Both axes are decided separately, which matters for an entity straddling the
-// world's corner: its side and bottom pieces are each clipped on the other axis
-// too, and stretching the whole sprite across them would smear it.
+// uvSpan is the slice of the sprite one image shows along one axis.
 func uvSpan(imgSize, spriteSize, shift float32) (float32, float32) {
 	visible := imgSize / spriteSize
 	if shift == 0 {

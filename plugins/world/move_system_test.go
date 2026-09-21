@@ -5,22 +5,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kjkrol/aabbworld"
+	"github.com/kjkrol/aabbworld/geom"
+	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokg"
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
-	"github.com/kjkrol/gokg/spatial"
 )
 
-func testSpace(t *testing.T) *gokg.Space {
+func testSpace(t *testing.T) *aabbworld.Space {
 	t.Helper()
-	space, err := gokg.NewSpace(gokg.Config{
+	space, err := aabbworld.NewSpace(aabbworld.Config{
 		Width: 1000, Height: 1000,
-		BucketSize: spatial.ResolutionFrom(64), BucketCapacity: 16, OpsBufferSize: 64,
+		BucketSize: 64, BucketCapacity: 16, OpsBufferSize: 64,
 	})
 	if err != nil {
-		t.Fatalf("gokg.NewSpace: %v", err)
+		t.Fatalf("aabbworld.NewSpace: %v", err)
 	}
 	return space
 }
@@ -30,11 +29,8 @@ type testHandles struct {
 	base *goke.Comp[world.Base]
 }
 
-// newTestWorld seeds one entity with the given starting Velocity and
-// returns the ECS (with world.MoveSystem registered and plan set), a
-// verification query, and the seeded entity's component handles.
-// maxDelta caps per-tick displacement (0 for no limit).
-func newTestWorld(t *testing.T, vel world.Velocity, maxDelta float64) (*goke.ECS, *goke.Query, testHandles) {
+// newTestWorld seeds one side x side entity moving at vel under world.MoveSystem.
+func newTestWorld(t *testing.T, vel world.Velocity, side float64) (*goke.ECS, *goke.Query, testHandles) {
 	t.Helper()
 	space := testSpace(t)
 
@@ -46,14 +42,14 @@ func newTestWorld(t *testing.T, vel world.Velocity, maxDelta float64) (*goke.ECS
 		f.Create(1)
 		f.Next()
 		base.Slice(&f.Cursor)[0] = world.Base{
-			Pos: world.Position{AABB: plane.NewAABB(geom.NewVec(0, 0), 5, 5)},
+			Pos: world.Position{AABB: plane.NewAABB(geom.NewVec(0, 0), side, side)},
 			Vel: vel,
 		}
 
 		q = si.NewQueryBuilder(&base).Build()
 	}})
 
-	sys := world.NewMoveSystem(space, maxDelta)
+	sys := world.NewMoveSystem(space)
 	handle := ecs.RegSys(sys)
 	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(handle, d)
@@ -77,10 +73,10 @@ func readFirst(t *testing.T, q *goke.Query, h testHandles) (world.Position, worl
 }
 
 func TestMoveSystem_Update_SubPixelAccumulatesWithoutMoving(t *testing.T) {
-	vel := world.Velocity{Dir: geom.NewVec(1, 0), Value: 1} // 1 unit/sec
-	ecs, q, h := newTestWorld(t, vel, 0)
+	vel := world.Velocity{Dir: geom.NewVec(1, 0), Value: 1}
+	ecs, q, h := newTestWorld(t, vel, 5)
 
-	ecs.Tick(10 * time.Millisecond) // 1 * 0.01 = one hundredth of a unit
+	ecs.Tick(10 * time.Millisecond)
 
 	p, _ := readFirst(t, q, h)
 	if math.Abs(p.TopLeft.X-0.01) > 1e-9 {
@@ -89,11 +85,11 @@ func TestMoveSystem_Update_SubPixelAccumulatesWithoutMoving(t *testing.T) {
 }
 
 func TestMoveSystem_Update_TranslatesWholeUnits(t *testing.T) {
-	vel := world.Velocity{Dir: geom.NewVec(1, 0), Value: 100} // 100 units/sec
-	ecs, q, h := newTestWorld(t, vel, 0)
+	vel := world.Velocity{Dir: geom.NewVec(1, 0), Value: 100}
+	ecs, q, h := newTestWorld(t, vel, 5)
 
 	for range 3 {
-		ecs.Tick(20 * time.Millisecond) // AccX += 100*0.02 = 2.0 exactly, each tick
+		ecs.Tick(20 * time.Millisecond)
 	}
 
 	p, _ := readFirst(t, q, h)
@@ -102,14 +98,30 @@ func TestMoveSystem_Update_TranslatesWholeUnits(t *testing.T) {
 	}
 }
 
-func TestMoveSystem_Update_ClampsDisplacementToMaxDelta(t *testing.T) {
-	vel := world.Velocity{Dir: geom.NewVec(1, 0), Value: 1000} // 1000 units/sec
-	ecs, q, h := newTestWorld(t, vel, 3)                       // cap: 3 units/tick
+func TestMoveSystem_Update_ClampsTheStepToHalfTheEntitysOwnSide(t *testing.T) {
+	vel := world.Velocity{Dir: geom.NewVec(1, 0), Value: 1000}
+	for _, side := range []float64{2, 16, 100} {
+		ecs, q, h := newTestWorld(t, vel, side)
 
-	ecs.Tick(100 * time.Millisecond) // uncapped the step would be 100 units
+		ecs.Tick(100 * time.Millisecond)
 
-	p, _ := readFirst(t, q, h)
-	if math.Abs(p.TopLeft.X-3) > 1e-9 {
-		t.Errorf("TopLeft.X = %v, want 3 (the step is clamped to maxDelta)", p.TopLeft.X)
+		p, _ := readFirst(t, q, h)
+		if want := side / 2; math.Abs(p.TopLeft.X-want) > 1e-9 {
+			t.Errorf("a %vx%v entity moved %v in one tick, want %v — half its own side", side, side, p.TopLeft.X, want)
+		}
+		if got := p.MaxStep(); got != side/2 {
+			t.Errorf("a %vx%v entity's MaxStep = %v, want %v", side, side, got, side/2)
+		}
+	}
+}
+
+func TestPosition_MaxSpeed_FollowsTheShorterSideAndTheTickRate(t *testing.T) {
+	p := world.Position{AABB: plane.NewAABB(geom.NewVec(0, 0), 40, 10)}
+
+	if got := p.MaxStep(); got != 5 {
+		t.Errorf("MaxStep of a 40x10 entity = %v, want 5 — half the shorter side", got)
+	}
+	if got := p.MaxSpeed(60); got != 300 {
+		t.Errorf("MaxSpeed at 60 ticks a second = %v, want 300", got)
 	}
 }

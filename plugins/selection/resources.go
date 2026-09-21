@@ -1,7 +1,7 @@
 package selection
 
 import (
-	"github.com/kjkrol/gokg/geom"
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/uid"
 )
 

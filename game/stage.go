@@ -17,7 +17,7 @@ type Stage interface {
 	// Restore resumes from a save, or reports false if there's nothing to restore.
 	Restore(p Persistence) (restored bool, err error)
 
-	// Spawn runs once, only if Restore found nothing, seeding each plugin's initial state (e.g. world.Plugin.Seed).
+	// Spawn runs once, only if Restore found nothing, seeding each plugin's initial state.
 	Spawn() error
 
 	// Update advances this stage's simulation by d, once per tick.

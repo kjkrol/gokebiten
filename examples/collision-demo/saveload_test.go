@@ -3,16 +3,17 @@ package main
 import (
 	"fmt"
 	"testing"
+	"time"
 
+	"github.com/kjkrol/aabbworld"
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/collisions"
-	"github.com/kjkrol/gokebiten/plugins/collisions/strategies/hit"
+	"github.com/kjkrol/gokebiten/plugins/collision"
+	"github.com/kjkrol/gokebiten/plugins/collision/behavior"
 	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gokebiten/plugins/world/kind"
 	"github.com/kjkrol/gokebiten/render"
-	"github.com/kjkrol/gokg"
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
 	"github.com/kjkrol/uid"
 )
 
@@ -39,8 +40,7 @@ func (c *testInstallCtx) RegSys(factory func() goke.System) goke.Runnable {
 }
 func (c *testInstallCtx) ECS() *goke.ECS { return c.ecs }
 
-// eachOnce drops repeated tokens, as the engine does: a kind and a module may
-// both name a type — Collision here — and Load refuses to be told twice.
+// eachOnce drops repeated tokens, as the engine does.
 func eachOnce(tokens []goke.CompToken) []goke.CompToken {
 	listed := map[string]bool{}
 	var once []goke.CompToken
@@ -53,25 +53,22 @@ func eachOnce(tokens []goke.CompToken) []goke.CompToken {
 	return once
 }
 
-// countCollidable reports how many entities the space will offer as collision
-// candidates — the only way to observe, from outside, that something actually
-// carries CanCollide.
-func countCollidable(space *gokg.Space) int {
-	box := plane.NewAABB(geom.NewVec(0, 0), ScreenWidth-1, ScreenHeight-1)
+// countCollidable reports how many entities the space offers as collision candidates.
+func countCollidable(space *aabbworld.Space) int {
+	box := geom.NewAABBAt(geom.NewVec(0, 0), ScreenWidth-1, ScreenHeight-1)
 	seen := map[uid.UID64]struct{}{}
-	space.Neighbours(&box, 0, collisions.CanCollide, func(id uid.UID64, _ plane.FragPosition) {
+	space.Query(box, aabbworld.CanCollide, func(id uid.UID64) {
 		seen[id] = struct{}{}
 	})
 	return len(seen)
 }
 
-// TestSaveLoadCycle exercises the same mechanics Persistence.Save/Load use, below the level of Engine (no Ebiten window).
 func TestSaveLoadCycle(t *testing.T) {
 	path := t.TempDir() + "/save.bin"
 
 	const count = 5
 	cfg := world.Config{
-		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
+		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Edges: aabbworld.Torus},
 		Entities: world.EntitiesCfg{MaxCount: count, MinSize: RectSize, MaxSize: RectSize},
 	}
 
@@ -79,24 +76,16 @@ func TestSaveLoadCycle(t *testing.T) {
 	wp := world.NewPlugin(cfg)
 	placement := world.NewGridPlacement(ScreenWidth, ScreenHeight, RectSize)
 	motion := newRandomVelocity(200, 50, 10)
-	// Both halves define the kinds, as a Stage's Init does before it ever loads:
-	// the dictionary is what tells Load about hit.Mark, which no module owns.
-	defineKinds := func(wp *world.Plugin) []world.Entry {
-		kinds := wp.EntKindDict()
-		var entries []world.Entry
+	defineKinds := func(wp *world.Plugin) []kind.Entry {
+		var entries []kind.Entry
 		for i := range count {
-			name := fmt.Sprintf("k%d", i)
-			kinds.Define(name, func(k world.Kind[body]) world.EntKind {
-				return world.EntKind{
-					Position: k.Load(func(b body) world.Position { return b.pos }),
-					Velocity: k.Load(func(b body) world.Velocity { return b.vel }),
-					Components: []world.ComponentTemplate{
-						collisions.Collidable(wp.Space()),
-						k.Const(hit.Mark{Duration: hitDuration}),
-					},
-				}
+			of := kind.Define[body](wp.Kinds(), fmt.Sprintf("k%d", i), kind.Spec{
+				kind.Load(func(b body) world.Position { return b.pos }),
+				kind.Load(func(b body) world.Velocity { return b.vel }),
+				kind.Const(collision.Collider{}),
+				kind.Const(behavior.HitMark{Duration: hitDuration}),
 			})
-			entries = append(entries, kinds.Entry(name, body{pos: placement.Place(i, count), vel: motion.initialVelocity(i)}))
+			entries = append(entries, of.Entry(body{pos: placement.Place(i, count), vel: motion.initialVelocity(i)}))
 		}
 		return entries
 	}
@@ -104,7 +93,7 @@ func TestSaveLoadCycle(t *testing.T) {
 	if err := wp.Populate(); err != nil {
 		t.Fatalf("Populate: %v", err)
 	}
-	cm := collisions.New(wp.Space(), ecs, 2*wp.MaxStep())
+	cm := collision.New(wp.Space(), ecs)
 
 	ctx := &testInstallCtx{ecs: ecs}
 	if err := wp.Install(ctx); err != nil {
@@ -141,9 +130,10 @@ func TestSaveLoadCycle(t *testing.T) {
 		t.Fatalf("spawned %d entities, want %d", len(origIDs), count)
 	}
 
-	// Half one: collisions.Collidable ran as each entity was spawned.
+	ecs.SetPlan(cm.RunPlan)
+	ecs.Tick(time.Millisecond)
 	if got := countCollidable(wp.Space()); got != count {
-		t.Errorf("%d of %d spawned entities can collide — the Collidable template did not register them", got, count)
+		t.Errorf("%d of %d spawned entities can collide after a tick — the broad phase did not tell the index", got, count)
 	}
 
 	ecs.Pause()
@@ -155,24 +145,19 @@ func TestSaveLoadCycle(t *testing.T) {
 	ecs2 := goke.New()
 	plugin2 := world.NewPlugin(cfg)
 	defineKinds(plugin2)
-	cm2 := collisions.New(plugin2.Space(), ecs2, 2*plugin2.MaxStep())
+	cm2 := collision.New(plugin2.Space(), ecs2)
 
 	ctx2 := &testInstallCtx{ecs: ecs2}
 	if err := plugin2.Install(ctx2); err != nil {
 		t.Fatalf("Install: %v", err)
 	}
 
-	// Ask every installed module what it owns rather than re-listing it here:
-	// a hand-written list silently rots the moment a plugin gains a component.
 	comps := goke.ProvidedComps(append([]any{cm2}, ctx2.tracked...)...)
 	if err := ecs2.Load(path, eachOnce(comps)...); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	cm2.RegSystems(ecs2)
 
-	// cm2 goes in alongside the tracked values for the same reason it does
-	// above: the engine tracks the collisions module through Plugin.Install,
-	// which this test bypasses.
 	var postLoad []goke.System
 	for _, v := range append([]any{cm2}, ctx2.tracked...) {
 		if pl, ok := v.(plugin.PostLoader); ok {
@@ -206,9 +191,9 @@ func TestSaveLoadCycle(t *testing.T) {
 		t.Fatalf("loaded %d entities, want %d", loadedCount, count)
 	}
 
-	// Half two: templates never ran here — a restored world spawns nothing —
-	// so this is entirely collisions.module.PostLoad's doing.
+	ecs2.SetPlan(cm2.RunPlan)
+	ecs2.Tick(time.Millisecond)
 	if got := countCollidable(plugin2.Space()); got != count {
-		t.Errorf("%d of %d loaded entities can collide — PostLoad did not restore the capability", got, count)
+		t.Errorf("%d of %d loaded entities can collide after a tick — PostLoad left them marked as already indexed", got, count)
 	}
 }

@@ -15,7 +15,7 @@ type pathFinder struct {
 	solver    *astar.Solver[board.CellID]
 }
 
-// newPathFinder builds a pathFinder over grid, respecting terrain/occupancy, allocating its solver once for reuse across findPath calls.
+// newPathFinder builds a pathFinder over grid that respects terrain and occupancy.
 func newPathFinder(grid board.Grid, terrain board.Terrain, occupancy board.Occupancy) *pathFinder {
 	return &pathFinder{
 		grid: grid, terrain: terrain, occupancy: occupancy,
@@ -37,7 +37,7 @@ func (p *pathFinder) findPath(entity uid.UID64, from, to board.CellID) (Path, bo
 	return path, true
 }
 
-// transitionsFor adapts p's Grid+Terrain+Occupancy into astar's Transitions shape for one entity's Solve call.
+// transitionsFor adapts the grid, terrain and occupancy into astar's Transitions for entity.
 func (p *pathFinder) transitionsFor(entity uid.UID64) astar.Transitions[board.CellID] {
 	return func(from, prev board.CellID, buf []astar.Transition[board.CellID]) []astar.Transition[board.CellID] {
 		buf = buf[:0]
@@ -60,7 +60,7 @@ func (p *pathFinder) transitionsFor(entity uid.UID64) astar.Transitions[board.Ce
 	}
 }
 
-// enterable reports whether entity may hold c: passable terrain nobody else occupies — the same test a diagonal step's corners must pass to be reserved.
+// enterable reports whether entity may hold c: passable terrain nobody else occupies.
 func (p *pathFinder) enterable(c board.CellID, entity uid.UID64) bool {
 	return p.terrain.Kind(c).Passable && p.occupancy.CanEnter(c, entity)
 }
@@ -68,8 +68,7 @@ func (p *pathFinder) enterable(c board.CellID, entity uid.UID64) bool {
 // maxVisitedCells bounds how many cells nearestFree inspects around its target.
 const maxVisitedCells = 64
 
-// nearestFree returns the cell nearest target that entity can hold and reach
-// from from, skipping taken, together with the route to it.
+// nearestFree returns the free cell nearest target that entity can reach, and the route to it.
 func (p *pathFinder) nearestFree(entity uid.UID64, from, target board.CellID, taken map[board.CellID]bool) (board.CellID, Path, bool) {
 	var path Path
 	passable := func(c board.CellID) bool { return p.terrain.Kind(c).Passable }

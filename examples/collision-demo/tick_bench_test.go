@@ -11,11 +11,8 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/world"
 )
 
-// benchInit is a game.Initializer that drives the real Stage without a window.
-// It mirrors internal/engine's initializer + ecsHost: queue every Use/UseModule/
-// Setup call, then flush them through one ecs.Setup, exactly as enterStage does.
-// Only Scene.Layers() is left out — it builds an Atlas, which needs a graphics
-// context, and contributes nothing to a tick.
+// benchInit is a game.Initializer that drives the real Stage without a window;
+// Scene.Layers() is left out.
 type benchInit struct {
 	ecs     *goke.ECS
 	world   *world.Plugin
@@ -64,14 +61,10 @@ func (c *benchInit) UseWorld(cfg world.Config) *world.Plugin {
 	return c.world
 }
 
-// buildStage runs the fresh-spawn half of enterStage: Init, Spawn, Populate,
-// SetPlan, one flushing ecs.Setup. Restore is skipped — with no save on disk
-// that is the path the demo takes anyway.
+// buildStage runs the fresh-spawn half of entering a Stage: Init, Spawn, Populate, Setup.
 func buildStage(tb testing.TB) (*goke.ECS, *mainStage) {
 	tb.Helper()
 
-	// Pinned: two builds must start from the same world, or the comparison
-	// measures divergent trajectories rather than the change under test.
 	rng = rand.New(rand.NewPCG(0x5eed, 0xc0ffee))
 
 	stage := &mainStage{}
@@ -100,8 +93,7 @@ func buildStage(tb testing.TB) (*goke.ECS, *mainStage) {
 	return ctx.ecs, stage
 }
 
-// withScale runs fn with the demo sized to rect/percent, restoring the
-// defaults afterwards so one benchmark cannot leak its scale into the next.
+// withScale runs fn with the demo sized to rect/percent, restoring the defaults afterwards.
 func withScale(rect uint32, percent float64, fn func()) {
 	oldRect, oldFill, oldCount := RectSize, FillPercent, EntityCount
 	RectSize, FillPercent, EntityCount = rect, percent, countFor(rect, percent)
@@ -131,8 +123,6 @@ func BenchmarkStageTick(b *testing.B) {
 		b.Run(sc.name, func(b *testing.B) {
 			withScale(sc.rect, sc.percent, func() {
 				ecs, stage := buildStage(b)
-				// Entities start on a grid, untouched. Let them reach the
-				// steady state the report is about before timing anything.
 				for range 120 {
 					ecs.Tick(benchStep)
 				}

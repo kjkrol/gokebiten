@@ -2,8 +2,7 @@ package navigation
 
 import "github.com/kjkrol/gokebiten/plugins/board"
 
-// breadthFirst visits cells ring by ring outward from start — only through
-// cells expand accepts, at most maxVisited — returning the first one match accepts.
+// breadthFirst returns the first cell match accepts, ring by ring from start through expand.
 func breadthFirst(start board.CellID, neighbors func(board.CellID) []board.CellID,
 	expand, match func(board.CellID) bool, maxVisited int) (board.CellID, bool) {
 	queue := []board.CellID{start}

@@ -29,7 +29,7 @@ func TestPathCells_PartiallyConsumedPath_SkipsPassedSteps(t *testing.T) {
 	p.Steps[1] = c2
 	p.Steps[2] = target
 	p.Length = 3
-	p.Index = 1 // c1 already consumed
+	p.Index = 1
 
 	cells := navigation.PathCells(board.Cell{ID: start}, navigation.MoveOrder{Target: target, Path: p})
 

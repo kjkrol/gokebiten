@@ -3,8 +3,8 @@ package engine
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokg/geom"
 )
 
 // InputAdapter captures one frame's raw input into events.

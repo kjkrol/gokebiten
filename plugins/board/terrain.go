@@ -7,10 +7,7 @@ type Terrain interface {
 	Kind(c CellID) CellKind
 }
 
-// CellKind identifies a terrain kind (e.g. grass, wall, road), its
-// movement properties, and the sprite a Renderer draws for it — the game
-// defines its own named values (comparable via == / switch, since Name
-// makes each one distinct).
+// CellKind is a named terrain kind: its movement properties and the sprite drawn for it.
 type CellKind struct {
 	Name string
 	// Cost is relative to 1 (baseline); Passable gates entry entirely.

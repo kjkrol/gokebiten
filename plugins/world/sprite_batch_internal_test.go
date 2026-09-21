@@ -5,17 +5,7 @@ import (
 	"testing"
 )
 
-// An entity straddling the world's corner breaks into four pieces, each clipped
-// on both axes, so both axes have to pick their own slice of the sprite. The
-// side and bottom pieces are where this used to go wrong: they were handed the
-// whole sprite along the axis they had not wrapped on, smearing it across a
-// piece only part as tall or as wide.
-//
-// The property that says it is right is that the pieces tile the texture: where
-// the head stops, the tail starts, with no gap and no overlap.
 func TestUVSpan_PiecesTileTheTextureAcrossTheCorner(t *testing.T) {
-	// A 100x100 sprite at (970,960) of a 1000x1000 toroidal world splits into
-	// 30x40 (main), 70x40 (right), 30x60 (bottom) and 70x60 (corner).
 	const sprite, shifted = 100, -1000
 
 	headU0, headU1 := uvSpan(30, sprite, 0)
@@ -41,8 +31,6 @@ func TestUVSpan_PiecesTileTheTextureAcrossTheCorner(t *testing.T) {
 		}
 	}
 
-	// And the two axes really are decided apart: the right piece is a tail
-	// across but still a head downwards.
 	if _, u1 := uvSpan(70, sprite, shifted); u1 != 1 {
 		t.Errorf("the right piece ends at %v across, want 1", u1)
 	}

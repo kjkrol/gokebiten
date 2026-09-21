@@ -1,6 +1,6 @@
 package board
 
-import "github.com/kjkrol/gokg/geom"
+import "github.com/kjkrol/aabbworld/geom"
 
 // CellID identifies one cell of a Grid — encoding is topology-specific.
 type CellID uint64
@@ -12,21 +12,11 @@ type Grid interface {
 	Contains(c CellID) bool
 	CellCenter(c CellID) geom.Vec
 	CellAt(pos geom.Vec) (CellID, bool)
-	// CellIndex returns the CellID at the topology-specific coordinate pair
-	// (col,row for a square grid; axial q,r for a hex grid) — the direct,
-	// position-free counterpart to CellAt. ok is false only when out of
-	// bounds on a non-toroidal grid (a toroidal grid always wraps).
+	// CellIndex returns the CellID at grid coordinates (col,row or axial q,r), if within bounds.
 	CellIndex(a, b uint32) (CellID, bool)
-	// NeighborCost is the geometric step cost from a to its neighbor b (as
-	// returned by Neighbors) — 1 where every neighbor is equidistant (hex);
-	// varies for a square grid with diagonal movement enabled. Undefined for
-	// a non-adjacent pair.
+	// NeighborCost is the geometric step cost from a to its neighbor b.
 	NeighborCost(a, b CellID) float64
-	// DiagonalNeighbors returns the two orthogonal cells flanking the corner
-	// between a and its diagonal neighbor b — ok is false if b isn't a
-	// diagonal neighbor of a (e.g. any pair on a hex grid, which has no
-	// diagonal/corner concept). Used to block cutting through a corner where
-	// either flanking cell is impassable.
+	// DiagonalNeighbors returns the two cells flanking the corner between a and its diagonal b.
 	DiagonalNeighbors(a, b CellID) (c1, c2 CellID, ok bool)
 	// Distance must never overestimate the true cost — it's the pathfinding heuristic.
 	Distance(a, b CellID) float64
@@ -34,6 +24,14 @@ type Grid interface {
 	CellSpan() float32
 }
 
-type toroidalSetter interface {
-	SetToroidal(bool)
+type wrapSetter interface {
+	SetWrap(x, y bool)
+}
+
+// foldAxis maps v onto [0,size): wrapped when the axis wraps, refused outside it otherwise.
+func foldAxis(v, size int64, wraps bool) (int64, bool) {
+	if wraps {
+		return wrapModI64(v, size), true
+	}
+	return v, v >= 0 && v < size
 }

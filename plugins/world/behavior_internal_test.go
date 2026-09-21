@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kjkrol/aabbworld/geom"
+	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
+	"github.com/kjkrol/gokebiten/plugins/world/kind"
 )
 
 // behaviorTag marks the one kind TestBehavior_Include applies to.
@@ -50,18 +51,12 @@ func (b *driveVelocity) Update(*goke.CmdBuf, time.Duration) {
 	}
 }
 
-func spawnAt(wm *module, x float64, extras ...ComponentTemplate) {
+func spawnAt(wm *module, x float64, extras ...kind.Comp) {
 	pos := Position{AABB: plane.NewAABB(geom.NewVec(x, 100), 10, 10)}
-	wm.populate(EntKind{
-		Name:       "e",
-		Position:   Const(pos),
-		Velocity:   Const(Velocity{}),
-		Components: extras,
-	}, []any{nil})
+	wm.populate(testKind(pos, Velocity{}, extras...), []any{nil})
 }
 
-// tickWorld runs one full world tick — behaviors, then velocity, then movement
-// — through the module's own RunPlan, with no engine or window involved.
+// tickWorld runs one full world tick through the module's own RunPlan.
 func tickWorld(t *testing.T, wm *module) []float64 {
 	t.Helper()
 
@@ -87,8 +82,6 @@ func tickWorld(t *testing.T, wm *module) []float64 {
 	return xs
 }
 
-// A decision taken this tick has to reach this tick's movement — that is the
-// whole reason the phase sits before velocity and move.
 func TestBehavior_RunsBeforeMovement(t *testing.T) {
 	p := testPlugin()
 	p.RegisterBehavior(&driveVelocity{})
@@ -117,14 +110,12 @@ func TestBehavior_RunsInRegistrationOrder(t *testing.T) {
 	}
 }
 
-// Include restricts a behavior to the archetypes carrying its tag, which is
-// what keeps a rare behavior from walking the whole world.
 func TestBehavior_IncludeVisitsOnlyTaggedEntities(t *testing.T) {
 	b := &driveVelocity{tagged: true}
 	wm := testWorld()
 	wm.RegisterBehavior(b)
 	spawnAt(wm, 100)
-	spawnAt(wm, 300, Const(behaviorTag{}))
+	spawnAt(wm, 300, kind.Const(behaviorTag{}))
 
 	tickWorld(t, wm)
 	if b.visited != 1 {
@@ -142,9 +133,6 @@ func TestBehavior_NoneRegisteredLeavesTheTickUnchanged(t *testing.T) {
 	}
 }
 
-// World hosts systems run before movement and nothing else: what belongs in
-// another plugin's pass is refused, so registering it in the wrong place is an
-// error rather than a behavior that silently never runs.
 func TestRegisterBehavior_RefusesWhatIsNotASystem(t *testing.T) {
 	p := testPlugin()
 

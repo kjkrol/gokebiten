@@ -3,21 +3,18 @@ package selection
 import (
 	"time"
 
+	"github.com/kjkrol/aabbworld"
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/camera"
-	"github.com/kjkrol/gokg"
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
 	"github.com/kjkrol/uid"
 )
 
 var _ goke.System = (*SelectionSystem)(nil)
 
-// SelectionSystem turns Resources into Selected tags — the actual query+migrate
-// happens in Update, reading whatever HandleEvents implementation wrote
-// into Resources this tick.
+// SelectionSystem turns what an event handler wrote into Resources into Selected tags.
 type SelectionSystem struct {
-	space  *gokg.Space
+	space  *aabbworld.Space
 	camera camera.Camera
 	state  *Resources
 
@@ -28,8 +25,8 @@ type SelectionSystem struct {
 	removeEditor *goke.Editor
 }
 
-// NewSelectionSystem builds a SelectionSystem driven by state, querying space and translating drag boxes through cam.
-func NewSelectionSystem(state *Resources, space *gokg.Space, cam camera.Camera) *SelectionSystem {
+// NewSelectionSystem builds a SelectionSystem driven by state over space and cam.
+func NewSelectionSystem(state *Resources, space *aabbworld.Space, cam camera.Camera) *SelectionSystem {
 	return &SelectionSystem{state: state, space: space, camera: cam}
 }
 
@@ -54,18 +51,13 @@ func (s *SelectionSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 		s.state.Pending = nil
 		box := s.worldBox(p.Start, p.End)
 		hit := make(map[uid.UID64]struct{})
-		collect := func(id uid.UID64, _ plane.FragPosition) { hit[id] = struct{}{} }
-		s.space.Query(box.AABB, collect)
-		box.VisitFragments(func(_ plane.FragPosition, fragBox geom.AABB) bool {
-			s.space.Query(fragBox, collect)
-			return true
-		})
+		collect := func(id uid.UID64) { hit[id] = struct{}{} }
+		s.space.Query(box, aabbworld.AnyCapability, collect)
 		s.applySelection(cb, hit, p.Additive)
 	}
 }
 
-// applySelection adds Selected to every hit entity that lacks it, and
-// (unless additive) removes it from every selected entity not in hit.
+// applySelection tags every hit entity Selected and, unless additive, untags the rest.
 func (s *SelectionSystem) applySelection(cb *goke.CmdBuf, hit map[uid.UID64]struct{}, additive bool) {
 	s.query.All()
 	for s.query.Next() {
@@ -106,7 +98,7 @@ func (s *SelectionSystem) applySelection(cb *goke.CmdBuf, hit map[uid.UID64]stru
 	}
 }
 
-func (s *SelectionSystem) worldBox(start, end geom.Vec) plane.AABB {
+func (s *SelectionSystem) worldBox(start, end geom.Vec) geom.AABB {
 	x0, y0, x1, y1 := camera.FromScreenRect(s.camera, float32(start.X), float32(start.Y), float32(end.X), float32(end.Y))
 	minX, maxX := min(x0, x1), max(x0, x1)
 	minY, maxY := min(y0, y1), max(y0, y1)
@@ -117,6 +109,5 @@ func (s *SelectionSystem) worldBox(start, end geom.Vec) plane.AABB {
 	if height < 1 {
 		height = 1
 	}
-	raw := plane.NewAABB(geom.NewVec(float64(minX), float64(minY)), float64(width), float64(height))
-	return s.space.WrapAABB(raw.AABB)
+	return geom.NewAABBAt(geom.NewVec(float64(minX), float64(minY)), float64(width), float64(height))
 }

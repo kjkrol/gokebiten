@@ -3,23 +3,11 @@ package world
 import (
 	"math"
 
-	"github.com/kjkrol/gokg/geom"
+	"github.com/kjkrol/aabbworld/geom"
 )
 
-// Steering turns a requested heading into motion gradually instead of at once:
-// Reflex ticks pass before a request takes effect, and TurnRate caps how fast
-// Velocity.Dir may swing towards it afterwards.
-//
-// The two are different things. Reflex is how long the entity takes to react —
-// and, while it counts down, the entity cannot change its mind, so something
-// that has just committed to a turn keeps turning when a newer threat appears.
-// It goes on acting on its last decision meanwhile: a stimulus that renews its
-// request every tick makes for a standing lag, never a standstill.
-// TurnRate is how sharply it can turn once it does. An entity with neither set
-// follows every request immediately and exactly.
-//
-// Add it to whatever should not react instantly, whether it is driven by a
-// Behavior, by a path, or by the player.
+// Steering turns a requested heading into motion gradually: Reflex ticks pass before a request
+// takes effect, and TurnRate caps how fast Velocity.Dir swings towards it afterwards.
 type Steering struct {
 	Want     geom.Vec // heading being turned towards; zero means none yet
 	Pending  geom.Vec // heading asked for, taking over from Want once Delay runs out
@@ -28,10 +16,7 @@ type Steering struct {
 	Delay    uint8    // ticks still to wait
 }
 
-// Request asks the entity to head towards dir, which need not be a unit vector
-// — a behavior may hand over the sum of whatever is pushing it around. It is
-// refused while an earlier request is still being reacted to, and reports
-// whether it was taken.
+// Request asks the entity to head towards dir, any length; false while an earlier one is pending.
 func (s *Steering) Request(dir geom.Vec) bool {
 	if s.Delay > 0 {
 		return false

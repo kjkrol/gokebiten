@@ -53,19 +53,17 @@ func directionAngle(d Direction) float64 {
 	}
 }
 
-const pathSpriteCount = 9
-
 func RegisterDefaultPathSprites(spriteSize int, strokeWidth float32, c color.RGBA) (*render.Atlas, PathSprites) {
-	atlas := render.NewAtlas(spriteSize, pathSpriteCount)
+	atlas := render.NewAtlas()
 
 	spoke := func(d Direction) render.SpriteID {
-		return atlas.Register(render.Arrow(directionAngle(d), strokeWidth, c))
+		return atlas.Register(spriteSize, render.Arrow(directionAngle(d), strokeWidth, c))
 	}
 
 	sprites := PathSprites{
 		N: spoke(DirN), S: spoke(DirS), E: spoke(DirE), W: spoke(DirW),
 		NE: spoke(DirNE), NW: spoke(DirNW), SE: spoke(DirSE), SW: spoke(DirSW),
-		Dot: atlas.Register(render.Dot(strokeWidth*2, c)),
+		Dot: atlas.Register(spriteSize, render.Dot(strokeWidth*2, c)),
 	}
 
 	atlas.Close()

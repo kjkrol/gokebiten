@@ -8,10 +8,8 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 )
 
-// ecsHost owns the full lifecycle of one *goke.ECS instance: queuing
-// ctx.Use/ctx.Track/UseModule/Setup work until a single ecs.Setup call, and
-// the tracked-value bookkeeping Persistence.Save/Load need. Engine builds a
-// fresh ecsHost each time it enters a Stage — see stageRuntime/enterStage.
+// ecsHost owns one *goke.ECS: it queues install work until a single ecs.Setup call
+// and keeps the tracked values Save and Load need. One is built per Stage entered.
 type ecsHost struct {
 	ecs       *goke.ECS
 	resources *storage
@@ -25,8 +23,7 @@ func newECSHost() *ecsHost {
 	return &ecsHost{ecs: goke.New(), resources: newStorage()}
 }
 
-// track records v so providedComps/postLoadSystems/runRestore/saveTargets
-// can find it later.
+// track records v among the values the host later loads, restores, populates and saves.
 func (h *ecsHost) track(v any) { h.tracked = append(h.tracked, v) }
 
 // addPendingSetup queues producer to run once, during flushPendingSetup.
@@ -51,17 +48,14 @@ func (h *ecsHost) regSys(factory func() goke.System) goke.Runnable {
 	return h.ecs.RegSys(factory())
 }
 
-func (h *ecsHost) registerRenderer(factory func() render.Renderer) render.Renderer {
-	r := factory()
-
+func (h *ecsHost) registerRenderer(r render.Renderer) render.Renderer {
 	sys := goke.SystemFn{OnInit: func(si *goke.SysInit) { r.Init(si) }}
 	h.addPendingSetup(func() []goke.System { return []goke.System{sys} })
 
 	return r
 }
 
-// providedComps collects LoadComps from every tracked value implementing
-// goke.CompProvider, each type once — a kind and a module may both name it.
+// providedComps collects LoadComps from every tracked goke.CompProvider, each type once.
 func (h *ecsHost) providedComps() []goke.CompToken {
 	all := goke.ProvidedComps(h.tracked...)
 	listed := make(map[string]bool, len(all))
@@ -86,8 +80,7 @@ func (h *ecsHost) postLoadSystems() []goke.System {
 	return systems
 }
 
-// runRestore calls Restore on every tracked value implementing Restorer,
-// synchronously, right after Persistence.Load decodes their Persisted() pointers.
+// runRestore calls Restore on every tracked Restorer, right after a Load.
 func (h *ecsHost) runRestore() {
 	for _, v := range h.tracked {
 		if r, ok := v.(plugin.Restorer); ok {
@@ -96,7 +89,7 @@ func (h *ecsHost) runRestore() {
 	}
 }
 
-// runPopulate calls Populate on every tracked value implementing Populator, stopping at the first error.
+// runPopulate calls Populate on every tracked Populator, stopping at the first error.
 func (h *ecsHost) runPopulate() error {
 	for _, v := range h.tracked {
 		if p, ok := v.(plugin.Populator); ok {
@@ -108,8 +101,7 @@ func (h *ecsHost) runPopulate() error {
 	return nil
 }
 
-// saveTargets collects Persisted from every tracked value implementing
-// Serializable, keyed by its Go type name (tracked values have no Plugin.Name()).
+// saveTargets collects Persisted from every tracked Serializable, keyed by Go type name.
 func (h *ecsHost) saveTargets() map[string][]any {
 	out := make(map[string][]any)
 	for _, v := range h.tracked {
@@ -120,8 +112,7 @@ func (h *ecsHost) saveTargets() map[string][]any {
 	return out
 }
 
-// persistGroups combines tracked Serializables, plugin-published
-// Serializables, and extra into one name-keyed map for save/load.
+// persistGroups combines tracked and plugin Serializables with extra into one name-keyed map.
 func (h *ecsHost) persistGroups(extra ...any) map[string][]any {
 	groups := h.saveTargets()
 	for name, targets := range h.resources.persisted() {
@@ -133,7 +124,7 @@ func (h *ecsHost) persistGroups(extra ...any) map[string][]any {
 	return groups
 }
 
-// flushPendingSetup evaluates every deferred producer once and runs the result through a single ecs.Setup call.
+// flushPendingSetup evaluates every deferred producer once and runs a single ecs.Setup.
 func (h *ecsHost) flushPendingSetup() {
 	if len(h.pendingSetup) == 0 {
 		return

@@ -1,24 +1,11 @@
 package render
 
 import (
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
+	"github.com/kjkrol/aabbworld/geom"
+	"github.com/kjkrol/aabbworld/plane"
 )
 
-// VisitWrapImages calls fn once per image of box — the canonical one first,
-// then each toroidal fragment — handing over that image's own box together with
-// the world-space shift at which it sits. A box in a Euclidean space, or one
-// that reaches no edge, has a single image and no shift.
-//
-// plane.AABB carries the fragments; this is the one place that says what they
-// mean for drawing, so everything wrapping a shape at the world seam agrees
-// about it. A fragment spanning the parent's right edge reappears at the left,
-// one world width back, which is why the shift is negative.
-//
-// What each caller takes from an image differs: something textured draws the
-// image's own box and picks the matching slice of its texture, while a shape
-// that cannot be sliced is drawn whole at the shift instead. fn returning false
-// stops the walk.
+// VisitWrapImages calls fn with the box and world shift of each image of box, until fn says stop.
 func VisitWrapImages(
 	box plane.AABB,
 	worldW, worldH float32,

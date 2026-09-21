@@ -5,11 +5,11 @@ import (
 	"slices"
 	"time"
 
+	"github.com/kjkrol/aabbworld"
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokg"
-	"github.com/kjkrol/gokg/geom"
 	"github.com/kjkrol/uid"
 )
 
@@ -50,7 +50,7 @@ type navigationSystem struct {
 	terrain    board.Terrain
 	occupancy  board.Occupancy
 	speed      float64
-	space      *gokg.Space
+	space      *aabbworld.Space
 	pathFinder *pathFinder
 
 	query *goke.Query
@@ -70,13 +70,13 @@ type navigationSystem struct {
 
 var _ goke.System = (*navigationSystem)(nil)
 
-// targetWaitTimeout is how long an entity waits for an occupied target before settling for the nearest free cell.
+// targetWaitTimeout is how long an entity waits for an occupied target before settling nearby.
 const targetWaitTimeout = 500 * time.Millisecond
 
-// arrivalEpsilon is how close (world-units) counts as "reached" a waypoint — small enough that the final snap is imperceptible.
+// arrivalEpsilon is how close, in world units, counts as having reached a waypoint.
 const arrivalEpsilon = 2.0
 
-// newNavigationSystem builds a navigationSystem whose base movement speed, before any world.SpeedModifier scales it, is speed world-units/sec.
+// newNavigationSystem builds a navigationSystem moving entities at speed world units a second.
 func newNavigationSystem(pathFinder *pathFinder, grid board.Grid, terrain board.Terrain, occupancy board.Occupancy, speed float64) *navigationSystem {
 	return &navigationSystem{
 		grid: grid, terrain: terrain, occupancy: occupancy, speed: speed,
@@ -84,8 +84,8 @@ func newNavigationSystem(pathFinder *pathFinder, grid board.Grid, terrain board.
 	}
 }
 
-// BindSpace attaches the shared spatial index — arrivals snap to the cell center once bound; no-op (best-effort stop) if never called.
-func (s *navigationSystem) BindSpace(space *gokg.Space) { s.space = space }
+// BindSpace attaches the shared spatial index, so arrivals snap to the cell centre.
+func (s *navigationSystem) BindSpace(space *aabbworld.Space) { s.space = space }
 
 func (s *navigationSystem) Init(si *goke.SysInit) {
 	s.query = si.NewQueryBuilder(&s.cell, &s.base).
@@ -119,7 +119,6 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 		var enteredIDs []uid.UID64
 		var enteredVals []CellEntered
 		var arrivedIDs []uid.UID64
-		// Entities doing both on one tick migrate once, via arrivedVM.
 		var bothIDs []uid.UID64
 		var bothVals []CellEntered
 
@@ -133,10 +132,6 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 				actual = current
 			}
 
-			// entered guards against staging this entity twice: moveTo can fire
-			// both from the reconcile switch and again on leg completion, and a
-			// duplicate id in one AddCompValue batch would resolve to the same
-			// slot twice.
 			entered := false
 			moveTo := func(c board.CellID) {
 				if c == cells[i].ID {
@@ -210,8 +205,8 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 			have := board.Center(bases[i].Pos)
 			dx, dy := want.X-have.X, want.Y-have.Y
 			if s.space != nil {
-				dx = shortestAxisDelta(have.X, want.X, s.space.Width, s.space.Toroidal)
-				dy = shortestAxisDelta(have.Y, want.Y, s.space.Height, s.space.Toroidal)
+				dx = shortestAxisDelta(have.X, want.X, s.space.Width, s.space.Edges.WrapsX())
+				dy = shortestAxisDelta(have.Y, want.Y, s.space.Height, s.space.Edges.WrapsY())
 			}
 			dist := math.Hypot(dx, dy)
 			if dist > arrivalEpsilon {
@@ -222,8 +217,6 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 
 			bases[i].Vel.Value = 0
 
-			// Close enough to the waypoint: step the rest of the way exactly,
-			// which a continuous world can do without rounding first.
 			if s.space != nil && (dx != 0 || dy != 0) {
 				s.space.Translate(id, &bases[i].Pos.AABB, geom.NewVec(dx, dy))
 				snapped = true
@@ -242,8 +235,6 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 
 			if waypoint == target {
 				if entered {
-					// Its entry is necessarily the last one appended — only this
-					// entity's moveTo ran since. Move it to the combined batch.
 					n := len(enteredIDs) - 1
 					bothIDs = append(bothIDs, enteredIDs[n])
 					bothVals = append(bothVals, enteredVals[n])
@@ -276,7 +267,7 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 	}
 }
 
-// reserveLeg claims every cell a step from→to can touch, reporting false (and claiming nothing) if any is impassable or held by another entity.
+// reserveLeg claims every cell a step from→to can touch, or none of them and false.
 func (s *navigationSystem) reserveLeg(from, to board.CellID, id uid.UID64) (Leg, bool) {
 	leg := Leg{From: from, To: to, Active: true}
 	if c1, c2, diag := s.grid.DiagonalNeighbors(from, to); diag {
@@ -300,9 +291,9 @@ func (s *navigationSystem) releaseLeg(leg Leg, id uid.UID64) {
 	}
 }
 
-func shortestAxisDelta(have, want float64, size uint32, toroidal bool) float64 {
+func shortestAxisDelta(have, want float64, size uint32, wraps bool) float64 {
 	d := want - have
-	if !toroidal || size == 0 {
+	if !wraps || size == 0 {
 		return d
 	}
 	s := float64(size)

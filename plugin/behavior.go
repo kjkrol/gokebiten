@@ -9,20 +9,14 @@ import (
 	"github.com/kjkrol/goke/v3"
 )
 
-// Behavior is game logic a Plugin runs inside its own pass over its entities,
-// rather than as one more system with a query of its own — built with Between
-// or Each, and registered with the plugin it concerns.
-//
-// Which plugin that is shows in the behavior's payload type: each host defines
-// its own, and refuses a behavior made for another's. A reusable strategy is a
-// plain func of that payload — the tags it runs between are the registration's
-// to name, Between[Wolf, Hare](hunt.Chase(d)).
+// Behavior is game logic a Plugin runs inside its own pass over its entities, built with
+// Between or Each; its payload type says which plugin hosts it, and another refuses it.
 type Behavior any
 
-// ErrUnhostedBehavior is what RegisterBehavior reports for a behavior the Plugin has no pass to run it in.
+// ErrUnhostedBehavior is what RegisterBehavior reports for a behavior the Plugin cannot run.
 var ErrUnhostedBehavior = errors.New("plugin: behavior cannot be hosted here")
 
-// ErrHostBuilt is what registering a behavior reports once its host's queries exist — it could no longer join them.
+// ErrHostBuilt is what registering a behavior reports once its host's queries exist.
 var ErrHostBuilt = errors.New("plugin: behavior registered after its host was built")
 
 // Tick is what a hosted behavior is told about the pass it runs in.
@@ -35,13 +29,7 @@ type Tick struct {
 // Anything stands for "whatever it is" on one side of Between, or both.
 type Anything struct{}
 
-// Between is a behavior for every pair a host comes across in which one entity
-// carries A and the other B — a contact, a sighting, whatever the host pairs up.
-// P is the host's own description of the pair, and is what says whose it is.
-//
-// A and B join the host's queries as optional components, so the behavior costs
-// no query of its own. Name A and B; P follows from react. Any tag react means
-// to ask about through a TagSet has to be declared here with Asking.
+// Between is a behavior for every pair a host meets where one entity carries A and the other B.
 func Between[A, B, P any](react func(t Tick, pair P), asking ...Ask) Behavior {
 	pair := &Pair[P]{
 		self: probeFor[A](), other: probeFor[B](),
@@ -58,8 +46,7 @@ func Between[A, B, P any](react func(t Tick, pair P), asking ...Ask) Behavior {
 // handed — see Asking.
 type Ask struct{ probe tagProbe }
 
-// Asking declares that a behavior will ask TagSet.Carries about T, so the host
-// can bind T to its queries: a tag nobody declared is one it never looks up.
+// Asking declares that a behavior will ask TagSet.Carries about T.
 func Asking[T any]() Ask { return Ask{probe: probeFor[T]()} }
 
 // TagSet is which of a host's tags one entity carries — what a payload hands a
@@ -69,7 +56,7 @@ type TagSet struct {
 	tags *[]tagProbe
 }
 
-// Carries reports whether the entity carries T — which the behavior must have declared with Asking, or named in Between.
+// Carries reports whether the entity carries T, a tag declared with Asking or named in Between.
 func (s TagSet) Carries[T any]() bool {
 	want := reflect.TypeFor[T]()
 	for i, known := range *s.tags {
@@ -80,12 +67,7 @@ func (s TagSet) Carries[T any]() bool {
 	panic(fmt.Sprintf("plugin: Carries[%v] asked of a host that was never told about it — declare it with plugin.Asking", want))
 }
 
-// Each is a behavior run on every entity a host visits that carries T, with
-// whatever the host has to say about that entity — P, which is what says whose
-// behavior it is.
-//
-// T joins the host's query as an optional component, so the behavior costs no
-// query of its own. Name T; P follows from react.
+// Each is a behavior run on every entity a host visits that carries T.
 func Each[T, P any](react func(t Tick, state *T, about P)) Behavior {
 	return &each[T, P]{react: react}
 }

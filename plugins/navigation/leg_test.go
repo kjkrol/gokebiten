@@ -67,7 +67,7 @@ func newLegWorld(t *testing.T, w, h uint32, units ...legUnit) *legWorld {
 				order.Slice(&f.Cursor)[0] = MoveOrder{Target: u.target}
 			}
 			lw.occupancy.Enter(u.start, id)
-			space.Insert(id, p.AABB)
+			space.Insert(id, &p.AABB)
 			lw.ids = append(lw.ids, id)
 		}
 		space.Flush(nil)
@@ -75,7 +75,7 @@ func newLegWorld(t *testing.T, w, h uint32, units ...legUnit) *legWorld {
 	}})
 
 	steerHandle := lw.ecs.RegSys(steer)
-	moveHandle := lw.ecs.RegSys(world.NewMoveSystem(space, 0))
+	moveHandle := lw.ecs.RegSys(world.NewMoveSystem(space))
 	lw.ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(steerHandle, d)
 		ctx.Run(moveHandle, d)

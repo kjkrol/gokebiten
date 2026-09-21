@@ -1,6 +1,9 @@
 package world
 
-import "github.com/kjkrol/gokebiten/camera"
+import (
+	"github.com/kjkrol/aabbworld"
+	"github.com/kjkrol/gokebiten/camera"
+)
 
 // Config configures world's spatial shape and the bounds its entity population must respect.
 type Config struct {
@@ -11,9 +14,10 @@ type Config struct {
 
 type SpaceCfg struct {
 	Width, Height uint32
-	Toroidal      bool
+	Edges         aabbworld.Edges
 }
 
+// EntitiesCfg bounds how many entities the world holds and the sizes they may spawn with.
 type EntitiesCfg struct {
 	MaxCount int
 	MinSize  uint32

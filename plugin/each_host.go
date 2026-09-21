@@ -36,7 +36,7 @@ type EachHost[P any] struct {
 	bound   bool
 }
 
-// Add takes b if it is an Each behavior for P — ErrUnhostedBehavior otherwise, ErrHostBuilt once Bind has run.
+// Add takes an Each behavior for P; ErrUnhostedBehavior for another, ErrHostBuilt after Bind.
 func (h *EachHost[P]) Add(b Behavior) error {
 	runner, ok := b.(eachRunner[P])
 	if !ok {
@@ -57,7 +57,7 @@ func (h *EachHost[P]) Bind(qb *goke.QueryBuilder) {
 	}
 }
 
-// Run runs every behavior over the chunk being walked, about(i) being what the host has to say about its i-th entity.
+// Run runs every behavior over the chunk being walked; about(i) describes its i-th entity.
 func (h *EachHost[P]) Run(t Tick, cursor *goke.Cursor, about func(i int) P) {
 	for _, r := range h.runners {
 		r.run(t, cursor, about)

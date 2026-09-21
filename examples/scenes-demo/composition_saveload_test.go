@@ -23,11 +23,6 @@ func (g oneStageGame) Stages() (map[string]game.Stage, string) {
 	return map[string]game.Stage{g.stage.Name(): g.stage}, g.stage.Name()
 }
 
-// TestGameplayStage_Composition_SurvivesSaveLoad guards the engine-level
-// persistence mechanism Composition relies on: opening the panel, saving,
-// then loading into a fresh Stage/Engine restores the same visible order
-// and the same active scene — with no save/load code written in
-// GameplayStage itself beyond the one ctx.Track(g.composition) call in Init.
 func TestGameplayStage_Composition_SurvivesSaveLoad(t *testing.T) {
 	basePath := t.TempDir() + "/save"
 

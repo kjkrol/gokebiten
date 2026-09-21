@@ -6,8 +6,6 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 )
 
-// Facing reads the heading out of the Base its host hands over — the renderer's
-// query already requires Base, and a query refuses to carry a component twice.
 func TestFacing_PicksTheSpriteFromTheEntitysHeading(t *testing.T) {
 	const eastward, other render.SpriteID = 7, 3
 	modifier := Facing(func(v Velocity) render.SpriteID {

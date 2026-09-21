@@ -1,6 +1,4 @@
 package plugin
 
-// Builtin marks a Plugin as installed automatically by the engine — Use
-// rejects any attempt to install it directly; see plugins/world.Plugin
-// for the reference implementation.
+// Builtin marks a Plugin the engine installs itself; Use rejects installing it directly.
 type Builtin interface{ Builtin() }

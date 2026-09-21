@@ -10,8 +10,8 @@ type Scene interface {
 	// Name uniquely identifies this scene.
 	Name() string
 
-	// Layers returns this scene's renderers to draw, bottom-to-top.
-	Layers() []func() render.Renderer
+	// Layers returns this scene's renderers, bottom to top; called once, when the Stage is entered.
+	Layers() []render.Renderer
 
 	// HandleEvents handles this tick's input, while this scene is active.
 	HandleEvents(events *control.InputEvents, runtime Runtime, composition Composition)

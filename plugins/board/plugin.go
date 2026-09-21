@@ -25,9 +25,7 @@ func (r *Resources) Persisted() []any { return []any{r.Logic.Board.TerrainMap} }
 
 var _ plugin.Serializable = (*Resources)(nil)
 
-// Plugin wires a Board into a Game — depends only on world (for
-// Position/Velocity/SpeedModifier). See plugins/navigation for entity
-// movement/pathfinding built on top of this Board.
+// Plugin wires a Board into a Game; it depends only on world.
 type Plugin struct {
 	Res Resources
 
@@ -43,9 +41,7 @@ type Plugin struct {
 var _ plugin.Plugin = (*Plugin)(nil)
 var _ plugin.Populator = (*Plugin)(nil)
 
-// NewPlugin builds a board over grid, capping cell occupancy per occupancy.
-// worldPlugin is where the board's TerrainSpeedModifier registers itself.
-// Register terrain kinds afterward via CellKindDict().Create.
+// NewPlugin builds a board over grid with the given occupancy cap, slowing worldPlugin's entities.
 func NewPlugin(grid Grid, occupancy Occupancy, worldPlugin *world.Plugin) *Plugin {
 	terrain := NewTerrainMap()
 	p := &Plugin{
@@ -55,8 +51,9 @@ func NewPlugin(grid Grid, occupancy Occupancy, worldPlugin *world.Plugin) *Plugi
 		kinds:        newCellKindDict(),
 	}
 	p.Res.Logic.Board = NewBoard(grid, terrain)
-	if ts, ok := p.Res.Logic.Board.Grid.(toroidalSetter); ok {
-		ts.SetToroidal(worldPlugin.Res.Config.Space.Toroidal)
+	if ws, ok := p.Res.Logic.Board.Grid.(wrapSetter); ok {
+		edges := worldPlugin.Res.Config.Space.Edges
+		ws.SetWrap(edges.WrapsX(), edges.WrapsY())
 	}
 	worldPlugin.RegisterSpeedModifier(p.terrainSpeed)
 	return p
@@ -74,7 +71,7 @@ func (p *Plugin) Install(ctx plugin.Installer) error { return nil }
 // RunPlan is a no-op — board has no per-tick work of its own; see plugins/navigation.
 func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {}
 
-// WithRenderer builds this plugin's own board renderer, drawing each cell's CellKind.SpriteID from atlas.
+// WithRenderer builds the board renderer, drawing each cell's CellKind.SpriteID from atlas.
 func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
 	p.Res.Render = &RenderState{ShowGridLines: true}
 	p.renderer = newRenderer(p.worldPlugin.Camera(), p.Res.Logic.Board, atlas, p.Res.Render)
@@ -109,14 +106,13 @@ func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
 // Occupancy returns the occupancy tracker this plugin was built with.
 func (p *Plugin) Occupancy() Occupancy { return p.occupancy }
 
-// CellKindDict returns this Plugin's registered set of CellKinds — call
-// Create to register kinds, Get/All to read them back.
+// CellKindDict returns this Plugin's registered CellKinds.
 func (p *Plugin) CellKindDict() CellKindDict { return p.kinds }
 
 // Seed sets the terrain applied when this Stage starts fresh — see Populate.
 func (p *Plugin) Seed(layout Layout) { p.seeded = &layout }
 
-// Populate applies the seeded Layout, erroring (and changing nothing) on a kind name CellKindDict doesn't know.
+// Populate applies the seeded Layout, changing nothing and erroring on an unknown kind name.
 func (p *Plugin) Populate() error {
 	if p.seeded == nil {
 		return nil

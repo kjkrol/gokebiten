@@ -5,10 +5,10 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/render"
-	"github.com/kjkrol/gokg/geom"
 )
 
 var colorGridLine = color.RGBA{R: 20, G: 20, B: 20, A: 120}

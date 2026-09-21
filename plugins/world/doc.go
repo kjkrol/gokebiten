@@ -1,7 +1,4 @@
-// Package world is the foundation for any game Stage with moving,
-// drawable entities. It gives every entity a Position and Velocity, keeps
-// them in a shared spatial index other plugins can query, and integrates
-// motion each tick - SpeedModifiers (e.g. terrain cost) scale it, and
-// displacement is capped per tick so fast entities can't tunnel through
-// each other.
+// Package world is the foundation for a Stage with moving, drawable entities: a Position and
+// Velocity each, a shared spatial index other plugins query, and motion integrated each tick,
+// never further than Position.MaxStep. What an entity carries is set by its kind — see kind.
 package world

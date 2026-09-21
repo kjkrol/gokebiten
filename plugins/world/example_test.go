@@ -2,11 +2,9 @@ package world_test
 
 import (
 	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gokebiten/plugins/world/kind"
 )
 
-// ExamplePlugin_Seed shows the shape of a spawn: Define declares a kind whose
-// components are fixed (Const) or read from its roster data (k.Load), Entry
-// builds roster entries through the dictionary, Seed and Populate spawn them.
 func ExamplePlugin_Seed() {
 	plugin := world.NewPlugin(world.Config{
 		Space:    world.SpaceCfg{Width: 800, Height: 600},
@@ -14,16 +12,13 @@ func ExamplePlugin_Seed() {
 	})
 	placement := world.NewGridPlacement(800, 600, 8)
 
-	kinds := plugin.EntKindDict()
-	kinds.Define("dot", func(k world.Kind[world.Position]) world.EntKind {
-		return world.EntKind{
-			Position: k.Load(func(p world.Position) world.Position { return p }),
-			Velocity: k.Const(world.Velocity{}),
-		}
+	dot := kind.Define[world.Position](plugin.Kinds(), "dot", kind.Spec{
+		kind.Load(func(p world.Position) world.Position { return p }),
+		kind.Const(world.Velocity{}),
 	})
 
 	for i := range 10 {
-		plugin.Seed(kinds.Entry("dot", placement.Place(i, 10)))
+		plugin.Seed(dot.Entry(placement.Place(i, 10)))
 	}
 
 	if err := plugin.Populate(); err != nil {

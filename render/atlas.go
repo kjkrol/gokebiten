@@ -14,82 +14,117 @@ type SpriteID uint8
 // Atlas.Register to bake a new sprite.
 type SpriteDrawer func(dst *ebiten.Image, size int)
 
-// AtlasSource supplies the sprite sheet and per-sprite UV rects that
-// QuadBatch draws quads from — swappable, e.g. procedurally-drawn shapes
-// vs. sprites loaded from a file.
+// AtlasSource supplies the sprite sheet and per-sprite UV rects that QuadBatch draws from.
 type AtlasSource interface {
 	Atlas() *ebiten.Image
 	UV(id SpriteID) (sx0, sy0, sx1, sy1 float32)
 }
 
-// Atlas is a fixed-capacity AtlasSource built by registering one sprite at
-// a time (Register), then freezing (Close) before the game loop starts —
-// UV lookups are always O(1) slice indexing, never a map.
+// maxAtlasWidth is where Close starts a new row of sprites, so that a sheet of
+// many or large sprites stays inside what a GPU accepts as one texture.
+const maxAtlasWidth = 4096
+
+// Atlas is an AtlasSource built by registering sprites, each at a size of its own, and
+// then Close — which is when the sheet is laid out and baked, so nothing has to be sized up front.
 type Atlas struct {
-	image      *ebiten.Image
-	spriteSize int
-	capacity   int
-	count      int
-	closed     bool
+	slots  []slot // indexed by SpriteID
+	image  *ebiten.Image
+	closed bool
+}
+
+// slot is one registered sprite: how to draw it and, after Close, where it sits on the sheet.
+type slot struct {
+	size           int
+	draw           SpriteDrawer
+	x0, y0, x1, y1 float32
 }
 
 var _ AtlasSource = (*Atlas)(nil)
 
-// NewAtlas allocates an atlas of capacity sprites, each spriteSize x spriteSize texels.
-func NewAtlas(spriteSize, capacity int) *Atlas {
-	return &Atlas{
-		image:      ebiten.NewImage(spriteSize*capacity, spriteSize),
-		spriteSize: spriteSize,
-		capacity:   capacity,
-	}
-}
+// NewAtlas starts an empty atlas: Register its sprites, then Close it before the game loop starts.
+func NewAtlas() *Atlas { return &Atlas{} }
 
-// Register bakes draw's output into the next free slot and returns its SpriteID — panics if Close was already called or capacity is exhausted.
-func (a *Atlas) Register(draw SpriteDrawer) SpriteID {
-	if a.closed {
-		panic("gokebiten: Atlas.Register after Close")
-	}
-	if a.count >= a.capacity {
-		panic(fmt.Sprintf("gokebiten: Atlas capacity %d exhausted", a.capacity))
-	}
-	sprite := ebiten.NewImage(a.spriteSize, a.spriteSize)
-	draw(sprite, a.spriteSize)
-	id := SpriteID(a.count)
-	opts := &ebiten.DrawImageOptions{}
-	opts.GeoM.Translate(float64(int(id)*a.spriteSize), 0)
-	a.image.DrawImage(sprite, opts)
-	a.count++
+// Register takes draw on as a size x size sprite and returns its SpriteID; panics after Close.
+func (a *Atlas) Register(size int, draw SpriteDrawer) SpriteID {
+	id := SpriteID(len(a.slots))
+	a.RegisterAt(id, size, draw)
 	return id
 }
 
-// RegisterAt bakes draw's output into slot id (pre-issued, e.g. an EntKind's SpriteID) instead
-// of the next free slot — panics if Close was already called or id is out of range.
-func (a *Atlas) RegisterAt(id SpriteID, draw SpriteDrawer) {
+// RegisterAt takes draw on as a size x size sprite in slot id; panics after Close or if taken.
+func (a *Atlas) RegisterAt(id SpriteID, size int, draw SpriteDrawer) {
 	if a.closed {
-		panic("gokebiten: Atlas.RegisterAt after Close")
+		panic("gokebiten: Atlas.Register after Close")
 	}
-	if int(id) >= a.capacity {
-		panic(fmt.Sprintf("gokebiten: Atlas capacity %d exhausted", a.capacity))
+	if size <= 0 {
+		panic(fmt.Sprintf("gokebiten: Atlas sprite %d registered with size %d", id, size))
 	}
-	sprite := ebiten.NewImage(a.spriteSize, a.spriteSize)
-	draw(sprite, a.spriteSize)
-	opts := &ebiten.DrawImageOptions{}
-	opts.GeoM.Translate(float64(int(id)*a.spriteSize), 0)
-	a.image.DrawImage(sprite, opts)
-	if int(id) >= a.count {
-		a.count = int(id) + 1
+	for int(id) >= len(a.slots) {
+		a.slots = append(a.slots, slot{})
+	}
+	if a.slots[id].draw != nil {
+		panic(fmt.Sprintf("gokebiten: Atlas sprite %d registered twice", id))
+	}
+	a.slots[id] = slot{size: size, draw: draw}
+}
+
+// Close lays the registered sprites out on one sheet and bakes them; call once, after Register.
+func (a *Atlas) Close() {
+	if a.closed {
+		return
+	}
+	a.closed = true
+
+	width, height := a.layout()
+	a.image = ebiten.NewImage(max(width, 1), max(height, 1))
+	for i := range a.slots {
+		s := &a.slots[i]
+		if s.draw == nil {
+			continue
+		}
+		sprite := ebiten.NewImage(s.size, s.size)
+		s.draw(sprite, s.size)
+		opts := &ebiten.DrawImageOptions{}
+		opts.GeoM.Translate(float64(s.x0), float64(s.y0))
+		a.image.DrawImage(sprite, opts)
+		s.draw = nil
 	}
 }
 
-// Close freezes the atlas — call once, after every Register, before the game loop starts.
-func (a *Atlas) Close() { a.closed = true }
+// layout shelves the sprites in slot order and reports how large a sheet that takes.
+func (a *Atlas) layout() (width, height int) {
+	x, y, rowHeight := 0, 0, 0
+	for i := range a.slots {
+		s := &a.slots[i]
+		if s.draw == nil {
+			continue
+		}
+		if x > 0 && x+s.size > maxAtlasWidth {
+			x, y, rowHeight = 0, y+rowHeight, 0
+		}
+		s.x0, s.y0 = float32(x), float32(y)
+		s.x1, s.y1 = float32(x+s.size), float32(y+s.size)
+		x += s.size
+		rowHeight = max(rowHeight, s.size)
+		width = max(width, x)
+	}
+	return width, y + rowHeight
+}
 
-func (a *Atlas) Atlas() *ebiten.Image { return a.image }
+func (a *Atlas) Atlas() *ebiten.Image {
+	if !a.closed {
+		panic("gokebiten: Atlas used before Close — its sheet does not exist yet")
+	}
+	return a.image
+}
 
 func (a *Atlas) UV(id SpriteID) (sx0, sy0, sx1, sy1 float32) {
-	sx0 = float32(int(id) * a.spriteSize)
-	sy0 = 0
-	sx1 = sx0 + float32(a.spriteSize)
-	sy1 = float32(a.spriteSize)
-	return
+	if !a.closed {
+		panic("gokebiten: Atlas used before Close — its sheet does not exist yet")
+	}
+	if int(id) >= len(a.slots) || a.slots[id].size == 0 {
+		panic(fmt.Sprintf("gokebiten: Atlas has no sprite %d — it was never registered", id))
+	}
+	s := &a.slots[id]
+	return s.x0, s.y0, s.x1, s.y1
 }

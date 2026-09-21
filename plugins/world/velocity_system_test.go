@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokg/geom"
 )
 
 // constFactorModifier is a world.SpeedModifier test double that scales
@@ -49,9 +49,6 @@ func TestVelocitySystem_Update_ComposesModifiersMultiplicatively(t *testing.T) {
 		if len(bases) == 0 {
 			continue
 		}
-		// 100 * 0.5 * 0.25 = 12.5, and it stays 12.5 — a continuous speed no
-		// longer loses the half to truncation. The two factors must have been
-		// multiplied together, not just the last one applied.
 		if math.Abs(bases[0].Vel.Value-12.5) > 1e-9 {
 			t.Errorf("Velocity.Value = %v, want 12.5 — modifiers should compose multiplicatively", bases[0].Vel.Value)
 		}

@@ -2,15 +2,13 @@ package navigation
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/plugins/board"
-	"github.com/kjkrol/gokg/geom"
 )
 
-// DefaultCommandEventHandler turns a right-click into a move-order target —
-// the default control.EventHandler for a navigation Plugin with WithCommands.
-// Write your own against the same Resources for a different binding scheme.
+// DefaultCommandEventHandler turns a right-click into a move-order target.
 type DefaultCommandEventHandler struct {
 	grid   board.Grid
 	camera camera.Camera

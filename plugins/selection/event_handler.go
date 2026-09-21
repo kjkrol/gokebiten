@@ -5,9 +5,7 @@ import (
 	"github.com/kjkrol/gokebiten/control"
 )
 
-// DefaultEventHandler turns left-click/left-drag input into Resources — the
-// default control.EventHandler for Plugin. Write your own against the same
-// Resources for a different binding scheme.
+// DefaultEventHandler turns left-click and left-drag input into Resources.
 type DefaultEventHandler struct{ state *Resources }
 
 var _ control.EventHandler = (*DefaultEventHandler)(nil)

@@ -1,39 +1,23 @@
 package vision
 
 import (
-	"github.com/kjkrol/gokg/geom"
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/uid"
 )
 
-// MaxSeen caps how many entities one scan records, nearest first — anything
-// further is dropped, as collisions.Collision drops neighbours past
-// MaxTouching. Sight is for reacting to what is closest, not for taking
-// inventory.
+// MaxSeen caps how many entities one scan records, nearest first.
 const MaxSeen = 8
 
-// Sizing of the outline buffer. The three together decide MaxSamples: an
-// outline sampled at a fixed angular step drifts by Radius*2*HalfAngle/samples
-// at full range, so widening the cone or reaching further needs more samples to
-// hold the same accuracy.
+// Sizing of the outline buffer: the first three decide MaxSamples.
 const (
 	// MaxSightRadius is the longest range the outline is sized for.
 	MaxSightRadius = 300
-	// MaxHalfAngleMilli is the widest half-angle the sizing assumes, in
-	// milliradians — pi/6 is about 524.
+	// MaxHalfAngleMilli is the widest half-angle the sizing assumes, in milliradians (pi/6).
 	MaxHalfAngleMilli = 524
-	// EdgeTolerance is how far a shadow edge may land from its true angle at
-	// full range, in world units.
+	// EdgeTolerance is how far a shadow edge may land from its true angle at full range.
 	EdgeTolerance = 5
 
-	// MaxSamples follows from the three above — 64 as they stand, meaning
-	// "accurate to EdgeTolerance out to MaxSightRadius for a cone no wider
-	// than MaxHalfAngleMilli". A wider or longer cone still works; its outline
-	// is simply coarser.
-	//
-	// Samples are one more than the gaps between them, and the gaps round up:
-	// truncating would leave the widest cone drifting just past EdgeTolerance.
-	// The arithmetic stays integral because converting a non-integral float
-	// constant to int is a compile error in Go.
+	// MaxSamples keeps a cone within the three limits above accurate to EdgeTolerance.
 	arcMilli   = 2 * MaxHalfAngleMilli * MaxSightRadius
 	gapMilli   = 1000 * EdgeTolerance
 	MaxSamples = (arcMilli+gapMilli-1)/gapMilli + 1
@@ -56,13 +40,8 @@ type Sighted struct {
 	Count uint8
 }
 
-// SightOutline is the drawn shape of one entity's view, held as a distance per
-// evenly spaced angle across the cone — the angles follow from the index, so
-// only the reach is stored.
-//
-// Its presence is what marks an entity for outline work. An entity without it
-// is still scanned and still fills Sight.Seen; it just costs nothing to draw and
-// nothing to store.
+// SightOutline is the drawn shape of one entity's view: a reach per evenly spaced angle
+// across the cone. Only an entity carrying it has its outline computed.
 type SightOutline struct {
 	Depths [MaxSamples]float32
 	Count  uint8

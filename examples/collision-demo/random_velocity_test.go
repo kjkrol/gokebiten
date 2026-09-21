@@ -6,9 +6,6 @@ import (
 
 func TestRandomVelocity_InitialVelocity_XWithinRangeAndDeadZoned(t *testing.T) {
 	const rng, deadZone, minSpeed = int32(50), int32(10), int32(20)
-	// Delta() round-trips what was drawn now: Dir+Value no longer rounds the
-	// magnitude to a whole number on the way through Hypot/normalize, so the
-	// unit of slack this test used to allow is gone.
 	const tolerance = 1e-9
 	m := newRandomVelocity(rng, deadZone, minSpeed)
 
@@ -32,10 +29,6 @@ func TestRandomVelocity_InitialVelocity_XWithinRangeAndDeadZoned(t *testing.T) {
 }
 
 func TestRandomVelocity_InitialVelocity_YHasNoDeadZone(t *testing.T) {
-	// Y is drawn from [-Range,Range] with no dead-zone clamp at all (only X
-	// gets one) — with DeadZone==Range every non-zero-magnitude X draw would
-	// get clamped to MinSpeed, but Y must still be free to land inside
-	// (-DeadZone,DeadZone), including exactly 0, unclamped.
 	const rng, deadZone, minSpeed = int32(20), int32(20), int32(5)
 	m := newRandomVelocity(rng, deadZone, minSpeed)
 

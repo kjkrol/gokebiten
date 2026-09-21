@@ -5,7 +5,7 @@ type Persistence interface {
 	// List returns every save found for basePath, "" (quicksave) first.
 	List(basePath string) ([]string, error)
 
-	// Save writes resources and the ECS snapshot to disk under basePath/label, auto-including every tracked Serializable's targets.
+	// Save writes resources, every tracked Serializable and the ECS snapshot under basePath/label.
 	Save(basePath, label string, resources ...any) error
 
 	// Load restores a snapshot written by Save, leaving anything absent from it unchanged.

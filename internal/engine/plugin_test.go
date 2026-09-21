@@ -187,11 +187,6 @@ func TestInitializer_Use_RejectsBuiltinPlugin(t *testing.T) {
 	}
 }
 
-// TestEngine_Init_WorldViewportDefaultsToScreenSize guards that Engine
-// fills in the built-in world's camera viewport from Props.ScreenWidth/
-// ScreenHeight when UseWorld's config leaves Camera.Viewport* unset — otherwise the
-// camera's pannable window defaults to the world's own size, leaving
-// zero room to pan or zoom out regardless of screen size.
 func TestEngine_Init_WorldViewportDefaultsToScreenSize(t *testing.T) {
 	props := game.Props{ScreenWidth: 200, ScreenHeight: 150}
 	var got camera.Camera

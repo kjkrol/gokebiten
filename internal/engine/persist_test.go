@@ -49,10 +49,6 @@ func TestSaveLoad_RoundTrip(t *testing.T) {
 	}
 }
 
-// TestSaveLoad_ToleratesResourceAddedAfterSave guards the whole point of the
-// named format: a resource requested at Load but absent from an older save
-// (e.g. a plugin added since it was written) is skipped, not an error —
-// and every other resource still loads correctly.
 func TestSaveLoad_ToleratesResourceAddedAfterSave(t *testing.T) {
 	basePath := t.TempDir() + "/save"
 

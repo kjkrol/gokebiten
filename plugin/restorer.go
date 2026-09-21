@@ -1,9 +1,7 @@
 package plugin
 
-// Restorer is implemented by a tracked Plugin needing a synchronous
-// callback right after Persistence.Load decodes its Serializable's
-// Persisted() pointers — for state with no dependency on ECS entities.
-// See PostLoader for a hook that needs to query loaded entities instead.
+// Restorer is a tracked Plugin called back right after Persistence.Load has decoded its state.
+// For a hook that queries loaded entities, see PostLoader.
 type Restorer interface {
 	Restore()
 }

@@ -24,7 +24,7 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 	oldTarget, _ := grid.CellIndex(3, 0)
 	newTarget, _ := grid.CellIndex(8, 0)
 
-	cam := camera.NewFromSpace(1000, 1000, false)
+	cam := camera.NewFromSpace(1000, 1000, 0)
 
 	cmdState := &Resources{}
 	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
@@ -114,7 +114,7 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 	start, _ := grid.CellIndex(0, 0)
 	newTarget, _ := grid.CellIndex(8, 0)
 
-	cam := camera.NewFromSpace(1000, 1000, false)
+	cam := camera.NewFromSpace(1000, 1000, 0)
 
 	cmdState := &Resources{}
 	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
@@ -211,7 +211,7 @@ func TestCommandSystem_Update_UnreachableTargetLeavesInFlightEntityUntouched(t *
 	wall, _ := grid.CellIndex(8, 0)
 	terrain.Set(wall, board.CellKind{Cost: 1, Passable: false})
 
-	cam := camera.NewFromSpace(1000, 1000, false)
+	cam := camera.NewFromSpace(1000, 1000, 0)
 
 	cmdState := &Resources{}
 	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)

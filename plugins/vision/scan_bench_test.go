@@ -5,14 +5,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugins/vision"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokg/geom"
+	"github.com/kjkrol/gokebiten/plugins/world/kind"
 )
 
-// benchScan ticks n observers, each scanning a cone over a world they share, so
-// the number measures one full vision pass — not one Space.Scan in isolation.
+// benchScan ticks n observers, each scanning a cone over a world they share.
 func benchScan(b *testing.B, n int, outlines bool) {
 	w := world.NewPlugin(world.Config{
 		Space:    world.SpaceCfg{Width: 4000, Height: 4000},
@@ -28,25 +28,20 @@ func benchScan(b *testing.B, n int, outlines bool) {
 		b.Fatal(err)
 	}
 
-	comps := []world.ComponentTemplate{
-		world.Const(vision.Sight{Facing: geom.NewVec(1.0, 0.0), HalfAngle: math.Pi / 6, Radius: 200}),
+	spec := kind.Spec{
+		kind.Load(func(d spawn) world.Position { return at(d.x, d.y) }),
+		kind.Const(world.Velocity{}),
+		kind.Const(vision.Sight{Facing: geom.NewVec(1.0, 0.0), HalfAngle: math.Pi / 6, Radius: 200}),
 	}
 	if outlines {
-		comps = append(comps, world.Const(vision.SightOutline{}))
+		spec = append(spec, kind.Const(vision.SightOutline{}))
 	}
-	dict := w.EntKindDict()
-	dict.Define("watcher", func(k world.Kind[spawn]) world.EntKind {
-		return world.EntKind{
-			Position:   k.Load(func(d spawn) world.Position { return at(d.x, d.y) }),
-			Velocity:   k.Const(world.Velocity{}),
-			Components: comps,
-		}
-	})
+	watcher := kind.Define[spawn](w.Kinds(), "watcher", spec)
 
 	side := int(math.Ceil(math.Sqrt(float64(n))))
-	entries := make([]world.Entry, 0, n)
+	entries := make([]kind.Entry, 0, n)
 	for i := range n {
-		entries = append(entries, dict.Entry("watcher", spawn{
+		entries = append(entries, watcher.Entry(spawn{
 			x: float64(100 + (i%side)*120),
 			y: float64(100 + (i/side)*120),
 		}))

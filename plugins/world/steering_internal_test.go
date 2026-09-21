@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kjkrol/aabbworld/geom"
+	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
+	"github.com/kjkrol/gokebiten/plugins/world/kind"
 )
 
 var (
@@ -15,18 +16,16 @@ var (
 	north = geom.NewVec(0.0, 1.0)
 )
 
-// steerTicks spawns one entity heading start, carrying st, and reports its
-// heading after each of n ticks.
+// steerTicks spawns one entity heading start, carrying st, and reports its heading per tick.
 func steerTicks(t *testing.T, st Steering, start geom.Vec, n int) []geom.Vec {
 	t.Helper()
 
 	wm := testWorld()
-	wm.populate(EntKind{
-		Name:       "e",
-		Position:   Const(Position{AABB: plane.NewAABB(geom.NewVec(500, 500), 10, 10)}),
-		Velocity:   Const(Velocity{Dir: start, Value: 1}),
-		Components: []ComponentTemplate{Const(st)},
-	}, []any{nil})
+	wm.populate(testKind(
+		Position{AABB: plane.NewAABB(geom.NewVec(500, 500), 10, 10)},
+		Velocity{Dir: start, Value: 1},
+		kind.Const(st),
+	), []any{nil})
 
 	var base goke.Comp[Base]
 	var query *goke.Query
@@ -52,8 +51,6 @@ func steerTicks(t *testing.T, st Steering, start geom.Vec, n int) []geom.Vec {
 
 func heading(v geom.Vec) float64 { return math.Atan2(v.Y, v.X) }
 
-// An entity part-way through reacting cannot change its mind — that is what
-// makes the delay behavioural inertia rather than a plain lag.
 func TestSteering_RequestIsRefusedWhileStillReacting(t *testing.T) {
 	s := &Steering{Reflex: 3}
 
@@ -70,7 +67,7 @@ func TestSteering_RequestIsRefusedWhileStillReacting(t *testing.T) {
 
 func TestSteering_RequestNormalisesWhateverItIsHanded(t *testing.T) {
 	s := &Steering{}
-	s.Request(geom.NewVec(3.0, 4.0)) // a behavior's summed push, not a unit vector
+	s.Request(geom.NewVec(3.0, 4.0))
 
 	if n := math.Hypot(s.Want.X, s.Want.Y); math.Abs(n-1) > 1e-12 {
 		t.Errorf("|Want| = %v, want 1", n)
@@ -97,7 +94,7 @@ func TestSteering_TurnRateCapsTheSwing(t *testing.T) {
 
 	from := heading(north)
 	for i, d := range dirs {
-		want := from - rate*float64(i+1) // turning clockwise, towards 0
+		want := from - rate*float64(i+1)
 		if math.Abs(heading(d)-want) > 1e-9 {
 			t.Errorf("tick %d heading %.4f, want %.4f — one rate step per tick", i+1, heading(d), want)
 		}
@@ -125,8 +122,6 @@ func TestSteering_LastStepSettlesOnTheTarget(t *testing.T) {
 	}
 }
 
-// An entity not heading anywhere yet has no angle to turn from, so it takes
-// the requested heading whole however tight its TurnRate.
 func TestSteering_StationaryEntityTakesTheHeadingWhole(t *testing.T) {
 	var stationary geom.Vec
 	if dirs := steerTicks(t, Steering{Want: east, TurnRate: 0.01}, stationary, 1); dirs[0] != east {
@@ -134,8 +129,6 @@ func TestSteering_StationaryEntityTakesTheHeadingWhole(t *testing.T) {
 	}
 }
 
-// Nothing standing means nothing to do — an entity keeps whatever heading it
-// already had.
 func TestSteering_LeavesHeadingAloneWithNoRequest(t *testing.T) {
 	if dirs := steerTicks(t, Steering{}, north, 2); dirs[0] != north || dirs[1] != north {
 		t.Errorf("headings %v, want north throughout", dirs)
@@ -162,17 +155,14 @@ func (a *asking) Update(*goke.CmdBuf, time.Duration) {
 	}
 }
 
-// A stimulus that lasts renews its request every tick, and each renewal used
-// to restart the reflex countdown — so an entity with any Reflex at all stood
-// frozen on its course for as long as it kept seeing what it should turn from.
 func TestSteering_LastingStimulusStillTurnsTheEntity(t *testing.T) {
 	wm := testWorld()
 	wm.RegisterBehavior(&asking{towards: north})
-	wm.populate(EntKind{
-		Position:   Const(Position{AABB: plane.NewAABB(geom.NewVec(500, 500), 10, 10)}),
-		Velocity:   Const(Velocity{Dir: east, Value: 1}),
-		Components: []ComponentTemplate{Const(Steering{Reflex: 3, TurnRate: 0.12})},
-	}, []any{nil})
+	wm.populate(testKind(
+		Position{AABB: plane.NewAABB(geom.NewVec(500, 500), 10, 10)},
+		Velocity{Dir: east, Value: 1},
+		kind.Const(Steering{Reflex: 3, TurnRate: 0.12}),
+	), []any{nil})
 
 	var base goke.Comp[Base]
 	var query *goke.Query
@@ -196,8 +186,6 @@ func TestSteering_LastingStimulusStillTurnsTheEntity(t *testing.T) {
 	}
 }
 
-// While a new request is still being reacted to, the entity goes on turning
-// towards the one before it rather than holding still.
 func TestSteering_KeepsActingOnTheLastDecisionWhileReacting(t *testing.T) {
 	const rate = 0.1
 	dirs := steerTicks(t, Steering{Want: east, Pending: north, Reflex: 3, Delay: 3, TurnRate: rate}, north, 2)

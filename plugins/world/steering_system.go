@@ -4,17 +4,14 @@ import (
 	"math"
 	"time"
 
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokg/geom"
 )
 
 var _ goke.System = (*SteeringSystem)(nil)
 
-// SteeringSystem carries out standing Steering requests: it swings Velocity.Dir
-// towards Want by no more than TurnRate, and counts down each entity's Reflex
-// until its Pending request takes Want's place. It runs between the decision
-// pass and movement, so a request made this tick is acted on this tick once
-// its Reflex has run out.
+// SteeringSystem carries out Steering requests between the decision pass and movement:
+// it counts down Reflex and swings Velocity.Dir towards Want by at most TurnRate.
 type SteeringSystem struct {
 	query *goke.Query
 	steer goke.Comp[Steering]
@@ -49,9 +46,7 @@ func (s *SteeringSystem) Update(*goke.CmdBuf, time.Duration) {
 	}
 }
 
-// turnTowards rotates from towards to by at most rate radians, the shorter way
-// round. A zero rate, or an entity not heading anywhere yet, snaps straight to
-// the target.
+// turnTowards rotates from towards to by at most rate radians; a zero rate or heading snaps to it.
 func turnTowards(from, to geom.Vec, rate float64) geom.Vec {
 	if rate <= 0 || (from.X == 0 && from.Y == 0) {
 		return to

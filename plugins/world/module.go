@@ -2,31 +2,37 @@ package world
 
 import (
 	"fmt"
+	"github.com/kjkrol/gokebiten/plugin"
 	"time"
 
+	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokg"
+	"github.com/kjkrol/gokebiten/plugins/world/kind"
 	"github.com/kjkrol/uid"
 )
 
-// SpeedModifier contributes a multiplicative factor to an entity's Velocity.Value each tick — see VelocitySystem.
+// SpeedModifier contributes a factor to an entity's Velocity.Value each tick.
 type SpeedModifier = Modifier[float64]
 
 // module owns the world's topology, entities, and movement — the foundation
 // any Stage with moving, drawable entities builds on.
 type module struct {
 	config Config
-	space  *gokg.Space
+	space  *aabbworld.Space
+	ecs    *goke.ECS
+
+	// declared is what the game said it attaches at runtime — see Plugin.Declare.
+	declared []goke.CompToken
 
 	spawnedCount int
 	seeds        []goke.System
 	telemetry    Telemetry
 
-	// despawned is this tick's removals, so asking twice for the same entity
-	// costs the world one slot, not two.
+	// despawned is this tick's removals.
 	despawned map[uid.UID64]struct{}
+	exits     exits
 
-	entKinds *EntKindDict
+	kinds *Kinds
 
 	behaviors         []Behavior
 	behaviorRunnables []goke.Runnable
@@ -58,19 +64,14 @@ func (w *module) RegSystems(ecs *goke.ECS) {
 	}
 	w.steeringRunnable = ecs.RegSys(NewSteeringSystem())
 	velocitySystem := NewVelocitySystem(w.modifiers)
-	moveSystem := NewMoveSystem(w.space, w.maxStep())
+	moveSystem := NewMoveSystem(w.space)
+	moveSystem.exits = &w.exits
+	moveSystem.leave = w.leave
 	w.velocityRunnable = ecs.RegSys(velocitySystem)
 	w.moveRunnable = ecs.RegSys(moveSystem)
 }
 
-// maxStep is the furthest one entity may travel in a single tick. MoveSystem
-// clamps to it so nothing tunnels through a neighbour; anything that has to
-// notice an entity before it arrives — a broad phase, say — has to reach at
-// least this far ahead, which is why it is named here rather than inlined.
-func (w *module) maxStep() float64 { return float64(w.config.Entities.MinSize) / 2 }
-
-// RunPlan runs world's tick: decisions first, then the movement pipeline
-// (speed modifiers, then integration) that acts on them.
+// RunPlan runs world's tick: decisions, then speed modifiers, then movement.
 func (w *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	clear(w.despawned)
 	for _, b := range w.behaviorRunnables {
@@ -88,18 +89,18 @@ func (w *module) SetupSystems() []goke.System { return w.seeds }
 
 // LoadComps lists the component types world owns — see [goke.CompProvider].
 func (w *module) LoadComps() []goke.CompToken {
-	return []goke.CompToken{
+	return append([]goke.CompToken{
 		goke.LoadComp[Base](),
 		goke.LoadComp[Appearance](),
 		goke.LoadComp[Steering](),
-	}
+	}, w.declared...)
 }
 
 // =================================================================
 // plugin.PostLoader contract
 // =================================================================
 
-// PostLoad recomputes Count and reinserts every loaded entity's Position into space — see plugin.PostLoader.
+// PostLoad recomputes Count and reinserts every loaded entity's Position into space.
 func (w *module) PostLoad() goke.System {
 	return goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		w.remapTypes(si)
@@ -112,7 +113,7 @@ func (w *module) PostLoad() goke.System {
 			cursor := query.Cursor()
 			bases := base.Slice(cursor)
 			for i, id := range cursor.IDs {
-				w.space.Insert(id, bases[i].Pos.AABB)
+				w.space.Insert(id, &bases[i].Pos.AABB)
 			}
 			count += len(cursor.IDs)
 		}
@@ -121,22 +122,19 @@ func (w *module) PostLoad() goke.System {
 	}}
 }
 
-// remapTypes rewrites every loaded Base.TypeID through the saved dictionary, so a
-// world keeps its kinds even when the game's Define order changed since the
-// save. EntKindDict.order is this build's mapping and gob never touches it;
-// EntKindDict.saved is what the save brought in.
+// remapTypes rewrites every loaded Base.TypeID from the saved kind order to this build's.
 func (w *module) remapTypes(si *goke.SysInit) {
-	saved := w.entKinds.saved
+	saved := w.kinds.saved
 
-	lut := make([]TypeID, len(saved))
+	lut := make([]kind.ID, len(saved))
 	moved := false
 	for old, name := range saved {
-		k, ok := w.entKinds.Get(name)
+		k, ok := w.kinds.entries[name]
 		if !ok {
-			panic(fmt.Sprintf("world: the save names EntKind %q, which this build no longer defines", name))
+			panic(fmt.Sprintf("world: the save names kind %q, which this build no longer defines", name))
 		}
-		lut[old] = k.TypeID
-		moved = moved || k.TypeID != TypeID(old)
+		lut[old] = k.typeID
+		moved = moved || k.typeID != kind.ID(old)
 	}
 	if !moved {
 		return
@@ -161,32 +159,48 @@ func (w *module) remapTypes(si *goke.SysInit) {
 // world-specific
 // =================================================================
 
-// RegisterSpeedModifier adds m to the set VelocitySystem folds into every entity's Velocity.Value each tick.
+// RegisterSpeedModifier adds m to the factors folded into every entity's speed each tick.
 func (w *module) RegisterSpeedModifier(m SpeedModifier) { w.modifiers = append(w.modifiers, m) }
 
 // RegisterBehavior adds b to the decision pass that runs before movement.
 func (w *module) RegisterBehavior(b Behavior) { w.behaviors = append(w.behaviors, b) }
 
-// despawn drops id from the ECS and from the spatial index, once per tick however often it is asked.
+// despawn drops id from the ECS and from the spatial index, once per tick.
 func (w *module) despawn(cb *goke.CmdBuf, id uid.UID64) {
 	if _, gone := w.despawned[id]; gone {
 		return
 	}
 	w.despawned[id] = struct{}{}
+	w.exits.forget(id)
 	cb.RemoveOne(id)
 	w.space.Remove(id)
 	w.spawnedCount--
 	w.telemetry.Count--
 }
 
-// populate queues a spawn of one entity of kind per element of data, each element feeding kind's Load templates.
-func (w *module) populate(kind EntKind, data []any) {
-	count := len(data)
-	extras := []entityExtras{
-		Const(Appearance{SpriteID: kind.SpriteID}).adder(),
+// tracked takes what Space.Translate or Reindex said of id and handles each leaver once.
+func (w *module) tracked(t plugin.Tick, id uid.UID64, inside bool) {
+	if w.exits.left(id, inside) {
+		w.leave(t, id)
 	}
-	for _, c := range kind.Components {
-		extras = append(extras, c.adder())
+}
+
+func (w *module) leave(t plugin.Tick, id uid.UID64) {
+	if w.exits.onExit == nil {
+		w.despawn(t.Cmd, id)
+		return
+	}
+	w.exits.onExit(t, id)
+}
+
+// populate queues a spawn of one entity of k per row, each row feeding k's Loads.
+func (w *module) populate(k registered, rows []any) {
+	count := len(rows)
+	writers := []kind.Spawner{
+		kind.Const(Appearance{SpriteID: k.spriteID}).Spawner(),
+	}
+	for _, c := range k.comps {
+		writers = append(writers, c.Spawner())
 	}
 
 	w.seeds = append(w.seeds, goke.SystemFn{OnInit: func(si *goke.SysInit) {
@@ -195,8 +209,8 @@ func (w *module) populate(kind EntKind, data []any) {
 
 		var baseComp goke.Comp[Base]
 		comps := []goke.Addable{&baseComp}
-		for _, e := range extras {
-			comps = append(comps, e.Components()...)
+		for _, wr := range writers {
+			comps = append(comps, wr.Columns()...)
 		}
 		factory := si.NewFactory(comps...)
 
@@ -205,13 +219,13 @@ func (w *module) populate(kind EntKind, data []any) {
 		for factory.Next() {
 			bases := baseComp.Slice(&factory.Cursor)
 			for i, id := range factory.IDs {
-				d := data[index]
-				pos := kind.Position.resolve(d, id)
+				row := rows[index]
+				pos := k.position.Resolve(row, id)
 				w.validateSize(id, pos)
-				bases[i] = Base{Pos: pos, Vel: kind.Velocity.resolve(d, id), TypeID: kind.TypeID}
-				w.space.Insert(id, pos.AABB)
-				for _, e := range extras {
-					e.Init(&factory.Cursor, i, d, id)
+				bases[i] = Base{Pos: pos, Vel: k.velocity.Resolve(row, id), TypeID: k.typeID}
+				w.space.Insert(id, &bases[i].Pos.AABB)
+				for _, wr := range writers {
+					wr.Write(&factory.Cursor, i, row, id)
 				}
 				index++
 			}

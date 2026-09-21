@@ -6,6 +6,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugins/board"
 	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gokebiten/plugins/world/kind"
 	"github.com/kjkrol/uid"
 )
 
@@ -37,7 +38,7 @@ func (c *testInstallCtx) flush() {
 	c.ecs.Setup(systems...)
 }
 
-func TestEntKind_LoadWithEffect_EntersOccupancyOnSpawn(t *testing.T) {
+func TestKind_LoadWithEffect_EntersOccupancyOnSpawn(t *testing.T) {
 	sqGrid := board.DefaultGrids{}.Square(5, 5, 10)
 	occupancy := &board.SingleOccupancy{}
 	target, _ := sqGrid.CellIndex(2, 2)
@@ -48,17 +49,13 @@ func TestEntKind_LoadWithEffect_EntersOccupancyOnSpawn(t *testing.T) {
 	}
 	plugin := world.NewPlugin(cfg)
 	placement := world.NewGridPlacement(50, 50, 8)
-	plugin.EntKindDict().Define("unit", func(k world.Kind[board.CellID]) world.EntKind {
-		return world.EntKind{
-			Position: k.Const(placement.Place(0, 1)),
-			Velocity: k.Const(world.Velocity{}),
-			Components: []world.ComponentTemplate{
-				k.Load(func(c board.CellID) board.Cell { return board.Cell{ID: c} }).
-					WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
-			},
-		}
+	unit := kind.Define[board.CellID](plugin.Kinds(), "unit", kind.Spec{
+		kind.Const(placement.Place(0, 1)),
+		kind.Const(world.Velocity{}),
+		kind.Load(func(c board.CellID) board.Cell { return board.Cell{ID: c} }).
+			WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
 	})
-	plugin.Seed(plugin.EntKindDict().Entry("unit", target))
+	plugin.Seed(unit.Entry(target))
 	if err := plugin.Populate(); err != nil {
 		t.Fatalf("Populate: %v", err)
 	}

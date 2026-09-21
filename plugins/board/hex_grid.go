@@ -3,7 +3,7 @@ package board
 import (
 	"math"
 
-	"github.com/kjkrol/gokg/geom"
+	"github.com/kjkrol/aabbworld/geom"
 )
 
 // hexGrid is a Grid over pointy-top hexagonal cells addressed by axial
@@ -11,7 +11,7 @@ import (
 type hexGrid struct {
 	Width, Height uint32
 	Size          float64
-	Toroidal      bool
+	WrapX, WrapY  bool
 }
 
 var _ Grid = (*hexGrid)(nil)
@@ -28,18 +28,17 @@ func unpackAxial(c CellID) (q, r int32) {
 	return int32(uint32(c >> 32)), int32(uint32(c))
 }
 
-// wrapAxial folds q,r into the canonical [0,Width) x [0,Height) parallelogram.
-func (g *hexGrid) wrapAxial(q, r int32) (int32, int32) {
-	return int32(wrapModI64(int64(q), int64(g.Width))), int32(wrapModI64(int64(r), int64(g.Height)))
+// foldAxial folds q along a wrapping X and r along a wrapping Y; false outside a non-wrapping axis.
+func (g *hexGrid) foldAxial(q, r int32) (int32, int32, bool) {
+	fq, okQ := foldAxis(int64(q), int64(g.Width), g.WrapX)
+	fr, okR := foldAxis(int64(r), int64(g.Height), g.WrapY)
+	return int32(fq), int32(fr), okQ && okR
 }
 
-// Contains is always true when Toroidal — every (q,r) maps to some cell once wrapped.
+// Contains is always true on a wrapping axis — every coordinate maps to some cell once wrapped.
 func (g *hexGrid) Contains(c CellID) bool {
-	if g.Toroidal {
-		return true
-	}
-	q, r := unpackAxial(c)
-	return q >= 0 && r >= 0 && uint32(q) < g.Width && uint32(r) < g.Height
+	_, _, ok := g.foldAxial(unpackAxial(c))
+	return ok
 }
 
 var hexDirs = [6][2]int32{{1, 0}, {1, -1}, {0, -1}, {-1, 0}, {-1, 1}, {0, 1}}
@@ -48,20 +47,14 @@ func (g *hexGrid) Neighbors(c CellID) []CellID {
 	q, r := unpackAxial(c)
 	out := make([]CellID, 0, 6)
 	for _, d := range hexDirs {
-		nq, nr := q+d[0], r+d[1]
-		if g.Toroidal {
-			wq, wr := g.wrapAxial(nq, nr)
-			out = append(out, packAxial(wq, wr))
-			continue
-		}
-		if n := packAxial(nq, nr); g.Contains(n) {
-			out = append(out, n)
+		if nq, nr, ok := g.foldAxial(q+d[0], r+d[1]); ok {
+			out = append(out, packAxial(nq, nr))
 		}
 	}
 	return out
 }
 
-// CellCenter shifts the standard axial-to-pixel conversion so cell (0,0) sits fully in positive space.
+// CellCenter is the world position of c's centre, with cell (0,0) fully in positive space.
 func (g *hexGrid) CellCenter(c CellID) geom.Vec {
 	q, r := unpackAxial(c)
 	x := g.Size*(math.Sqrt(3)*float64(q)+math.Sqrt(3)/2*float64(r)) + g.Size
@@ -77,36 +70,29 @@ func (g *hexGrid) CellAt(pos geom.Vec) (CellID, bool) {
 	qf := (math.Sqrt(3)/3*x - 1.0/3*y) / g.Size
 	rf := (2.0 / 3 * y) / g.Size
 	q, r := axialRound(qf, rf)
-	if g.Toroidal {
-		wq, wr := g.wrapAxial(q, r)
-		return packAxial(wq, wr), true
-	}
-	c := packAxial(q, r)
-	if !g.Contains(c) {
+	q, r, ok := g.foldAxial(q, r)
+	if !ok {
 		return 0, false
 	}
-	return c, true
+	return packAxial(q, r), true
 }
 
 func (g *hexGrid) CellSpan() float32 { return float32(g.Size) }
 
-func (g *hexGrid) SetToroidal(t bool) { g.Toroidal = t }
+func (g *hexGrid) SetWrap(x, y bool) { g.WrapX, g.WrapY = x, y }
 
 func (g *hexGrid) CellIndex(q, r uint32) (CellID, bool) {
-	if g.Toroidal {
-		return packAxial(int32(q%g.Width), int32(r%g.Height)), true
-	}
-	if q >= g.Width || r >= g.Height {
+	fq, fr, ok := g.foldAxial(int32(q), int32(r))
+	if !ok {
 		return 0, false
 	}
-	return packAxial(int32(q), int32(r)), true
+	return packAxial(fq, fr), true
 }
 
 // NeighborCost is always 1 — every hex neighbor is equidistant in this axial model.
 func (g *hexGrid) NeighborCost(a, b CellID) float64 { return 1 }
 
-// DiagonalNeighbors always returns ok=false — hex neighbors share a full
-// edge, not a corner point, so cutting through a corner isn't a concept here.
+// DiagonalNeighbors always returns ok=false: hex neighbors share an edge, never a corner.
 func (g *hexGrid) DiagonalNeighbors(a, b CellID) (c1, c2 CellID, ok bool) {
 	return 0, 0, false
 }
@@ -115,16 +101,19 @@ func hexCubeDistance(dq, dr int32) float64 {
 	return (math.Abs(float64(dq)) + math.Abs(float64(dr)) + math.Abs(float64(dq+dr))) / 2
 }
 
-// Distance is hex (cube) distance; when Toroidal it checks every wrap period and returns the shortest.
+// Distance is hex (cube) distance, the shortest across every wrap period when toroidal.
 func (g *hexGrid) Distance(a, b CellID) float64 {
 	aq, ar := unpackAxial(a)
 	bq, br := unpackAxial(b)
 	dq, dr := aq-bq, ar-br
 
-	if !g.Toroidal {
-		return hexCubeDistance(dq, dr)
+	width, height := int32(0), int32(0)
+	if g.WrapX {
+		width = int32(g.Width)
 	}
-	width, height := int32(g.Width), int32(g.Height)
+	if g.WrapY {
+		height = int32(g.Height)
+	}
 	best := math.Inf(1)
 	for _, mq := range [3]int32{-width, 0, width} {
 		for _, mr := range [3]int32{-height, 0, height} {

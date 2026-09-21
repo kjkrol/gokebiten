@@ -1,21 +1,21 @@
 package world
 
 import (
+	"github.com/kjkrol/aabbworld"
 	"testing"
 	"time"
 
+	"github.com/kjkrol/aabbworld/geom"
+	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
 )
 
-// benchWorld spawns n entities and returns the module plus an ECS wired to run
-// its tick — the pass every game pays for on every entity, every tick.
+// benchWorld spawns n entities and returns the module with an ECS wired to run its tick.
 func benchWorld(b *testing.B, n int) (*goke.ECS, *module, *goke.Query, *goke.Comp[Base]) {
 	b.Helper()
 
 	wm := NewPlugin(Config{
-		Space:    SpaceCfg{Width: 4000, Height: 4000, Toroidal: true},
+		Space:    SpaceCfg{Width: 4000, Height: 4000, Edges: aabbworld.Torus},
 		Entities: EntitiesCfg{MaxCount: n, MinSize: 1, MaxSize: 100},
 	}).module
 
@@ -26,11 +26,7 @@ func benchWorld(b *testing.B, n int) (*goke.ECS, *module, *goke.Query, *goke.Com
 	for i := range n {
 		pos := Position{AABB: plane.NewAABB(
 			geom.NewVec(float64(10+(i%side)*30), float64(10+(i/side)*30)), 20, 20)}
-		wm.populate(EntKind{
-			Name:     "e",
-			Position: Const(pos),
-			Velocity: Const(Velocity{Dir: geom.NewVec(1.0, 0.0), Value: 60}),
-		}, []any{nil})
+		wm.populate(testKind(pos, Velocity{Dir: geom.NewVec(1.0, 0.0), Value: 60}), []any{nil})
 	}
 
 	base := new(goke.Comp[Base])
@@ -44,8 +40,6 @@ func benchWorld(b *testing.B, n int) (*goke.ECS, *module, *goke.Query, *goke.Com
 	return ecs, wm, query, base
 }
 
-// Benchmark_PositionScan is the renderer's access pattern: walk every entity's
-// Position and read its corners, touching nothing else.
 func Benchmark_PositionScan(b *testing.B) {
 	for _, n := range []int{1000, 5000} {
 		b.Run(entityCount(n), func(b *testing.B) {
@@ -66,8 +60,6 @@ func Benchmark_PositionScan(b *testing.B) {
 	}
 }
 
-// Benchmark_WorldTick is the whole movement pipeline: steering, speed
-// modifiers and integration over every entity.
 func Benchmark_WorldTick(b *testing.B) {
 	for _, n := range []int{1000, 5000} {
 		b.Run(entityCount(n), func(b *testing.B) {

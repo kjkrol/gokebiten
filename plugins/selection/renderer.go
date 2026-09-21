@@ -41,9 +41,7 @@ func DefaultHighlightStyle() HighlightStyle {
 
 var marqueeColor = color.RGBA{R: 255, G: 140, B: 0, A: 255}
 
-// Renderer draws a thin outline around every Selected entity, plus a live
-// marquee rectangle while a drag-select is in progress — register alongside
-// your other layers.
+// Renderer outlines every Selected entity and draws the marquee of a drag in progress.
 type Renderer struct {
 	state  *Resources
 	camera camera.Camera
@@ -55,7 +53,7 @@ type Renderer struct {
 
 var _ render.Renderer = (*Renderer)(nil)
 
-// NewRenderer builds a Renderer over state's live selection/drag state, with DefaultHighlightStyle — override via WithStyle.
+// NewRenderer builds a Renderer over state with DefaultHighlightStyle.
 func NewRenderer(cam camera.Camera, state *Resources) *Renderer {
 	return &Renderer{state: state, camera: cam, style: DefaultHighlightStyle()}
 }

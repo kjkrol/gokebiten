@@ -7,8 +7,6 @@ import (
 	"github.com/kjkrol/gokebiten/plugins/vision"
 )
 
-// Every component vision owns has to be listed, or a save that contains one
-// fails to load with "no matching LoadComp was provided".
 func TestModule_DeclaresEveryComponentItOwns(t *testing.T) {
 	p := vision.NewPlugin(testWorldPlugin())
 	ctx := &installCtx{ecs: goke.New()}
@@ -22,8 +20,6 @@ func TestModule_DeclaresEveryComponentItOwns(t *testing.T) {
 	}
 }
 
-// RegSystems runs again whenever a Stage is re-entered; it must not stack up a
-// second copy of the scan.
 func TestModule_RegSystemsIsIdempotent(t *testing.T) {
 	p := vision.NewPlugin(testWorldPlugin())
 	ctx := &installCtx{ecs: goke.New()}

@@ -4,20 +4,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/game"
 	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/vision/strategies/hunt"
+	"github.com/kjkrol/gokebiten/plugins/vision/behavior"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
 	"github.com/kjkrol/uid"
 )
 
-// stageInit is a game.Initializer that drives the real Stage without a window:
-// queue every Use/UseModule/Setup call, then flush them through one ecs.Setup,
-// exactly as the engine does when it enters a Stage. Scene.Layers() is left
-// out — it builds an Atlas, which needs a graphics context.
+// stageInit is a game.Initializer that drives the real Stage without a window;
+// Scene.Layers() is left out.
 type stageInit struct {
 	ecs     *goke.ECS
 	world   *world.Plugin
@@ -66,8 +63,7 @@ func (c *stageInit) UseWorld(cfg world.Config) *world.Plugin {
 	return c.world
 }
 
-// buildStage runs the fresh-spawn half of entering a Stage: Init, Spawn,
-// Populate, SetPlan, one flushing ecs.Setup.
+// buildStage runs the fresh-spawn half of entering a Stage: Init, Spawn, Populate, Setup.
 func buildStage(t *testing.T) (*goke.ECS, *mainStage) {
 	t.Helper()
 
@@ -97,11 +93,6 @@ func buildStage(t *testing.T) (*goke.ECS, *mainStage) {
 	return ctx.ecs, stage
 }
 
-// A catch has to cost the prey its life, and that takes the whole chain: the
-// hunter with no physical body, the eat behaviour registered, and
-// world.Despawn clearing both the ECS and the index. Leave out any one of them
-// and the demo still runs, still builds, and the hunter merely drifts through
-// everyone forever — so this stages a catch rather than waiting for one.
 func TestStage_HunterEatsWhatItCatches(t *testing.T) {
 	ecs, stage := buildStage(t)
 	view := bodies(ecs)
@@ -125,8 +116,7 @@ func TestStage_HunterEatsWhatItCatches(t *testing.T) {
 	}
 }
 
-// placeOnPrey drops the hunter straight onto the first prey — in the ECS and in
-// the spatial index the broad phase probes — and returns that prey's id.
+// placeOnPrey drops the hunter onto the first prey, in the ECS and the index, and returns its id.
 func placeOnPrey(t *testing.T, stage *mainStage, view bodyView) uid.UID64 {
 	t.Helper()
 	var target world.Position
@@ -144,8 +134,7 @@ func placeOnPrey(t *testing.T, stage *mainStage, view bodyView) uid.UID64 {
 	view.hunters.All()
 	for view.hunters.Next() {
 		cursor := view.hunters.Cursor()
-		view.hunterBase.Slice(cursor)[0].Pos = target
-		stage.world.Space().Reindex(cursor.IDs[0], target.AABB)
+		stage.world.Space().MoveTo(cursor.IDs[0], &view.hunterBase.Slice(cursor)[0].Pos.AABB, target.TopLeft)
 	}
 	stage.world.Space().Flush(nil)
 	return caught
@@ -163,26 +152,19 @@ func bodies(ecs *goke.ECS) bodyView {
 		preyBase:   new(goke.Comp[world.Base]),
 	}
 	ecs.RegSys(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		view.hunters = si.NewQueryBuilder(view.hunterBase).Include(goke.Include[hunt.Predator]()).Build()
-		view.prey = si.NewQueryBuilder(view.preyBase).Include(goke.Include[hunt.Prey]()).Build()
+		view.hunters = si.NewQueryBuilder(view.hunterBase).Include(goke.Include[behavior.Predator]()).Build()
+		view.prey = si.NewQueryBuilder(view.preyBase).Include(goke.Include[behavior.Prey]()).Build()
 	}})
 	return view
 }
 
-// A prey that sees the hunter has to turn and run — with the demo's own
-// Steering, reflex and all. A renewed request used to restart the reflex
-// countdown every time it ran out, so a prey looking straight at the hunter
-// held its course into its jaws for as long as it kept looking.
 func TestStage_PreyTurnsAwayFromTheHunterItSees(t *testing.T) {
 	ecs, stage := buildStage(t)
 	view := bodies(ecs)
 
-	// Close enough that nothing on the spawn grid can stand in between and
-	// hide the hunter, far enough that it cannot reach the prey in the ticks
-	// below even closing head-on.
 	watched, course := placeHunterAhead(t, stage, view, 60)
 
-	const ticks = 14 // a reflex of 3, then 11 steps of 0.12 rad: past 70 degrees
+	const ticks = 14
 	for range ticks {
 		ecs.Tick(time.Second / TPS)
 	}
@@ -196,8 +178,7 @@ func TestStage_PreyTurnsAwayFromTheHunterItSees(t *testing.T) {
 	}
 }
 
-// placeHunterAhead puts the hunter dead ahead of the first prey, inside its
-// cone, and returns that prey's id and the course it was holding.
+// placeHunterAhead puts the hunter dead ahead of the first prey; returns its id and course.
 func placeHunterAhead(t *testing.T, stage *mainStage, view bodyView, distance float64) (uid.UID64, geom.Vec) {
 	t.Helper()
 	var watched uid.UID64
@@ -214,17 +195,15 @@ func placeHunterAhead(t *testing.T, stage *mainStage, view bodyView, distance fl
 		t.Fatal("no prey to put the hunter in front of")
 	}
 
-	ahead := plane.NewAABB(geom.NewVec(
+	ahead := geom.NewVec(
 		float64(from.TopLeft.X)+course.X*distance,
 		float64(from.TopLeft.Y)+course.Y*distance,
-	), RectSize, RectSize)
-	spot := world.Position{AABB: stage.world.Space().WrapAABB(ahead.AABB)}
+	)
 
 	view.hunters.All()
 	for view.hunters.Next() {
 		cursor := view.hunters.Cursor()
-		view.hunterBase.Slice(cursor)[0].Pos = spot
-		stage.world.Space().Reindex(cursor.IDs[0], spot.AABB)
+		stage.world.Space().MoveTo(cursor.IDs[0], &view.hunterBase.Slice(cursor)[0].Pos.AABB, ahead)
 	}
 	stage.world.Space().Flush(nil)
 	return watched, course

@@ -12,9 +12,8 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 )
 
-// Plugin wires vision into a Stage — optional, borrows world.Plugin's own Space
-// and Camera. It publishes what entities can see; deciding what to do about it
-// belongs to a world.Behavior.
+// Plugin wires vision into a Stage over world.Plugin's space and camera.
+// It publishes what entities can see; what to do about it is a behavior's business.
 type Plugin struct {
 	worldPlugin *world.Plugin
 	camera      camera.Camera
@@ -47,8 +46,7 @@ func (p *Plugin) Install(ctx plugin.Installer) error {
 // RunPlan runs the scan for this tick — call from your own Game.Loop closure.
 func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) { p.module.RunPlan(ctx, d) }
 
-// WithRenderer builds this plugin's own cone renderer — atlas is unused, vision
-// draws primitives.
+// WithRenderer builds the cone renderer; atlas is unused, vision draws primitives.
 func (p *Plugin) WithRenderer(render.AtlasSource) {
 	p.renderer = NewRenderer(p.camera, p.worldPlugin.Space())
 	if p.style != nil {
@@ -66,12 +64,10 @@ func (p *Plugin) Renderer() render.Renderer {
 // EventHandler is a no-op — vision reads no input.
 func (p *Plugin) EventHandler() control.EventHandler { return nil }
 
-// Serializable is a no-op — vision's components are saved as components, and it
-// keeps no state beside them.
+// Serializable returns nil: vision keeps no state beside its components.
 func (p *Plugin) Serializable() plugin.Serializable { return nil }
 
-// RegisterBehavior hosts a plugin.Between behavior made for Sighting in the
-// scan's own pass, run once a tick per observer — call before Use.
+// RegisterBehavior hosts a plugin.Between of Sighting, run once per observer; call before Use.
 func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
 	for _, b := range behaviors {
 		if err := p.sightings.Add(b); err != nil {
@@ -85,8 +81,7 @@ func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
 // vision-specific
 // =================================================================
 
-// WithStyle sets how cones are drawn, for callers that want something other
-// than DefaultConeStyle. Call it before Use.
+// WithStyle sets how cones are drawn, in place of DefaultConeStyle; call before Use.
 func (p *Plugin) WithStyle(style ConeStyle) *Plugin {
 	p.style = style
 	return p

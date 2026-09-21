@@ -5,13 +5,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kjkrol/aabbworld/geom"
+	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
 )
 
 func TestClampStep(t *testing.T) {
-	// clampStep assumes max > 0 — MoveSystem.Update only calls it under that guard.
 	cases := []struct {
 		name         string
 		step         geom.Vec
@@ -33,20 +32,14 @@ func TestClampStep(t *testing.T) {
 	}
 }
 
-// This is what the continuous world buys. An entity crossing half a unit per
-// tick used to sit still every other tick, because an integer position could
-// not hold the half and Velocity carried it in an accumulator instead. Now the
-// entity simply moves half a unit, every tick.
 func TestMoveSystem_CarriesSubUnitSpeedEveryTick(t *testing.T) {
 	const tps = 60
 	wm := testWorld()
 
-	// 30 units a second at 60 ticks a second is half a unit per tick.
-	wm.populate(EntKind{
-		Name:     "e",
-		Position: Const(Position{AABB: plane.NewAABB(geom.NewVec(100, 100), 10, 10)}),
-		Velocity: Const(Velocity{Dir: geom.NewVec(1, 0), Value: 30}),
-	}, []any{nil})
+	wm.populate(testKind(
+		Position{AABB: plane.NewAABB(geom.NewVec(100, 100), 10, 10)},
+		Velocity{Dir: geom.NewVec(1, 0), Value: 30},
+	), []any{nil})
 
 	var base goke.Comp[Base]
 	var query *goke.Query
@@ -66,9 +59,6 @@ func TestMoveSystem_CarriesSubUnitSpeedEveryTick(t *testing.T) {
 		return 0
 	}
 
-	// A tick is a whole number of nanoseconds, so 1/60 s is 16666666ns and half
-	// a unit is really 0.49999998 — the slack below is for that truncation, not
-	// for anything the movement does.
 	const step = 30 * (16666666.0 / 1e9)
 
 	start := x()

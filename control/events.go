@@ -2,7 +2,7 @@ package control
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/kjkrol/gokg/geom"
+	"github.com/kjkrol/aabbworld/geom"
 )
 
 type KeyAction int
@@ -30,9 +30,7 @@ type InputEvents struct {
 		Shift, Ctrl, Alt bool
 	}
 	MiddleDown bool
-	// WindowFillsScreen reports whether the game window currently covers
-	// the entire monitor — true fullscreen, or a borderless window sized
-	// to match it.
+	// WindowFillsScreen reports whether the window covers the whole monitor, fullscreen or borderless.
 	WindowFillsScreen bool
 
 	ClickQueue  []ClickEvent

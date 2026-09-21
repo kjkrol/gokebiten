@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/kjkrol/gokg/geom"
+	"github.com/kjkrol/aabbworld/geom"
 )
 
 func TestSquareGrid_NonToroidal_EdgeExcludesNeighbors(t *testing.T) {
@@ -19,7 +19,7 @@ func TestSquareGrid_NonToroidal_EdgeExcludesNeighbors(t *testing.T) {
 }
 
 func TestSquareGrid_Toroidal_EdgeWrapsNeighborsAndDistance(t *testing.T) {
-	g := &squareGrid{Width: 4, Height: 4, CellSize: 10, Toroidal: true}
+	g := &squareGrid{Width: 4, Height: 4, CellSize: 10, WrapX: true, WrapY: true}
 
 	first, last := cellAtXY(g, 0, 0), cellAtXY(g, 3, 0)
 	neighbors := g.Neighbors(first)
@@ -46,7 +46,7 @@ func TestSquareGrid_Toroidal_EdgeWrapsNeighborsAndDistance(t *testing.T) {
 }
 
 func TestSquareGrid_Toroidal_CellAtWrapsNegativePositions(t *testing.T) {
-	g := &squareGrid{Width: 4, Height: 4, CellSize: 10, Toroidal: true}
+	g := &squareGrid{Width: 4, Height: 4, CellSize: 10, WrapX: true, WrapY: true}
 	c, ok := g.CellAt(geom.NewVec(-5.0, -5.0))
 	if !ok {
 		t.Fatal("expected a negative position to wrap to a valid cell")
@@ -73,7 +73,7 @@ func TestSquareGrid_CellIndex_NonToroidal(t *testing.T) {
 }
 
 func TestSquareGrid_CellIndex_ToroidalWraps(t *testing.T) {
-	g := &squareGrid{Width: 4, Height: 4, CellSize: 10, Toroidal: true}
+	g := &squareGrid{Width: 4, Height: 4, CellSize: 10, WrapX: true, WrapY: true}
 	c, ok := g.CellIndex(4, 0)
 	origin, _ := g.CellIndex(0, 0)
 	if !ok || c != origin {
@@ -113,5 +113,43 @@ func TestSquareGrid_DiagonalNeighbors_ReturnsFlankingCells(t *testing.T) {
 	}
 	if _, _, ok := g.DiagonalNeighbors(cellAtXY(g, 1, 1), cellAtXY(g, 1, 2)); ok {
 		t.Error("expected an orthogonal pair to report ok=false")
+	}
+}
+
+func TestSquareGrid_WrapsAlongOneAxisOnly(t *testing.T) {
+	g := &squareGrid{Width: 4, Height: 4, CellSize: 10, WrapX: true}
+	corner := g.idAt(0, 0)
+
+	got := map[CellID]bool{}
+	for _, n := range g.Neighbors(corner) {
+		got[n] = true
+	}
+	want := []CellID{g.idAt(1, 0), g.idAt(3, 0), g.idAt(0, 1), g.idAt(1, 1), g.idAt(3, 1)}
+	if len(got) != len(want) {
+		t.Fatalf("corner has %d neighbors, want %d: across the X seam but not the top", len(got), len(want))
+	}
+	for _, c := range want {
+		if !got[c] {
+			t.Errorf("neighbor %v missing", c)
+		}
+	}
+
+	if d := g.Distance(g.idAt(0, 0), g.idAt(3, 0)); d != 1 {
+		t.Errorf("distance across the X seam = %v, want 1", d)
+	}
+	if d := g.Distance(g.idAt(0, 0), g.idAt(0, 3)); d != 3 {
+		t.Errorf("distance down a column = %v, want 3 — Y does not wrap", d)
+	}
+	if _, ok := g.CellAt(geom.NewVec(-5, 5)); !ok {
+		t.Error("a position left of the world has no cell, want it wrapped")
+	}
+	if _, ok := g.CellAt(geom.NewVec(5, -5)); ok {
+		t.Error("a position above the world has a cell, want none")
+	}
+	if _, ok := g.CellIndex(5, 0); !ok {
+		t.Error("column 5 refused, want it wrapped")
+	}
+	if _, ok := g.CellIndex(0, 5); ok {
+		t.Error("row 5 accepted, want it refused")
 	}
 }

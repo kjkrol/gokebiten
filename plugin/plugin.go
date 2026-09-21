@@ -8,19 +8,18 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 )
 
-// Plugin extends a Game: Install wires an ECS module, setup, renderers, and/or resources as one unit.
+// Plugin extends a Game: Install wires an ECS module, setup, renderers and resources as one unit.
 type Plugin interface {
 	// Name uniquely identifies this plugin — Use rejects a duplicate.
 	Name() string
 
-	// Install queues this plugin's ECS wiring — dependencies on other
-	// plugins are resolved before this, via constructor injection.
+	// Install queues this plugin's ECS wiring.
 	Install(ctx Installer) error
 
-	// RunPlan runs this plugin's per-tick work — call from your own Game.RunPlan, in whatever order you need.
+	// RunPlan runs this plugin's per-tick work; call it from Stage.Update in the order you need.
 	RunPlan(ctx goke.RunCtx, d time.Duration)
 
-	// WithRenderer configures this plugin's own render.Renderer to draw cam-relative sprites from atlas — call before Use. A no-op for a plugin with no renderer of its own.
+	// WithRenderer has this plugin's renderer draw sprites from atlas; call before Use.
 	WithRenderer(atlas render.AtlasSource)
 
 	// Renderer returns this plugin's own render.Renderer, or nil if it has none.
@@ -32,6 +31,6 @@ type Plugin interface {
 	// Serializable returns this plugin's persistable state, or nil if it has none.
 	Serializable() Serializable
 
-	// RegisterBehavior hosts behaviors in this plugin's own pass — call before Use. It stops at the first one it cannot run, reporting ErrUnhostedBehavior.
+	// RegisterBehavior hosts behaviors in this plugin's own pass; call before Use.
 	RegisterBehavior(behaviors ...Behavior) error
 }

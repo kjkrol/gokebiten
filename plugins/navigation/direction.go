@@ -1,6 +1,9 @@
 package navigation
 
-import "github.com/kjkrol/gokg/geom"
+import (
+	"github.com/kjkrol/aabbworld"
+	"github.com/kjkrol/aabbworld/geom"
+)
 
 type Direction uint8
 
@@ -17,9 +20,9 @@ const (
 
 const directionEpsilon = 1e-6
 
-func directionBetween(have, want geom.Vec, width, height uint32, toroidal bool) Direction {
-	dx := shortestAxisDelta(have.X, want.X, width, toroidal)
-	dy := shortestAxisDelta(have.Y, want.Y, height, toroidal)
+func directionBetween(have, want geom.Vec, width, height uint32, edges aabbworld.Edges) Direction {
+	dx := shortestAxisDelta(have.X, want.X, width, edges.WrapsX())
+	dy := shortestAxisDelta(have.Y, want.Y, height, edges.WrapsY())
 
 	switch {
 	case dx > directionEpsilon && dy < -directionEpsilon:

@@ -6,11 +6,8 @@ import (
 	"github.com/kjkrol/gokebiten/render"
 )
 
-// stageRuntime is one active Stage: its own ecsHost, the world.Plugin the
-// Stage installed via UseWorld (nil if it didn't), and every Scene's Layers() already
-// resolved into concrete render.Renderer values (built once, at entry —
-// Draw just replays them, keyed by Scene.Name() to match
-// Stage.Stack().Composition().Order()).
+// stageRuntime is one active Stage: its ecsHost, its world.Plugin if it installed one,
+// and every Scene's renderers, built once at entry and keyed by Scene.Name().
 type stageRuntime struct {
 	host        *ecsHost
 	stage       game.Stage
@@ -18,10 +15,7 @@ type stageRuntime struct {
 	sceneLayers map[string][]render.Renderer
 }
 
-// enterStage builds a Stage's world from scratch: a fresh *goke.ECS,
-// Stage.Init (which may install a world.Plugin via UseWorld), Restore/Spawn, every Scene's
-// renderers, and the single ecs.Setup flush — mirroring what Engine.Init
-// used to do once for the whole game, now repeatable per Stage.
+// enterStage builds a Stage from scratch: a fresh ECS, Init, Restore or Spawn, renderers, Setup.
 func (e *Engine) enterStage(stage game.Stage) (*stageRuntime, error) {
 	host := newECSHost()
 
@@ -48,8 +42,8 @@ func (e *Engine) enterStage(stage game.Stage) (*stageRuntime, error) {
 	sceneLayers := make(map[string][]render.Renderer)
 	for _, sc := range stage.Stack().All() {
 		var layers []render.Renderer
-		for _, factory := range sc.Layers() {
-			layers = append(layers, host.registerRenderer(factory))
+		for _, r := range sc.Layers() {
+			layers = append(layers, host.registerRenderer(r))
 		}
 		sceneLayers[sc.Name()] = layers
 	}

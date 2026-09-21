@@ -30,14 +30,13 @@ func TestGridPlacement_Place_SquareCount(t *testing.T) {
 func TestGridPlacement_Place_NonSquareCount(t *testing.T) {
 	p := world.NewGridPlacement(100, 100, 10)
 
-	// count=5 -> cols=ceil(sqrt(5))=3, rows=ceil(5/3)=2
 	cases := []struct {
 		index int
 		wantX float64
 		wantY float64
 	}{
-		{0, 11, 20}, // row 0, col 0
-		{4, 44, 70}, // row 1, col 1
+		{0, 11, 20},
+		{4, 44, 70},
 	}
 	for _, c := range cases {
 		pos := p.Place(c.index, 5)

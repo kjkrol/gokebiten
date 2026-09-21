@@ -16,15 +16,12 @@ var _ game.Persistence = (*persistence)(nil)
 // List returns every save found for basePath, "" (quicksave) first.
 func (p *persistence) List(basePath string) ([]string, error) { return listSaves(basePath) }
 
-// Save writes resources and the ECS snapshot to disk under basePath/label, auto-including every tracked Serializable's targets.
+// Save writes resources, every tracked Serializable and the ECS snapshot under basePath/label.
 func (p *persistence) Save(basePath, label string, resources ...any) error {
 	return save(p.host.ecs, basePath, label, p.host.persistGroups(resources...))
 }
 
-// Load restores a snapshot written by Save, auto-scanning tracked plugins
-// for components, Serializable targets, and post-load systems. A resource
-// not present in the save (e.g. a plugin added since it was written) is
-// left at its current value instead of failing the whole load.
+// Load restores a snapshot written by Save; a resource the save does not hold keeps its value.
 func (p *persistence) Load(basePath, label string, resources ...any) error {
 	comps := p.host.providedComps()
 	if err := load(p.host.ecs, basePath, label, comps, p.host.persistGroups(resources...)); err != nil {

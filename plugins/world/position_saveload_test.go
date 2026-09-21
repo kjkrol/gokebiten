@@ -3,21 +3,12 @@ package world_test
 import (
 	"testing"
 
+	"github.com/kjkrol/aabbworld/geom"
+	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
 )
 
-// TestPosition_RoundTrip guards against a real bug that shipped briefly:
-// plane.AABB (embedded, anonymous, in world.Position) once implemented
-// BinaryMarshaler for its own reasons — Go's method promotion made world.Position
-// implement it too, so goke's persist treated all of world.Position as one opaque
-// blob written by the promoted method, which only knows about AABB's own
-// fields, silently dropping the rest on every Save. Fixed by keeping AABB a
-// plain, recursively POD-encodable type — goke also now rejects this
-// pattern generally at RegComp (internal/comp.ValidateEncodable's
-// promotedCodecHazard check).
 func TestPosition_RoundTrip(t *testing.T) {
 	path := t.TempDir() + "/save.bin"
 

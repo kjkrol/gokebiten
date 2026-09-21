@@ -6,12 +6,12 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
+	"github.com/kjkrol/aabbworld"
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/camera"
 	"github.com/kjkrol/gokebiten/plugins/world"
 	"github.com/kjkrol/gokebiten/render"
-	"github.com/kjkrol/gokg"
-	"github.com/kjkrol/gokg/geom"
 )
 
 // ConeStyle draws one entity's view, given the fan already projected to screen
@@ -29,8 +29,7 @@ var _ ConeStyle = ConeStyleFn(nil)
 
 var coneColor = color.RGBA{R: 255, G: 220, B: 90, A: 160}
 
-// DefaultConeStyle strokes the boundary of the lit region, leaving the inside
-// clear so whatever the cone covers stays readable.
+// DefaultConeStyle strokes the boundary of the lit region and leaves the inside clear.
 func DefaultConeStyle() ConeStyle {
 	return ConeStyleFn(func(screen *ebiten.Image, pts []ebiten.Vertex) {
 		var path vector.Path
@@ -54,16 +53,14 @@ func colorScaleOf(c color.RGBA) ebiten.ColorScale {
 
 var _ render.Renderer = (*Renderer)(nil)
 
-// Renderer draws the view of every entity carrying SightOutline. The Include
-// keeps it out of the chunks of everything else, so a world where only a
-// handful of entities show their cone costs only those.
+// Renderer draws the view of every entity carrying SightOutline.
 type Renderer struct {
 	camera camera.Camera
-	space  *gokg.Space
+	space  *aabbworld.Space
 	style  ConeStyle
 
 	worldW, worldH float32
-	toroidal       bool
+	wraps          bool
 
 	query *goke.Query
 	base  goke.Comp[world.Base]
@@ -73,14 +70,12 @@ type Renderer struct {
 	pts []ebiten.Vertex // rebuilt per entity, kept to stay off the heap
 }
 
-// NewRenderer builds a Renderer with DefaultConeStyle — override via WithStyle.
-// The space is what tells a cone reaching past the world edge where its wrapped
-// copies belong.
-func NewRenderer(cam camera.Camera, space *gokg.Space) *Renderer {
-	w, h, toroidal := space.Bounds()
+// NewRenderer builds a Renderer with DefaultConeStyle, wrapping cones at the edges of space.
+func NewRenderer(cam camera.Camera, space *aabbworld.Space) *Renderer {
+	w, h, edges := space.Bounds()
 	return &Renderer{
 		camera: cam, space: space, style: DefaultConeStyle(),
-		worldW: float32(w), worldH: float32(h), toroidal: toroidal,
+		worldW: float32(w), worldH: float32(h), wraps: edges&aabbworld.Torus != 0,
 	}
 }
 
@@ -115,15 +110,11 @@ func (r *Renderer) Draw(screen *ebiten.Image) {
 }
 
 // drawCone draws one entity's view once per image of the world it reaches into.
-//
-// The anchor is projected once and the copies are shifted afterwards, in screen
-// space: handing a shifted anchor to ToScreen would be pointless, since a
-// toroidal camera folds it straight back onto the original.
 func (r *Renderer) drawCone(screen *ebiten.Image, pos *world.Position, s *Sight, o *SightOutline) {
 	ox, oy := centreOf(pos)
 	sx, sy := r.camera.ToScreen(float32(ox), float32(oy))
 
-	if !r.toroidal {
+	if !r.wraps {
 		r.style.Draw(screen, r.fan(sx, sy, s, o))
 		return
 	}
@@ -136,12 +127,7 @@ func (r *Renderer) drawCone(screen *ebiten.Image, pos *world.Position, s *Sight,
 	})
 }
 
-// coneBox is the square a cone covers. Its left edge sits at centre-Radius,
-// which is routinely negative — the Space folds that back in on its own now
-// that coordinates are signed.
-//
-// A cone reaching further than the world is clamped to it; such a cone already
-// spans every column, so there is nothing more to wrap.
+// coneBox is the square a cone covers, clamped to the size of the world.
 func (r *Renderer) coneBox(ox, oy, radius float64) geom.AABB {
 	w, h := float64(r.worldW), float64(r.worldH)
 	return geom.NewAABBAt(
@@ -150,10 +136,7 @@ func (r *Renderer) coneBox(ox, oy, radius float64) geom.AABB {
 	)
 }
 
-// fan rebuilds the boundary around an already-projected anchor. Only the reach
-// was stored: the angle of sample i follows from its index across the cone, and
-// every point is placed relative to the anchor so the shape stays in one piece
-// however close to the seam it sits.
+// fan rebuilds the boundary around an already-projected anchor from the stored reaches.
 func (r *Renderer) fan(sx, sy float32, s *Sight, o *SightOutline) []ebiten.Vertex {
 	facing := math.Atan2(s.Facing.Y, s.Facing.X)
 	step := 2 * s.HalfAngle / float64(o.Count-1)

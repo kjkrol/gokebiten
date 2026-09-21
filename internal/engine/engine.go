@@ -17,11 +17,8 @@ const (
 	defaultTargetTPS = 60
 )
 
-// Engine drives a user-implemented game.Game — a collection of Stages —
-// through the Ebitengine loop, one active Stage (and its own *goke.ECS) at
-// a time. game.Game is the only container of Stages; Engine never caches
-// its own copy — it calls game.Stages() whenever it needs to resolve a
-// name (Init, and each SwitchStage).
+// Engine drives a game.Game through the Ebitengine loop, one active Stage and its ECS at a time.
+// Stage names are always resolved against game.Stages().
 type Engine struct {
 	game    game.Game
 	current *stageRuntime
@@ -34,10 +31,7 @@ type Engine struct {
 	tps         *game.TPS
 	controller  *DefaultController
 
-	// pendingSwitch names the Stage a SwitchStage call asked to enter,
-	// picked up at the top of the next Update — see SwitchStage. Its
-	// presence also tells Draw to show transitionOverlay for that one
-	// frame instead of the (about to be replaced) current Stage.
+	// pendingSwitch names the Stage to enter at the top of the next Update.
 	pendingSwitch     string
 	transitionOverlay render.SolidBackground
 
@@ -47,8 +41,7 @@ type Engine struct {
 var _ ebiten.Game = (*Engine)(nil)
 var _ game.Runtime = (*Engine)(nil)
 
-// NewEngine builds an Engine driving g — g.Props() supplies the window and
-// tick-rate config.
+// NewEngine builds an Engine driving g, configured by g.Props().
 func NewEngine(g game.Game) *Engine {
 	props := g.Props()
 	inputs := &control.InputEvents{}
@@ -93,7 +86,7 @@ func (e *Engine) TogglePause() {
 	}
 }
 
-// Camera returns the active Stage's built-in world's shared Camera, or nil if the Stage has no world.
+// Camera returns the active Stage's world camera, or nil if the Stage has no world.
 func (e *Engine) Camera() camera.Camera {
 	if e.current.world == nil {
 		return nil
@@ -104,10 +97,7 @@ func (e *Engine) Camera() camera.Camera {
 // Quit ends the Ebitengine loop after this tick.
 func (e *Engine) Quit() { e.quit = true }
 
-// SwitchStage requests a transition to the Stage named name — resolved
-// fresh against game.Stages() (never a cached copy), performed
-// synchronously at the start of the next Update, after this tick shows
-// transitionOverlay for one frame.
+// SwitchStage requests a transition to the Stage called name, made at the start of the next Update.
 func (e *Engine) SwitchStage(name string) error {
 	stages, _ := e.game.Stages()
 	if _, ok := stages[name]; !ok {
@@ -117,8 +107,7 @@ func (e *Engine) SwitchStage(name string) error {
 	return nil
 }
 
-// Init calls Game.Stages and enters the initial Stage — split out from Run
-// so tests can exercise it without starting the (blocking) Ebitengine loop.
+// Init calls Game.Stages and enters the initial Stage, without starting the Ebitengine loop.
 func (e *Engine) Init() error {
 	stages, initial := e.game.Stages()
 	stage, ok := stages[initial]
@@ -211,10 +200,7 @@ func (e *Engine) Layout(outsideWidth, outsideHeight int) (int, int) {
 
 // =================================================================
 
-// dispatchEvents is the controller's single registered handler — it runs
-// exclusively the active Scene's HandleEvents (Composition.Active()).
-// Stage has no HandleEvents of its own: input is the Scene's sole
-// responsibility.
+// dispatchEvents hands input to the active Scene's HandleEvents and to nothing else.
 func (e *Engine) dispatchEvents(events *control.InputEvents) {
 	stack := e.current.stage.Stack()
 	comp := stack.Composition()

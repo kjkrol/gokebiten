@@ -57,7 +57,7 @@ func newEnteredWorld(t *testing.T, w, h uint32, start, target board.CellID) *ent
 		pos.Slice(&f.Cursor)[0].Pos = p
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(start, ew.id)
-		space.Insert(ew.id, p.AABB)
+		space.Insert(ew.id, &p.AABB)
 		space.Flush(nil)
 
 		enteredQ = si.NewQueryBuilder(&enteredComp).Build()
@@ -65,8 +65,7 @@ func newEnteredWorld(t *testing.T, w, h uint32, start, target board.CellID) *ent
 	}})
 
 	steerHandle := ew.ecs.RegSys(steer)
-	moveHandle := ew.ecs.RegSys(world.NewMoveSystem(space, 0))
-	// Runs after Sync has applied the tick's migrations.
+	moveHandle := ew.ecs.RegSys(world.NewMoveSystem(space))
 	observer := ew.ecs.RegSys(goke.SystemFn{OnUpdate: func(*goke.CmdBuf, time.Duration) {
 		clear(ew.entered)
 		clear(ew.hasOrder)
@@ -103,8 +102,6 @@ func (ew *enteredWorld) cellAt(x, y uint32) board.CellID {
 	return c
 }
 
-// Every cell change on the way to the target must be reported, including the
-// target's own. Entry and arrival need not share a tick.
 func TestCellEntered_ReportsEveryCellOnTheWayToTheTarget(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(6, 1, legCellSize)
 	start, _ := grid.CellIndex(0, 0)

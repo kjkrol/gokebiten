@@ -10,7 +10,7 @@ type Initializer interface {
 	plugin.Installer
 	Use(p plugin.Plugin) error
 
-	// UseWorld builds and installs this Stage's world.Plugin from cfg — call at most once per Stage, it panics otherwise.
+	// UseWorld builds and installs this Stage's world.Plugin from cfg; a second call panics.
 	UseWorld(cfg world.Config) *world.Plugin
 
 	// Track saves and loads s alongside the game's Plugins.

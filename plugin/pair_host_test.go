@@ -18,9 +18,7 @@ type hunted struct{ N int }
 // sighting is a made-up host's description of a pair: who looks at whom.
 type sighting struct{ from, to uid.UID64 }
 
-// hostOf builds a host with behaviors registered, one hunter and one hunted
-// entity, and the tag masks a real host would read: the hunter's off the chunk
-// being walked, the hunted's off the entity sought.
+// hostOf builds a host with behaviors registered, a hunter, a hunted, and their tag masks.
 func hostOf(t *testing.T, behaviors ...plugin.Behavior) (h *plugin.PairHost[sighting], hunterMask, huntedMask uint64, pair sighting) {
 	t.Helper()
 	h = &plugin.PairHost[sighting]{}
@@ -66,8 +64,6 @@ func recording(into *[]sighting) plugin.Behavior {
 	return plugin.Between[hunter, hunted](func(_ plugin.Tick, s sighting) { *into = append(*into, s) })
 }
 
-// A pair with a direction — who sees whom — runs a behavior only the way round
-// it was asked for: being seen by the hunted is not the hunter seeing it.
 func TestPairHost_Dispatch_KeepsTheDirection(t *testing.T) {
 	var got []sighting
 	h, hunterMask, huntedMask, pair := hostOf(t, recording(&got))
@@ -93,8 +89,6 @@ func TestPairHost_DispatchEitherWay_FindsTheFit(t *testing.T) {
 	}
 }
 
-// The payload is what says whose a behavior is: one made for another host's
-// pairs is refused rather than quietly never run.
 func TestPairHost_Add_RefusesABehaviorMadeForAnotherHost(t *testing.T) {
 	var h plugin.PairHost[sighting]
 	stranger := plugin.Between[hunter, hunted](func(plugin.Tick, string) {})
@@ -120,9 +114,6 @@ type group struct {
 	tags   []plugin.TagSet
 }
 
-// One Self against many Others is handed over once, with just the others that
-// carry the behavior's second tag — and with none at all too, since "nobody
-// there" is something a behavior has to be able to hear.
 func TestPairHost_DispatchGrouped_HandsOverTheOthersThatFit(t *testing.T) {
 	var h plugin.PairHost[group]
 	var got []group
@@ -131,12 +122,12 @@ func TestPairHost_DispatchGrouped_HandsOverTheOthersThatFit(t *testing.T) {
 	})); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
-	const isHunter, isHunted = 1 << 0, 1 << 1 // Add hands bits out in naming order
+	const isHunter, isHunted = 1 << 0, 1 << 1
 	build := func(matched []int) group { return group{others: matched} }
 
 	h.DispatchGrouped(plugin.Tick{}, isHunter, []uint64{isHunted, 0, isHunted}, build)
 	h.DispatchGrouped(plugin.Tick{}, isHunter, nil, build)
-	h.DispatchGrouped(plugin.Tick{}, isHunted, []uint64{isHunted}, build) // not a hunter: not run at all
+	h.DispatchGrouped(plugin.Tick{}, isHunted, []uint64{isHunted}, build)
 
 	if len(got) != 2 {
 		t.Fatalf("behavior ran %d times, want twice — once with prey in view, once with none", len(got))
@@ -149,8 +140,6 @@ func TestPairHost_DispatchGrouped_HandsOverTheOthersThatFit(t *testing.T) {
 	}
 }
 
-// A behavior handed "anything" can still tell its others apart — through a tag
-// it declared, since a host only looks up the tags it was told about.
 func TestTagSet_Carries_AnswersForDeclaredTagsOnly(t *testing.T) {
 	var h plugin.PairHost[group]
 	if err := h.Add(plugin.Between[hunter, plugin.Anything](func(plugin.Tick, group) {}, plugin.Asking[hunted]())); err != nil {

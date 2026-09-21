@@ -4,24 +4,20 @@ import (
 	"math"
 	"time"
 
+	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokg"
-	"github.com/kjkrol/gokg/raycast"
 	"github.com/kjkrol/uid"
 )
 
 var _ goke.System = (*ScanSystem)(nil)
 
-// ScanSystem fills in what every Sight-carrying entity sees, and the outline of
-// those that also carry SightOutline.
-//
-// Both come off one scan: gathering the candidates is what costs, so splitting
-// the outline into a second system would scan the same entity twice a tick.
+// ScanSystem fills in what every Sight-carrying entity sees,
+// and the outline of those that also carry SightOutline.
 type ScanSystem struct {
-	space *gokg.Space
-	view  raycast.View // one for the whole system — see Update
+	space *aabbworld.Space
+	view  aabbworld.View // one for the whole system — see Update
 
 	query   *goke.Query
 	sight   goke.Comp[Sight]
@@ -29,9 +25,7 @@ type ScanSystem struct {
 	steer   goke.OptComp[world.Steering]
 	outline goke.OptComp[SightOutline]
 
-	// lookup resolves a sighted id back to the entity — the scan reports who and
-	// how far, not where it is or what it carries. One lookup serves every
-	// hosted behavior, where each used to keep a query of its own.
+	// lookup resolves a sighted id back to the entity and what it carries.
 	lookup     *goke.Query
 	lookupBase goke.Comp[world.Base]
 	lookupHot  bool
@@ -39,9 +33,7 @@ type ScanSystem struct {
 	// host runs the Between behaviors registered with the plugin, inside this pass.
 	host *plugin.PairHost[Sighting]
 
-	// What the host is being run over: the observer in hand, everyone it sees,
-	// and the tags each of them carries. sightingOf is bound once, so handing it
-	// to the host allocates nothing per observer.
+	// What the host is being run over: the observer in hand, everyone it sees, and their tags.
 	observer   Sighting
 	seen       []Seen
 	seenTags   []uint64
@@ -55,11 +47,11 @@ const (
 	sought        // what it sees, one entity at a time
 )
 
-func NewScanSystem(space *gokg.Space) *ScanSystem {
+func NewScanSystem(space *aabbworld.Space) *ScanSystem {
 	return newScanSystem(space, &plugin.PairHost[Sighting]{})
 }
 
-func newScanSystem(space *gokg.Space, host *plugin.PairHost[Sighting]) *ScanSystem {
+func newScanSystem(space *aabbworld.Space, host *plugin.PairHost[Sighting]) *ScanSystem {
 	s := &ScanSystem{space: space, host: host}
 	s.sightingOf = s.sighting
 	return s
@@ -88,8 +80,6 @@ func (s *ScanSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 			observerTags = s.host.InChunk(walked, cursor)
 		}
 
-		// Present asks about the archetype, not the entity, so the branch
-		// lifts out of the inner loop.
 		var outlines []SightOutline
 		if s.outline.Present(cursor) {
 			outlines = s.outline.Slice(cursor)
@@ -97,9 +87,6 @@ func (s *ScanSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 
 		for i, id := range cursor.IDs {
 			sight := &sights[i]
-			// One View serves every observer in turn: Entities hands over
-			// values and Depths copies into the caller's buffer, so nothing a
-			// reader keeps points back into it.
 			if s.space.Scan(id, cone(sight), &s.view) {
 				record(&sight.Seen, &s.view)
 				if outlines != nil {
@@ -131,7 +118,7 @@ func (s *ScanSystem) gather(found *Sighted) {
 			s.lookupHot = ok
 		}
 		if !ok {
-			continue // gone since the scan
+			continue
 		}
 		cursor := s.lookup.Cursor()
 		tags := s.host.At(sought, cursor)
@@ -151,13 +138,12 @@ func (s *ScanSystem) sighting(matched []int) Sighting {
 	return out
 }
 
-func cone(s *Sight) raycast.Cone {
-	return raycast.Cone{Direction: s.Facing, HalfAngle: s.HalfAngle, Radius: s.Radius}
+func cone(s *Sight) aabbworld.Cone {
+	return aabbworld.Cone{Direction: s.Facing, HalfAngle: s.HalfAngle, Radius: s.Radius}
 }
 
-// record keeps the nearest MaxSeen entities; Visible reports nearest first, so
-// anything dropped is further away than everything kept.
-func record(dst *Sighted, view *raycast.View) {
+// record keeps the nearest MaxSeen entities of view.
+func record(dst *Sighted, view *aabbworld.View) {
 	dst.Count = 0
 	view.Entities(func(id uid.UID64, dist float64) {
 		if dst.Count == MaxSeen {
@@ -169,16 +155,13 @@ func record(dst *Sighted, view *raycast.View) {
 	})
 }
 
-// trace samples the cone at the resolution its own reach and width call for,
-// never more than the buffer holds.
-func trace(dst *SightOutline, view *raycast.View, s *Sight) {
+// trace samples the cone at the resolution its reach and width call for, within the buffer.
+func trace(dst *SightOutline, view *aabbworld.View, s *Sight) {
 	k := samplesFor(s)
 	dst.Count = uint8(len(view.Depths(k, dst.Depths[:0])))
 }
 
-// samplesFor is the accuracy rule from sight.go solved for a single cone:
-// enough samples that the reach drifts by no more than EdgeTolerance at full
-// range, capped by the buffer.
+// samplesFor is how many samples keep the reach within EdgeTolerance at full range.
 func samplesFor(s *Sight) int {
 	k := int(math.Ceil(2*s.HalfAngle*s.Radius/EdgeTolerance)) + 1
 	return min(max(k, 2), MaxSamples)

@@ -6,8 +6,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 )
 
-// testWorld builds the module through NewPlugin rather than newModule, so it
-// arrives wired to a dictionary and Resources exactly as a game's would.
+// testWorld builds the module through NewPlugin, wired as a game's would be.
 func testWorld() *module {
 	return NewPlugin(Config{
 		Space:    SpaceCfg{Width: 1000, Height: 1000},

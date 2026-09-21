@@ -1,11 +1,12 @@
 package render_test
 
 import (
+	"github.com/kjkrol/aabbworld"
 	"testing"
 
+	"github.com/kjkrol/aabbworld/geom"
+	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/gokebiten/render"
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
 )
 
 type image struct {
@@ -23,11 +24,13 @@ func images(box plane.AABB, w, h float32) []image {
 }
 
 func wrapped(toroidal bool, x, y, w, h float64) plane.AABB {
-	var space plane.Space2D
+	cfg := aabbworld.Config{Width: 1000, Height: 1000, BucketSize: 64}
 	if toroidal {
-		space = plane.NewToroidal2D(1000, 1000)
-	} else {
-		space = plane.NewEuclidean2D(1000, 1000)
+		cfg.Edges = aabbworld.Torus
+	}
+	space, err := aabbworld.NewSpace(cfg)
+	if err != nil {
+		panic(err)
 	}
 	return space.WrapAABB(geom.NewAABBAt(geom.NewVec(x, y), w, h))
 }
@@ -79,8 +82,6 @@ func TestVisitWrapImages_BoxInTheCornerHasFour(t *testing.T) {
 	}
 }
 
-// The canonical image comes first, so a caller that only wants the main one can
-// stop after it.
 func TestVisitWrapImages_StopsWhenAsked(t *testing.T) {
 	seen := 0
 	render.VisitWrapImages(wrapped(true, 970, 960, 100, 100), 1000, 1000,

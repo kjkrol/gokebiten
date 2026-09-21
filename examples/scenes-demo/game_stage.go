@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/kjkrol/aabbworld"
 	"image/color"
 	"log"
 	"slices"
@@ -10,12 +11,13 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/control"
 	"github.com/kjkrol/gokebiten/game"
 	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gokebiten/plugins/world/kind"
 	"github.com/kjkrol/gokebiten/render"
-	"github.com/kjkrol/gokg/geom"
 )
 
 const (
@@ -23,7 +25,6 @@ const (
 	EntitySize  = 16
 
 	saveBasePath = "scenes-demo"
-	moverKind    = "mover"
 )
 
 // =========================== Stage ===========================
@@ -31,7 +32,7 @@ const (
 // GameplayStage is the real game — its own fresh ECS, built only once entered from the menu.
 type GameplayStage struct {
 	world *world.Plugin
-
+	mover kind.Of[world.Position]
 	stack game.Scenes
 	panel *panelScene
 
@@ -52,16 +53,14 @@ func (g *GameplayStage) Name() string { return "gameplay" }
 
 func (g *GameplayStage) Init(ctx game.Initializer) error {
 	g.world = ctx.UseWorld(world.Config{
-		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Toroidal: true},
+		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight, Edges: aabbworld.Torus},
 		Entities: world.EntitiesCfg{MaxCount: EntityCount, MinSize: EntitySize, MaxSize: EntitySize},
 	})
 	velocity := world.Velocity{}
 	velocity.SetDelta(geom.NewVec(30, 20))
-	g.world.EntKindDict().Define(moverKind, func(k world.Kind[world.Position]) world.EntKind {
-		return world.EntKind{
-			Position: k.Load(func(p world.Position) world.Position { return p }),
-			Velocity: k.Const(velocity),
-		}
+	g.mover = kind.Define[world.Position](g.world.Kinds(), "mover", kind.Spec{
+		kind.Load(func(p world.Position) world.Position { return p }),
+		kind.Const(velocity),
 	})
 
 	worldScn := &worldScene{stage: g}
@@ -95,10 +94,9 @@ func (g *GameplayStage) Restore(p game.Persistence) (bool, error) {
 
 func (g *GameplayStage) Spawn() error {
 	placement := world.NewGridPlacement(ScreenWidth, ScreenHeight, EntitySize)
-	kinds := g.world.EntKindDict()
-	entries := make([]world.Entry, EntityCount)
+	entries := make([]kind.Entry, EntityCount)
 	for i := range entries {
-		entries[i] = kinds.Entry(moverKind, placement.Place(i, EntityCount))
+		entries[i] = g.mover.Entry(placement.Place(i, EntityCount))
 	}
 	g.world.Seed(entries...)
 	return nil
@@ -142,21 +140,17 @@ var _ game.Scene = (*worldScene)(nil)
 
 func (w *worldScene) Name() string { return "world" }
 
-func (w *worldScene) Layers() []func() render.Renderer {
+func (w *worldScene) Layers() []render.Renderer {
 	s := w.stage
 
-	kinds := s.world.EntKindDict()
-	mover, _ := kinds.Get(moverKind)
-	atlas := render.NewAtlas(EntitySize, len(kinds.All()))
-	atlas.RegisterAt(mover.SpriteID, render.Solid(color.RGBA{R: 90, G: 200, B: 110, A: 255}))
+	atlas := render.NewAtlas()
+	atlas.RegisterAt(s.mover.SpriteID(), EntitySize, render.Solid(color.RGBA{R: 90, G: 200, B: 110, A: 255}))
 	atlas.Close()
 	s.world.WithRenderer(atlas)
 
-	return []func() render.Renderer{
-		func() render.Renderer {
-			return render.NewCachedRenderer(render.SolidBackground{Color: color.RGBA{R: 30, G: 30, B: 40, A: 255}}, ScreenWidth, ScreenHeight)
-		},
-		s.world.Renderer,
+	return []render.Renderer{
+		render.NewCachedRenderer(render.SolidBackground{Color: color.RGBA{R: 30, G: 30, B: 40, A: 255}}, ScreenWidth, ScreenHeight),
+		s.world.Renderer(),
 	}
 }
 
@@ -171,21 +165,15 @@ func (w *worldScene) HandleEvents(events *control.InputEvents, runtime game.Runt
 
 func (w *worldScene) Focusable() bool { return true }
 
-// panelScene is a modal box toggled by P: while shown, it sits on top of
-// worldScene and becomes Composition.Active, so only its own HandleEvents
-// runs — the world keeps ticking (GameplayStage.Update doesn't consult
-// Composition at all), it just stops receiving input.
+// panelScene is a modal box toggled by P: while shown it takes the input,
+// and the world beneath keeps ticking.
 type panelScene struct{ stage *GameplayStage }
 
 var _ game.Scene = (*panelScene)(nil)
 
 func (p *panelScene) Name() string { return "panel" }
 
-func (p *panelScene) Layers() []func() render.Renderer {
-	return []func() render.Renderer{
-		func() render.Renderer { return &panelRenderer{} },
-	}
-}
+func (p *panelScene) Layers() []render.Renderer { return []render.Renderer{&panelRenderer{}} }
 
 func (p *panelScene) HandleEvents(events *control.InputEvents, runtime game.Runtime, composition game.Composition) {
 	handleGlobalKeys(events, runtime, p.stage.basePath())
@@ -209,20 +197,14 @@ func (r *panelRenderer) Draw(screen *ebiten.Image) {
 	ebitenutil.DebugPrintAt(screen, "PANEL\n\nthe world keeps ticking behind me\nP to close", int(x)+12, int(y)+12)
 }
 
-// hudScene is a passive overlay — always shown on top (even over the
-// panel), but Focusable() is false so it never becomes Composition.Active
-// and never intercepts input, no matter what's drawn beneath it.
+// hudScene is a passive overlay: always on top, never focusable, so it never takes input.
 type hudScene struct{ stage *GameplayStage }
 
 var _ game.Scene = (*hudScene)(nil)
 
 func (h *hudScene) Name() string { return "hud" }
 
-func (h *hudScene) Layers() []func() render.Renderer {
-	return []func() render.Renderer{
-		func() render.Renderer { return &hudRenderer{stage: h.stage} },
-	}
-}
+func (h *hudScene) Layers() []render.Renderer { return []render.Renderer{&hudRenderer{stage: h.stage}} }
 
 func (h *hudScene) HandleEvents(*control.InputEvents, game.Runtime, game.Composition) {}
 

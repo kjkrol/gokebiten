@@ -31,7 +31,7 @@ registry — spatial indexing, physics, camera handling, your own game logic —
 
 The library ships three built-in plugins:
 
-* **`world.Plugin`** — owns the game's spatial index (via [GOKg](https://github.com/kjkrol/gokg))
+* **`world.Plugin`** — owns the game's spatial index (via [GOKg](https://github.com/kjkrol/aabbworld))
   and entity population/spawn bookkeeping.
 * **`physics.Plugin`** — kinematics and collision detection/resolution (broad + narrow phase,
   pluggable `CollisionHandler` strategies) built on `world`'s spatial index.

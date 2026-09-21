@@ -3,8 +3,8 @@ package world
 import (
 	"math"
 
-	"github.com/kjkrol/gokg/geom"
-	"github.com/kjkrol/gokg/plane"
+	"github.com/kjkrol/aabbworld/geom"
+	"github.com/kjkrol/aabbworld/plane"
 )
 
 // GridPlacement arranges entities on a regular grid spanning [0,Width)×[0,Height).

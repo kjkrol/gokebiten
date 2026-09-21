@@ -1,0 +1,50 @@
+package behavior
+
+import (
+	"time"
+
+	"github.com/kjkrol/gokebiten/plugin"
+	"github.com/kjkrol/gokebiten/plugins/collision"
+	"github.com/kjkrol/gokebiten/plugins/world"
+)
+
+// HitMark is how long this entity shows a hit, and whether one is showing now —
+// give it to a kind with kind.Const(behavior.HitMark{Duration: 100 * time.Millisecond}).
+type HitMark struct {
+	Duration      time.Duration
+	ExpiresAtNano int64
+}
+
+// Active reports whether a hit is showing, as of the last tick the behavior ran.
+func (m HitMark) Active() bool { return m.ExpiresAtNano != 0 }
+
+// ShowHits marks an entity that struck something for its own Duration, or d if it sets none.
+func ShowHits(d time.Duration) func(plugin.Tick, *HitMark, collision.Struck) {
+	return func(t plugin.Tick, m *HitMark, struck collision.Struck) {
+		now := t.Now.UnixNano()
+		switch {
+		case len(struck.Contacts) > 0:
+			m.ExpiresAtNano = now + int64(m.lasting(d))
+		case m.Active() && now > m.ExpiresAtNano:
+			m.ExpiresAtNano = 0
+		}
+	}
+}
+
+// lasting is the entity's own hit duration, or fallback for one that sets none.
+func (m HitMark) lasting(fallback time.Duration) time.Duration {
+	if m.Duration > 0 {
+		return m.Duration
+	}
+	return fallback
+}
+
+// HitOverlay draws with on top of whatever an entity looks like, while its HitMark is active.
+func HitOverlay(with world.Appearance) world.AppearanceStrategy[HitMark] {
+	return world.AppearanceStrategyFn[HitMark](func(dst []world.Appearance, m HitMark) []world.Appearance {
+		if !m.Active() {
+			return dst
+		}
+		return append(dst, with)
+	})
+}

@@ -6,7 +6,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 )
 
-// MaxTags is how many distinct tags one PairHost's behaviors may name between them — one mask bit each.
+// MaxTags is how many distinct tags one PairHost's behaviors may name between them.
 const MaxTags = 64
 
 // Pair is a Between behavior with its tags erased: what a host finds in RegisterBehavior.
@@ -19,11 +19,8 @@ type Pair[P any] struct {
 	wantSelf, wantOther uint64
 }
 
-// PairHost runs the Between behaviors made for payload P inside a host's own
-// pass. Every tag is bound to the host's queries once, however many behaviors
-// name it — a query refuses to carry a component twice — and answers on one
-// bit of a mask the host reads per chunk or per entity and hands back to
-// Dispatch.
+// PairHost runs the Between behaviors made for payload P inside a host's own pass.
+// Each tag answers on one bit of a mask the host reads and hands back to Dispatch.
 type PairHost[P any] struct {
 	tags    []tagProbe
 	pairs   []*Pair[P]
@@ -31,7 +28,7 @@ type PairHost[P any] struct {
 	matched []int // DispatchGrouped's scratch
 }
 
-// Add takes b if it is a Between behavior for P — ErrUnhostedBehavior otherwise, ErrHostBuilt once Bind has run.
+// Add takes a Between behavior for P; ErrUnhostedBehavior for another, ErrHostBuilt after Bind.
 func (h *PairHost[P]) Add(b Behavior) error {
 	pair, ok := b.(*Pair[P])
 	if !ok {
@@ -48,7 +45,7 @@ func (h *PairHost[P]) Add(b Behavior) error {
 	return nil
 }
 
-// Empty reports a host with nothing to run — one whose pass can skip whatever it does only for its behaviors.
+// Empty reports a host with nothing to run.
 func (h *PairHost[P]) Empty() bool { return len(h.pairs) == 0 }
 
 // TagSet wraps a mask read with InChunk or At, for a payload to hand on.
@@ -99,7 +96,7 @@ func (h *PairHost[P]) At(query int, cursor *goke.Cursor) (mask uint64) {
 	return mask
 }
 
-// Dispatch runs every behavior whose Self tag is in self and Other tag in other — a pair with a direction, like a sighting.
+// Dispatch runs every behavior whose Self tag is in self and Other tag in other.
 func (h *PairHost[P]) Dispatch(t Tick, self, other uint64, pair P) {
 	for _, b := range h.pairs {
 		if self&b.wantSelf == b.wantSelf && other&b.wantOther == b.wantOther {
@@ -108,11 +105,7 @@ func (h *PairHost[P]) Dispatch(t Tick, self, other uint64, pair P) {
 	}
 }
 
-// DispatchGrouped is Dispatch for one Self against many Others at once: each
-// behavior whose Self tag fits runs once, with the pair built from the indices
-// of the others carrying its Other tag — none at all included, so a behavior
-// hears about an entity with nobody to pair with too. matched is the host's to
-// read only until build returns.
+// DispatchGrouped is Dispatch for one Self against many Others, run even when none match.
 func (h *PairHost[P]) DispatchGrouped(t Tick, self uint64, others []uint64, build func(matched []int) P) {
 	for _, b := range h.pairs {
 		if self&b.wantSelf != b.wantSelf {
@@ -128,10 +121,7 @@ func (h *PairHost[P]) DispatchGrouped(t Tick, self uint64, others []uint64, buil
 	}
 }
 
-// DispatchEitherWay is Dispatch for a pair with no direction, like a contact:
-// each behavior runs for whichever way round its tags fit, forward describing
-// the pair with a as Self and backward with b — and once, not twice, when it
-// names the same tag on both sides.
+// DispatchEitherWay is Dispatch for a pair with no direction, run whichever way the tags fit.
 func (h *PairHost[P]) DispatchEitherWay(t Tick, a, b uint64, forward, backward P) {
 	for _, p := range h.pairs {
 		if a&p.wantSelf == p.wantSelf && b&p.wantOther == p.wantOther {

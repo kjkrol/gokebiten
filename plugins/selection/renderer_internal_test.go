@@ -22,7 +22,6 @@ func TestRenderer_Init_QueryMatchesOnlySelectedEntity(t *testing.T) {
 	}
 
 	r := NewRenderer(h.sys.camera, h.state)
-	// RegSys calls Init immediately, so this builds r's query right away.
 	h.ecs.RegSys(goke.SystemFn{OnInit: func(si *goke.SysInit) { r.Init(si) }})
 
 	r.query.All()

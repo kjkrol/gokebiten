@@ -59,9 +59,6 @@ func (g oneStageGame) Stages() (map[string]game.Stage, string) {
 	return map[string]game.Stage{g.stage.Name(): g.stage}, g.stage.Name()
 }
 
-// TestPlugin_SaveLoad_CameraRoundTrip guards that the shared Camera's
-// Viewport/Zoom is saved/restored automatically via world's Serializable,
-// without the caller ever passing it to Persistence.Save/Load explicitly.
 func TestPlugin_SaveLoad_CameraRoundTrip(t *testing.T) {
 	basePath := t.TempDir() + "/save"
 

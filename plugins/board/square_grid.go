@@ -3,18 +3,15 @@ package board
 import (
 	"math"
 
-	"github.com/kjkrol/gokg/geom"
+	"github.com/kjkrol/aabbworld/geom"
 )
 
-// squareGrid is a Grid over a Width x Height array of square cells,
-// CellSize world-pixels on a side, with 8-directional (N/S/E/W plus
-// diagonals) neighbors — a diagonal step costs √2× an orthogonal one
-// (NeighborCost), so paths favor natural diagonal movement over
-// stairstepping.
+// squareGrid is a Grid of Width x Height square cells with 8-directional neighbors;
+// a diagonal step costs √2 of an orthogonal one.
 type squareGrid struct {
 	Width, Height uint32
 	CellSize      uint32
-	Toroidal      bool
+	WrapX, WrapY  bool
 }
 
 var _ Grid = (*squareGrid)(nil)
@@ -32,7 +29,7 @@ func (g *squareGrid) cellXY(c CellID) (x, y uint32) {
 }
 
 func (g *squareGrid) Contains(c CellID) bool {
-	if g.Toroidal {
+	if g.WrapX && g.WrapY {
 		return true
 	}
 	x, y := g.cellXY(c)
@@ -48,10 +45,9 @@ func (g *squareGrid) Neighbors(c CellID) []CellID {
 	x, y := g.cellXY(c)
 	out := make([]CellID, 0, 8)
 	for _, d := range squareDirs {
-		nx, ny := int64(x)+d[0], int64(y)+d[1]
-		if g.Toroidal {
-			nx, ny = wrapModI64(nx, int64(g.Width)), wrapModI64(ny, int64(g.Height))
-		} else if nx < 0 || ny < 0 || nx >= int64(g.Width) || ny >= int64(g.Height) {
+		nx, okX := foldAxis(int64(x)+d[0], int64(g.Width), g.WrapX)
+		ny, okY := foldAxis(int64(y)+d[1], int64(g.Height), g.WrapY)
+		if !okX || !okY {
 			continue
 		}
 		out = append(out, g.idAt(uint32(nx), uint32(ny)))
@@ -69,15 +65,9 @@ func (g *squareGrid) CellAt(pos geom.Vec) (CellID, bool) {
 	if g.CellSize == 0 {
 		return 0, false
 	}
-	if !g.Toroidal && (pos.X < 0 || pos.Y < 0) {
-		return 0, false
-	}
-	x := int64(math.Floor(pos.X / float64(g.CellSize)))
-	y := int64(math.Floor(pos.Y / float64(g.CellSize)))
-	if g.Toroidal {
-		return g.idAt(uint32(wrapModI64(x, int64(g.Width))), uint32(wrapModI64(y, int64(g.Height)))), true
-	}
-	if x < 0 || y < 0 || uint32(x) >= g.Width || uint32(y) >= g.Height {
+	x, okX := foldAxis(int64(math.Floor(pos.X/float64(g.CellSize))), int64(g.Width), g.WrapX)
+	y, okY := foldAxis(int64(math.Floor(pos.Y/float64(g.CellSize))), int64(g.Height), g.WrapY)
+	if !okX || !okY {
 		return 0, false
 	}
 	return g.idAt(uint32(x), uint32(y)), true
@@ -85,16 +75,15 @@ func (g *squareGrid) CellAt(pos geom.Vec) (CellID, bool) {
 
 func (g *squareGrid) CellSpan() float32 { return float32(g.CellSize) }
 
-func (g *squareGrid) SetToroidal(t bool) { g.Toroidal = t }
+func (g *squareGrid) SetWrap(x, y bool) { g.WrapX, g.WrapY = x, y }
 
 func (g *squareGrid) CellIndex(col, row uint32) (CellID, bool) {
-	if g.Toroidal {
-		return g.idAt(col%g.Width, row%g.Height), true
-	}
-	if col >= g.Width || row >= g.Height {
+	x, okX := foldAxis(int64(col), int64(g.Width), g.WrapX)
+	y, okY := foldAxis(int64(row), int64(g.Height), g.WrapY)
+	if !okX || !okY {
 		return 0, false
 	}
-	return g.idAt(col, row), true
+	return g.idAt(uint32(x), uint32(y)), true
 }
 
 // dxdy returns the wrap-aware column/row gap between a and b.
@@ -102,8 +91,11 @@ func (g *squareGrid) dxdy(a, b CellID) (dx, dy float64) {
 	ax, ay := g.cellXY(a)
 	bx, by := g.cellXY(b)
 	width, height := uint32(0), uint32(0)
-	if g.Toroidal {
-		width, height = g.Width, g.Height
+	if g.WrapX {
+		width = g.Width
+	}
+	if g.WrapY {
+		height = g.Height
 	}
 	return float64(wrapDistance1D(ax, bx, width)), float64(wrapDistance1D(ay, by, height))
 }
@@ -114,8 +106,7 @@ func (g *squareGrid) NeighborCost(a, b CellID) float64 {
 	return math.Sqrt(dx*dx + dy*dy)
 }
 
-// Distance is octile distance — admissible for this grid's 8-directional
-// Neighbors with diagonal NeighborCost √2 (Manhattan would overestimate).
+// Distance is octile distance.
 func (g *squareGrid) Distance(a, b CellID) float64 {
 	dx, dy := g.dxdy(a, b)
 	if dx < dy {
@@ -124,14 +115,12 @@ func (g *squareGrid) Distance(a, b CellID) float64 {
 	return dx + (math.Sqrt2-1)*dy
 }
 
-// DiagonalNeighbors returns the two orthogonal cells flanking the corner
-// between a and its diagonal neighbor b — ok is false if b isn't a diagonal
-// neighbor of a.
+// DiagonalNeighbors returns the two cells flanking the corner between a and its diagonal b.
 func (g *squareGrid) DiagonalNeighbors(a, b CellID) (c1, c2 CellID, ok bool) {
 	ax, ay := g.cellXY(a)
 	bx, by := g.cellXY(b)
-	dx := g.axisDelta(ax, bx, g.Width)
-	dy := g.axisDelta(ay, by, g.Height)
+	dx := axisDelta(ax, bx, g.Width, g.WrapX)
+	dy := axisDelta(ay, by, g.Height, g.WrapY)
 	if dx == 0 || dy == 0 {
 		return 0, 0, false
 	}
@@ -141,11 +130,11 @@ func (g *squareGrid) DiagonalNeighbors(a, b CellID) (c1, c2 CellID, ok bool) {
 }
 
 // axisDelta is the single-step direction (-1/0/+1) from a to b along an axis of length size.
-func (g *squareGrid) axisDelta(a, b, size uint32) int64 {
+func axisDelta(a, b, size uint32, wraps bool) int64 {
 	if a == b {
 		return 0
 	}
-	if !g.Toroidal {
+	if !wraps {
 		if b > a {
 			return 1
 		}
@@ -164,8 +153,7 @@ func absDiffU32(a, b uint32) uint32 {
 	return b - a
 }
 
-// wrapDistance1D is the shorter of the direct gap between a and b on an axis
-// of length size, or the gap going the other way around it (size 0 disables wrapping).
+// wrapDistance1D is the shorter way from a to b on an axis of length size; size 0 never wraps.
 func wrapDistance1D(a, b, size uint32) uint32 {
 	d := absDiffU32(a, b)
 	if size == 0 {
