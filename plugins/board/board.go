@@ -3,7 +3,7 @@ package board
 import (
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/aabbworld/plane"
-	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gram/plugins/world"
 )
 
 // Board is a Grid paired with its TerrainMap — the single integration

@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/game"
-	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gram/game"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/world"
 )
 
 // initializer is the game.Initializer bound to one Stage's ecsHost.
@@ -33,7 +33,7 @@ func (c *initializer) ECS() *goke.ECS { return c.host.ecs }
 // Use installs p, rejecting a duplicate Name and any Plugin the engine installs itself.
 func (c *initializer) Use(p plugin.Plugin) error {
 	if _, ok := p.(plugin.Builtin); ok {
-		return fmt.Errorf("gokebiten: %q is installed by the engine itself — do not Use it yourself", p.Name())
+		return fmt.Errorf("gram: %q is installed by the engine itself — do not Use it yourself", p.Name())
 	}
 	return c.use(p)
 }
@@ -47,7 +47,7 @@ func (c *initializer) use(p plugin.Plugin) error {
 		c.host.names = make(map[string]bool)
 	}
 	if c.host.names[p.Name()] {
-		return fmt.Errorf("gokebiten: plugin %q already used", p.Name())
+		return fmt.Errorf("gram: plugin %q already used", p.Name())
 	}
 	c.host.names[p.Name()] = true
 	if s := p.Serializable(); s != nil {
@@ -65,7 +65,7 @@ func (c *initializer) Track(s plugin.Serializable) error {
 
 func (c *initializer) UseWorld(cfg world.Config) *world.Plugin {
 	if c.world != nil {
-		panic("gokebiten: UseWorld called more than once in the same Stage")
+		panic("gram: UseWorld called more than once in the same Stage")
 	}
 	if cfg.Camera.ViewportWidth == 0 && cfg.Camera.ViewportHeight == 0 {
 		cfg.Camera.ViewportWidth = uint32(c.screenWidth)

@@ -13,11 +13,11 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/vector"
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/game"
-	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/plugins/world/kind"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/control"
+	"github.com/kjkrol/gram/game"
+	"github.com/kjkrol/gram/plugins/world"
+	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/render"
 )
 
 const (

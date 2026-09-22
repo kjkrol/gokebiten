@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/kjkrol/aabbworld/geom"
-	"github.com/kjkrol/gokebiten/camera"
-	"github.com/kjkrol/gokebiten/control"
+	"github.com/kjkrol/gram/camera"
+	"github.com/kjkrol/gram/control"
 )
 
 func TestDefaultCameraHandler_Scroll_Zooms(t *testing.T) {

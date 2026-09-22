@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/kjkrol/gokebiten/game"
+	"github.com/kjkrol/gram/game"
 )
 
 func TestInit_MakesTheEnginesStepTheOnlyClock(t *testing.T) {

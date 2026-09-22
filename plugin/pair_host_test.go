@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/plugin"
+	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/uid"
 )
 

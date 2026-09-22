@@ -2,7 +2,7 @@ package board
 
 import (
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gram/plugins/world"
 )
 
 // TerrainSpeedModifier scales Velocity by 1/cost for whichever cell an

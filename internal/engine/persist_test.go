@@ -27,7 +27,7 @@ func TestSaveLoad_RoundTrip(t *testing.T) {
 	if _, err := os.Stat(wantPath); err != nil {
 		t.Fatalf("expected %s to exist: %v", wantPath, err)
 	}
-	if tmps, _ := filepath.Glob(filepath.Join(os.TempDir(), "gokebiten-ecs-*.tmp")); len(tmps) != 0 {
+	if tmps, _ := filepath.Glob(filepath.Join(os.TempDir(), "gram-ecs-*.tmp")); len(tmps) != 0 {
 		t.Errorf("expected no leftover temp files after Save, got %v", tmps)
 	}
 
@@ -37,7 +37,7 @@ func TestSaveLoad_RoundTrip(t *testing.T) {
 	if err := load(ecs2, basePath, "", nil, map[string][]any{"a": {a2}, "b": {b2}}); err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if tmps, _ := filepath.Glob(filepath.Join(os.TempDir(), "gokebiten-ecs-*.tmp")); len(tmps) != 0 {
+	if tmps, _ := filepath.Glob(filepath.Join(os.TempDir(), "gram-ecs-*.tmp")); len(tmps) != 0 {
 		t.Errorf("expected no leftover temp files after Load, got %v", tmps)
 	}
 

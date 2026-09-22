@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/kjkrol/gokebiten/plugins/vision"
-	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gram/plugins/vision"
+	"github.com/kjkrol/gram/plugins/world"
 )
 
 func testWorldPlugin() *world.Plugin {
@@ -18,7 +18,7 @@ func testWorldPlugin() *world.Plugin {
 func TestPlugin_Contract(t *testing.T) {
 	p := vision.NewPlugin(testWorldPlugin())
 
-	if p.Name() != "gokebiten.vision" {
+	if p.Name() != "gram.vision" {
 		t.Errorf("Name = %q", p.Name())
 	}
 	if p.EventHandler() != nil {

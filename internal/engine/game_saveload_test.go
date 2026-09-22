@@ -7,13 +7,13 @@ import (
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/game"
-	"github.com/kjkrol/gokebiten/internal/engine"
-	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/plugins/world/kind"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/control"
+	"github.com/kjkrol/gram/game"
+	"github.com/kjkrol/gram/internal/engine"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/world"
+	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/render"
 )
 
 func testWorldConfig() world.Config {

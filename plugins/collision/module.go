@@ -8,7 +8,7 @@ import (
 
 	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/plugin"
+	"github.com/kjkrol/gram/plugin"
 )
 
 var _ goke.Module = (*module)(nil)

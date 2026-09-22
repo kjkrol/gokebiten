@@ -1,7 +1,7 @@
 package world
 
 import (
-	"github.com/kjkrol/gokebiten/plugin"
+	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/uid"
 )
 

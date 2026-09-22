@@ -2,7 +2,7 @@ package world
 
 import (
 	"github.com/kjkrol/aabbworld"
-	"github.com/kjkrol/gokebiten/camera"
+	"github.com/kjkrol/gram/camera"
 )
 
 // Config configures world's spatial shape and the bounds its entity population must respect.

@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-**gokebiten** is a public, modular Go game engine library: a
+**gram** is a public, modular Go game engine library: a
 user-implemented `game.Game` — a named collection of `game.Stage`s, each
 with its own lifecycle (`Init`/`Restore`/`Spawn`/`Update`) and its own
 `game.Scene`s (`Stack`/`Composition`, the sole entry point for input) — is
-driven by a `gokebiten.Engine` that wraps
+driven by a `gram.Engine` that wraps
 [goke](https://github.com/kjkrol/goke) (a type-safe, archetype-based ECS)
 into [Ebitengine](https://ebitengine.org/)'s `Update`/`Draw`/`Layout` loop.
 Everything beyond the tick loop is installed as a `plugin.Plugin`, added
@@ -20,7 +20,7 @@ the extension contract — `game.Game`/`Stage`/`Scene`/`Stack`/`Composition`/
 `Serializable`/`PostLoader` — lives in the public root packages `game` and
 `plugin`, not `internal/`, so it gets full godoc treatment. Only pure
 orchestration (`Engine` itself, nobody's godoc a user needs to read) lives
-in `internal/engine`; root `gokebiten` just re-exports `Engine`/`Props`/
+in `internal/engine`; root `gram` just re-exports `Engine`/`Props`/
 `NewEngine` as thin aliases over it.
 
 ## Commands
@@ -117,8 +117,8 @@ implements and receives, all in one package (Scene needs the same
 `game.Initializer`/`game.Persistence`/the save registry/one active
 `Stage`'s runtime; imports `game`, `plugin`, and `render`. Dependency
 direction is one-way: `render` ← `plugin` ← `game` ← `internal/engine` ←
-`gokebiten`. Built-in plugins (`plugins/*`) import `plugin`/`render`
-directly (not `gokebiten`), exactly like a third-party plugin would.
+`gram`. Built-in plugins (`plugins/*`) import `plugin`/`render`
+directly (not `gram`), exactly like a third-party plugin would.
 
 ### Module naming convention
 
@@ -217,7 +217,7 @@ Each package has a `doc.go` describing the gameplay capability it adds.
 ### Stage / Scene
 
 A `game.Game` also supplies `Props()` (window/tick-rate config, read
-once at startup by `gokebiten.Run(g)`; `TargetTPS` is the engine's own fixed
+once at startup by `gram.Run(g)`; `TargetTPS` is the engine's own fixed
 step — Ebitengine runs one `Update` per frame (`SyncWithFPS`), and a frame that
 falls behind runs at most 5 steps and drops the rest, so the game slows down
 instead of spiralling) alongside a named collection of
@@ -272,7 +272,7 @@ world plus a non-focusable HUD overlay.
 
 ### Game / persistence
 
-`internal/engine.Engine` (aliased `gokebiten.Engine`) owns the Ebitengine
+`internal/engine.Engine` (aliased `gram.Engine`) owns the Ebitengine
 loop and drives a user's `game.Game` one active `Stage` at a time — see
 "Stage / Scene" above. `Engine` never caches its own copy of the Stage
 set: it calls `game.Stages()` whenever it needs to resolve a name (once in

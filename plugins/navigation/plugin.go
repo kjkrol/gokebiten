@@ -5,12 +5,12 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/camera"
-	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/board"
-	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/camera"
+	"github.com/kjkrol/gram/control"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/board"
+	"github.com/kjkrol/gram/plugins/world"
+	"github.com/kjkrol/gram/render"
 )
 
 // Plugin moves entities along a MoveOrder's path across a board, re-pathing when terrain changes.
@@ -43,7 +43,7 @@ func NewPlugin(speed float64, boardPlugin *board.Plugin, worldPlugin *world.Plug
 // plugin.Plugin contract
 // =================================================================
 
-func (p *Plugin) Name() string { return "gokebiten.navigation" }
+func (p *Plugin) Name() string { return "gram.navigation" }
 
 func (p *Plugin) Install(ctx plugin.Installer) error {
 	brd := p.boardPlugin.Res.Logic.Board

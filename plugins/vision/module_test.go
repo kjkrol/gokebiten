@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/plugins/vision"
+	"github.com/kjkrol/gram/plugins/vision"
 )
 
 func TestModule_DeclaresEveryComponentItOwns(t *testing.T) {

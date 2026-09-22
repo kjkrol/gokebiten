@@ -8,8 +8,8 @@ import (
 	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/plugins/board"
-	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gram/plugins/board"
+	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/uid"
 )
 

@@ -3,7 +3,7 @@ package navigation
 import (
 	"testing"
 
-	"github.com/kjkrol/gokebiten/plugins/board"
+	"github.com/kjkrol/gram/plugins/board"
 	"github.com/kjkrol/uid"
 )
 

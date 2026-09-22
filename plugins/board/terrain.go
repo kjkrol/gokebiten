@@ -1,6 +1,6 @@
 package board
 
-import "github.com/kjkrol/gokebiten/render"
+import "github.com/kjkrol/gram/render"
 
 // Terrain reports one cell's terrain kind, independent of the Grid's topology.
 type Terrain interface {

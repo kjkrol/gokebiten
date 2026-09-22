@@ -8,9 +8,9 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/game"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/control"
+	"github.com/kjkrol/gram/game"
+	"github.com/kjkrol/gram/render"
 )
 
 // =========================== Stage ===========================
@@ -86,5 +86,5 @@ func (r *menuRenderer) Init(*goke.SysInit) {}
 
 func (r *menuRenderer) Draw(screen *ebiten.Image) {
 	screen.Fill(color.RGBA{R: 20, G: 20, B: 30, A: 255})
-	ebitenutil.DebugPrintAt(screen, "gokebiten Stage/Scene demo\n\nPress ENTER to start", 20, 20)
+	ebitenutil.DebugPrintAt(screen, "gram Stage/Scene demo\n\nPress ENTER to start", 20, 20)
 }

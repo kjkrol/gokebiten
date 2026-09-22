@@ -8,11 +8,11 @@ import (
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/vision"
-	"github.com/kjkrol/gokebiten/plugins/vision/behavior"
-	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/plugins/world/kind"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/vision"
+	"github.com/kjkrol/gram/plugins/vision/behavior"
+	"github.com/kjkrol/gram/plugins/world"
+	"github.com/kjkrol/gram/plugins/world/kind"
 )
 
 // fleeBody is a test entity: where it is, which way it is going (a zero dir is

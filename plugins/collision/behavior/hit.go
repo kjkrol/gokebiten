@@ -3,9 +3,9 @@ package behavior
 import (
 	"time"
 
-	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/collision"
-	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/collision"
+	"github.com/kjkrol/gram/plugins/world"
 )
 
 // HitMark is how long this entity shows a hit, and whether one is showing now —

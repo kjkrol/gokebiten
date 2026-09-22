@@ -6,10 +6,10 @@ import (
 
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/game"
-	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/vision/behavior"
-	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gram/game"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/vision/behavior"
+	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/uid"
 )
 

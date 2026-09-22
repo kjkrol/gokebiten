@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/game"
-	"github.com/kjkrol/gokebiten/internal/engine"
-	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gram/game"
+	"github.com/kjkrol/gram/internal/engine"
+	"github.com/kjkrol/gram/plugins/world"
 )
 
 func testWorldConfig() world.Config {

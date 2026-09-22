@@ -1,4 +1,4 @@
-module github.com/kjkrol/gokebiten
+module github.com/kjkrol/gram
 
 go 1.27.1
 

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/kjkrol/gokebiten/plugin"
+	"github.com/kjkrol/gram/plugin"
 )
 
 // storage is a name-keyed registry of installed plugins' Serializable state,
@@ -34,7 +34,7 @@ func verifyPersisted(name string, v plugin.Serializable) {
 	enc := gob.NewEncoder(&buf)
 	for _, target := range v.Persisted() {
 		if err := enc.Encode(target); err != nil {
-			panic(fmt.Sprintf("gokebiten: %q (%T).Persisted() returned an unencodable value %T: %v", name, v, target, err))
+			panic(fmt.Sprintf("gram: %q (%T).Persisted() returned an unencodable value %T: %v", name, v, target, err))
 		}
 	}
 }

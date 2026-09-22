@@ -2,7 +2,7 @@ package world
 
 import (
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/render"
 )
 
 type Appearance struct {

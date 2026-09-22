@@ -1,6 +1,6 @@
 package navigation
 
-import "github.com/kjkrol/gokebiten/plugins/board"
+import "github.com/kjkrol/gram/plugins/board"
 
 // breadthFirst returns the first cell match accepts, ring by ring from start through expand.
 func breadthFirst(start board.CellID, neighbors func(board.CellID) []board.CellID,

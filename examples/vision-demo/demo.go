@@ -13,16 +13,16 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/game"
-	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/collision"
-	cbehavior "github.com/kjkrol/gokebiten/plugins/collision/behavior"
-	"github.com/kjkrol/gokebiten/plugins/vision"
-	vbehavior "github.com/kjkrol/gokebiten/plugins/vision/behavior"
-	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/plugins/world/kind"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/control"
+	"github.com/kjkrol/gram/game"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/collision"
+	cbehavior "github.com/kjkrol/gram/plugins/collision/behavior"
+	"github.com/kjkrol/gram/plugins/vision"
+	vbehavior "github.com/kjkrol/gram/plugins/vision/behavior"
+	"github.com/kjkrol/gram/plugins/world"
+	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/render"
 )
 
 const (
@@ -54,7 +54,7 @@ func NewDemo() *Demo { return &Demo{stage: &mainStage{avoiding: true}} }
 
 func (d *Demo) Props() game.Props {
 	return game.Props{
-		Title:       "gokebiten — sight, avoidance and a hunter",
+		Title:       "gram — sight, avoidance and a hunter",
 		ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight,
 		TargetTPS: TPS,
 	}

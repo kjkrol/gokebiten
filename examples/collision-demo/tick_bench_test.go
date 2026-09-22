@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/game"
-	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gram/game"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/world"
 )
 
 // benchInit is a game.Initializer that drives the real Stage without a window;

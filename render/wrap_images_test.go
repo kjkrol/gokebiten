@@ -6,7 +6,7 @@ import (
 
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/aabbworld/plane"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/render"
 )
 
 type image struct {

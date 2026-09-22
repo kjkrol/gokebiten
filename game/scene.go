@@ -1,8 +1,8 @@
 package game
 
 import (
-	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/control"
+	"github.com/kjkrol/gram/render"
 )
 
 // Scene groups the renderers and input handling for one thing a Stage can show.

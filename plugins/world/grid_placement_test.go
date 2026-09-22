@@ -3,7 +3,7 @@ package world_test
 import (
 	"testing"
 
-	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gram/plugins/world"
 )
 
 func TestGridPlacement_Place_SquareCount(t *testing.T) {

@@ -3,8 +3,8 @@ package world
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/aabbworld/geom"
-	"github.com/kjkrol/gokebiten/camera"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/camera"
+	"github.com/kjkrol/gram/render"
 )
 
 // spriteBatch is render.QuadBatch that draws a wrapped entity as the slices of its sprite

@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/kjkrol/aabbworld/geom"
-	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/vision"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/vision"
 )
 
 // Predator and Prey are ready-made tags for the two sides of a hunt.

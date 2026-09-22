@@ -1,8 +1,8 @@
 package behavior
 
 import (
-	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/collision"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/collision"
 )
 
 // CountContacts adds every contact it is handed to a ContactStats the game owns.

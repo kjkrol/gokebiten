@@ -8,15 +8,15 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/game"
-	"github.com/kjkrol/gokebiten/plugins/board"
-	"github.com/kjkrol/gokebiten/plugins/collision"
-	"github.com/kjkrol/gokebiten/plugins/navigation"
-	"github.com/kjkrol/gokebiten/plugins/selection"
-	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/plugins/world/kind"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/control"
+	"github.com/kjkrol/gram/game"
+	"github.com/kjkrol/gram/plugins/board"
+	"github.com/kjkrol/gram/plugins/collision"
+	"github.com/kjkrol/gram/plugins/navigation"
+	"github.com/kjkrol/gram/plugins/selection"
+	"github.com/kjkrol/gram/plugins/world"
+	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/render"
 	"github.com/kjkrol/uid"
 )
 
@@ -47,7 +47,7 @@ func NewDemo() *Demo { return &Demo{stage: &mainStage{}} }
 
 func (d *Demo) Props() game.Props {
 	return game.Props{
-		Title:       "gokebiten board & navigation plugins demo",
+		Title:       "gram board & navigation plugins demo",
 		ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight,
 		TargetTPS: TPS,
 	}

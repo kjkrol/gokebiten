@@ -10,8 +10,8 @@ import (
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/camera"
-	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gram/camera"
+	"github.com/kjkrol/gram/plugins/world"
 )
 
 // spawn materialises n entities from f.

@@ -3,8 +3,8 @@ package navigation_test
 import (
 	"testing"
 
-	"github.com/kjkrol/gokebiten/plugins/board"
-	"github.com/kjkrol/gokebiten/plugins/navigation"
+	"github.com/kjkrol/gram/plugins/board"
+	"github.com/kjkrol/gram/plugins/navigation"
 )
 
 func TestPathCells_NoPathYet_StraightToTarget(t *testing.T) {

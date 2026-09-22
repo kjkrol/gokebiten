@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/kjkrol/gokebiten/camera"
-	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/game"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/camera"
+	"github.com/kjkrol/gram/control"
+	"github.com/kjkrol/gram/game"
+	"github.com/kjkrol/gram/render"
 )
 
 const (
@@ -101,7 +101,7 @@ func (e *Engine) Quit() { e.quit = true }
 func (e *Engine) SwitchStage(name string) error {
 	stages, _ := e.game.Stages()
 	if _, ok := stages[name]; !ok {
-		return fmt.Errorf("gokebiten: unknown stage %q", name)
+		return fmt.Errorf("gram: unknown stage %q", name)
 	}
 	e.pendingSwitch = name
 	return nil
@@ -113,7 +113,7 @@ func (e *Engine) Init() error {
 	stages, initial := e.game.Stages()
 	stage, ok := stages[initial]
 	if !ok {
-		return fmt.Errorf("gokebiten: initial stage %q not found among registered Stages", initial)
+		return fmt.Errorf("gram: initial stage %q not found among registered Stages", initial)
 	}
 
 	current, err := e.enterStage(stage)
@@ -152,7 +152,7 @@ func (e *Engine) Update() error {
 		stages, _ := e.game.Stages()
 		stage, ok := stages[name]
 		if !ok {
-			return fmt.Errorf("gokebiten: unknown stage %q", name)
+			return fmt.Errorf("gram: unknown stage %q", name)
 		}
 		current, err := e.enterStage(stage)
 		if err != nil {

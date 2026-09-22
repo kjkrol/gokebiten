@@ -3,7 +3,7 @@ package world
 import (
 	"testing"
 
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/render"
 )
 
 func TestFacing_PicksTheSpriteFromTheEntitysHeading(t *testing.T) {

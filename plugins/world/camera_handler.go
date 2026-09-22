@@ -1,8 +1,8 @@
 package world
 
 import (
-	"github.com/kjkrol/gokebiten/camera"
-	"github.com/kjkrol/gokebiten/control"
+	"github.com/kjkrol/gram/camera"
+	"github.com/kjkrol/gram/control"
 )
 
 const (

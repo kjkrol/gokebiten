@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/kjkrol/aabbworld/geom"
-	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gram/plugins/world"
 )
 
 // randomVelocity draws X and Y independently from [-rng, rng];

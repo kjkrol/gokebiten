@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/plugins/collision"
+	"github.com/kjkrol/gram/plugins/collision"
 )
 
 func TestModule_LoadComps_ListsOwnedComponents(t *testing.T) {

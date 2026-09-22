@@ -1,9 +1,9 @@
 package engine
 
 import (
-	"github.com/kjkrol/gokebiten/game"
-	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/game"
+	"github.com/kjkrol/gram/plugins/world"
+	"github.com/kjkrol/gram/render"
 )
 
 // stageRuntime is one active Stage: its ecsHost, its world.Plugin if it installed one,

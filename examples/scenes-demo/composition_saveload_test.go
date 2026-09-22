@@ -3,8 +3,8 @@ package main
 import (
 	"testing"
 
-	"github.com/kjkrol/gokebiten/game"
-	"github.com/kjkrol/gokebiten/internal/engine"
+	"github.com/kjkrol/gram/game"
+	"github.com/kjkrol/gram/internal/engine"
 )
 
 func testProps() game.Props {

@@ -54,16 +54,16 @@ func (a *Atlas) Register(size int, draw SpriteDrawer) SpriteID {
 // RegisterAt takes draw on as a size x size sprite in slot id; panics after Close or if taken.
 func (a *Atlas) RegisterAt(id SpriteID, size int, draw SpriteDrawer) {
 	if a.closed {
-		panic("gokebiten: Atlas.Register after Close")
+		panic("gram: Atlas.Register after Close")
 	}
 	if size <= 0 {
-		panic(fmt.Sprintf("gokebiten: Atlas sprite %d registered with size %d", id, size))
+		panic(fmt.Sprintf("gram: Atlas sprite %d registered with size %d", id, size))
 	}
 	for int(id) >= len(a.slots) {
 		a.slots = append(a.slots, slot{})
 	}
 	if a.slots[id].draw != nil {
-		panic(fmt.Sprintf("gokebiten: Atlas sprite %d registered twice", id))
+		panic(fmt.Sprintf("gram: Atlas sprite %d registered twice", id))
 	}
 	a.slots[id] = slot{size: size, draw: draw}
 }
@@ -113,17 +113,17 @@ func (a *Atlas) layout() (width, height int) {
 
 func (a *Atlas) Atlas() *ebiten.Image {
 	if !a.closed {
-		panic("gokebiten: Atlas used before Close — its sheet does not exist yet")
+		panic("gram: Atlas used before Close — its sheet does not exist yet")
 	}
 	return a.image
 }
 
 func (a *Atlas) UV(id SpriteID) (sx0, sy0, sx1, sy1 float32) {
 	if !a.closed {
-		panic("gokebiten: Atlas used before Close — its sheet does not exist yet")
+		panic("gram: Atlas used before Close — its sheet does not exist yet")
 	}
 	if int(id) >= len(a.slots) || a.slots[id].size == 0 {
-		panic(fmt.Sprintf("gokebiten: Atlas has no sprite %d — it was never registered", id))
+		panic(fmt.Sprintf("gram: Atlas has no sprite %d — it was never registered", id))
 	}
 	s := &a.slots[id]
 	return s.x0, s.y0, s.x1, s.y1

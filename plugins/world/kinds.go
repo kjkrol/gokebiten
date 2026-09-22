@@ -5,9 +5,9 @@ import (
 	"reflect"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/world/kind"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/render"
 )
 
 // Kinds is a Plugin's registered set of entity kinds — reached via Plugin.Kinds

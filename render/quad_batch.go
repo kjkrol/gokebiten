@@ -2,7 +2,7 @@ package render
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/kjkrol/gokebiten/camera"
+	"github.com/kjkrol/gram/camera"
 )
 
 // QuadBatch batches textured quads from an AtlasSource into a single

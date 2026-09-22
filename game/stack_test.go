@@ -3,8 +3,8 @@ package game
 import (
 	"testing"
 
-	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/control"
+	"github.com/kjkrol/gram/render"
 )
 
 type stubScene struct {

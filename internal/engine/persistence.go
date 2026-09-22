@@ -2,7 +2,7 @@ package engine
 
 import (
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/game"
+	"github.com/kjkrol/gram/game"
 )
 
 // persistence is the only concrete implementation of game.Persistence,

@@ -4,8 +4,8 @@ import (
 	"math"
 
 	"github.com/kjkrol/aabbworld/geom"
-	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/vision"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/vision"
 )
 
 // onCourse is the cosine of the widest angle at which one still counts as heading at the other.

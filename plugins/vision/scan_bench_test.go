@@ -7,9 +7,9 @@ import (
 
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/plugins/vision"
-	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/vision"
+	"github.com/kjkrol/gram/plugins/world"
+	"github.com/kjkrol/gram/plugins/world/kind"
 )
 
 // benchScan ticks n observers, each scanning a cone over a world they share.

@@ -4,10 +4,10 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/control"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/world"
+	"github.com/kjkrol/gram/render"
 )
 
 // Plugin wires the collision engine into a Game — optional, borrows world.Plugin's own Space.
@@ -32,7 +32,7 @@ func NewPlugin(worldPlugin *world.Plugin) *Plugin {
 // plugin.Plugin contract
 // =================================================================
 
-func (p *Plugin) Name() string { return "gokebiten.collision" }
+func (p *Plugin) Name() string { return "gram.collision" }
 
 func (p *Plugin) Install(ctx plugin.Installer) error {
 	p.module = newModule(p.worldPlugin.Space(), ctx.ECS(), &p.pairs, &p.entities)

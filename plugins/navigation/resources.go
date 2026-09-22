@@ -1,6 +1,6 @@
 package navigation
 
-import "github.com/kjkrol/gokebiten/plugins/board"
+import "github.com/kjkrol/gram/plugins/board"
 
 // Resources is navigation's single published Resources — live move-order
 // state HandleEvents writes to and CommandSystem reads/clears.

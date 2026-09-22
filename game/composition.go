@@ -1,6 +1,6 @@
 package game
 
-import "github.com/kjkrol/gokebiten/plugin"
+import "github.com/kjkrol/gram/plugin"
 
 // Composition tracks which Scenes in a Stack are visible, in what order, and which is active.
 type Composition interface {

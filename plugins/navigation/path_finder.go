@@ -2,7 +2,7 @@ package navigation
 
 import (
 	"github.com/kjkrol/astar"
-	"github.com/kjkrol/gokebiten/plugins/board"
+	"github.com/kjkrol/gram/plugins/board"
 	"github.com/kjkrol/uid"
 )
 

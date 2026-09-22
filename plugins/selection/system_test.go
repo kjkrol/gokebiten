@@ -9,9 +9,9 @@ import (
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/camera"
-	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gram/camera"
+	"github.com/kjkrol/gram/control"
+	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/uid"
 )
 

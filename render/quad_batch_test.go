@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/kjkrol/gokebiten/camera"
+	"github.com/kjkrol/gram/camera"
 )
 
 type fakeAtlasSource struct{}

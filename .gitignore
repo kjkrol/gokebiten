@@ -33,7 +33,7 @@ bin/
 # asdf
 .tool-versions
 
-# gokebiten save files
+# gram save files
 *.game.save
 *.game.*.save
 

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/kjkrol/gokebiten/game"
+	"github.com/kjkrol/gram/game"
 )
 
 const (
@@ -31,7 +31,7 @@ func NewDemo() *Demo {
 
 func (d *Demo) Props() game.Props {
 	return game.Props{
-		Title:       "gokebiten Stage/Scene demo",
+		Title:       "gram Stage/Scene demo",
 		ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight,
 		TargetTPS: TPS,
 	}

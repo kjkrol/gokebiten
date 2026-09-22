@@ -1,8 +1,8 @@
 package game
 
 import (
-	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/world"
 )
 
 // Initializer is what a Stage gets during Init to install plugins and configure the ECS.

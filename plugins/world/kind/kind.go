@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/render"
 )
 
 // ID identifies an entity's kind at runtime, carried on every entity a world spawns —

@@ -1,6 +1,6 @@
 package behavior
 
-import "github.com/kjkrol/gokebiten/plugins/world"
+import "github.com/kjkrol/gram/plugins/world"
 
 // centre is the middle of an entity's box.
 func centre(p *world.Position) (float64, float64) {

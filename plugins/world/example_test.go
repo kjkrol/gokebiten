@@ -1,8 +1,8 @@
 package world_test
 
 import (
-	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world"
+	"github.com/kjkrol/gram/plugins/world/kind"
 )
 
 func ExamplePlugin_Seed() {

@@ -5,11 +5,11 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/camera"
-	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/camera"
+	"github.com/kjkrol/gram/control"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/world"
+	"github.com/kjkrol/gram/render"
 )
 
 // Plugin wires vision into a Stage over world.Plugin's space and camera.
@@ -35,7 +35,7 @@ func NewPlugin(worldPlugin *world.Plugin) *Plugin {
 // plugin.Plugin contract
 // =================================================================
 
-func (p *Plugin) Name() string { return "gokebiten.vision" }
+func (p *Plugin) Name() string { return "gram.vision" }
 
 func (p *Plugin) Install(ctx plugin.Installer) error {
 	p.module = newModule(p.worldPlugin.Space(), &p.sightings)

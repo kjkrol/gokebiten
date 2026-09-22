@@ -40,7 +40,7 @@ func save(ecs *goke.ECS, basePath, label string, groups map[string][]any) error 
 	ecs.Pause()
 	defer ecs.Resume()
 
-	tmp, err := os.CreateTemp("", "gokebiten-ecs-*.tmp")
+	tmp, err := os.CreateTemp("", "gram-ecs-*.tmp")
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func load(ecs *goke.ECS, basePath, label string, comps []goke.CompToken, groups 
 		return err
 	}
 
-	tmp, err := os.CreateTemp("", "gokebiten-ecs-*.tmp")
+	tmp, err := os.CreateTemp("", "gram-ecs-*.tmp")
 	if err != nil {
 		return err
 	}
@@ -116,7 +116,7 @@ func saveResources(w io.Writer, groups map[string][]any) error {
 		enc := gob.NewEncoder(&buf)
 		for _, t := range targets {
 			if err := enc.Encode(t); err != nil {
-				return fmt.Errorf("gokebiten: encode resource %q: %w", name, err)
+				return fmt.Errorf("gram: encode resource %q: %w", name, err)
 			}
 		}
 		encoded[name] = buf.Bytes()
@@ -157,7 +157,7 @@ func loadResources(r io.Reader, groups map[string][]any) error {
 		dec := gob.NewDecoder(bytes.NewReader(blob))
 		for _, t := range targets {
 			if err := dec.Decode(t); err != nil {
-				return fmt.Errorf("gokebiten: decode resource %q: %w", name, err)
+				return fmt.Errorf("gram: decode resource %q: %w", name, err)
 			}
 		}
 	}

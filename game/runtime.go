@@ -1,6 +1,6 @@
 package game
 
-import "github.com/kjkrol/gokebiten/camera"
+import "github.com/kjkrol/gram/camera"
 
 // TPS is the built-in measured-ticks-per-second counter.
 type TPS struct{ Ticks int }

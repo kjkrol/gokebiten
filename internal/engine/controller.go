@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/control"
+	"github.com/kjkrol/gram/control"
 )
 
 // DefaultController captures input each frame and, once an EventHandler is

@@ -3,7 +3,7 @@ package collision
 import (
 	"testing"
 
-	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/gram/plugins/world"
 )
 
 func testWorldPlugin() *world.Plugin {
@@ -15,7 +15,7 @@ func testWorldPlugin() *world.Plugin {
 
 func TestPlugin_Name(t *testing.T) {
 	p := NewPlugin(testWorldPlugin())
-	if p.Name() != "gokebiten.collision" {
-		t.Errorf("Name() = %q, want %q", p.Name(), "gokebiten.collision")
+	if p.Name() != "gram.collision" {
+		t.Errorf("Name() = %q, want %q", p.Name(), "gram.collision")
 	}
 }

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind"
 	"github.com/kjkrol/uid"
 )
 

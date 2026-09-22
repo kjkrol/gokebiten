@@ -1,6 +1,6 @@
 package navigation
 
-import "github.com/kjkrol/gokebiten/plugins/board"
+import "github.com/kjkrol/gram/plugins/board"
 
 // MaxPathLength bounds Path.Steps — a route longer than this is fetched in successive chunks.
 const MaxPathLength = 64

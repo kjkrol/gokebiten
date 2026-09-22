@@ -5,8 +5,8 @@ import (
 	"io"
 	"os"
 
-	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/collision"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/collision"
 )
 
 // LogFormatter renders one contact as a log line.

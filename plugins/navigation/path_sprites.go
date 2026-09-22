@@ -3,7 +3,7 @@ package navigation
 import (
 	"image/color"
 
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/render"
 )
 
 type PathSprites struct {

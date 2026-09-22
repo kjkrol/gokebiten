@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/control"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/world"
+	"github.com/kjkrol/gram/render"
 )
 
 // Resources is board's single published Resources — Logic is what
@@ -63,7 +63,7 @@ func NewPlugin(grid Grid, occupancy Occupancy, worldPlugin *world.Plugin) *Plugi
 // plugin.Plugin contract
 // =================================================================
 
-func (p *Plugin) Name() string { return "gokebiten.board" }
+func (p *Plugin) Name() string { return "gram.board" }
 
 // Install is a no-op — board has no ECS wiring of its own; see plugins/navigation.
 func (p *Plugin) Install(ctx plugin.Installer) error { return nil }

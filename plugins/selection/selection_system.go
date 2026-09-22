@@ -6,7 +6,7 @@ import (
 	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/camera"
+	"github.com/kjkrol/gram/camera"
 	"github.com/kjkrol/uid"
 )
 

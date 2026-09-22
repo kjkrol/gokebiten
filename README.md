@@ -1,4 +1,4 @@
-# gokebiten
+# gram
 
 <p align="center">
   <img src=".github/docs/img/logo.png" alt="GOKe Logo" width="300">
@@ -6,23 +6,23 @@
   <a href="https://go.dev">
     <img src="https://img.shields.io/badge/Go-1.27.0+-00ADD8?style=flat-square&logo=go" alt="Go Version">
   </a>
-  <a href="https://pkg.go.dev/github.com/kjkrol/gokebiten">
+  <a href="https://pkg.go.dev/github.com/kjkrol/gram">
     <img src="https://img.shields.io/badge/GoDoc-Reference-007d9c?style=flat-square&logo=go" alt="GoDoc">
   </a>
   <a href="https://opensource.org/licenses/MIT">
     <img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="License">
   </a>
-  <a href="https://app.codecov.io/gh/kjkrol/gokebiten">
-    <img src="https://img.shields.io/codecov/c/github/kjkrol/gokebiten?style=flat-square&logo=codecov" alt="Codecov Coverage">
+  <a href="https://app.codecov.io/gh/kjkrol/gram">
+    <img src="https://img.shields.io/codecov/c/github/kjkrol/gram?style=flat-square&logo=codecov" alt="Codecov Coverage">
   </a>
   <a href="https://github.com/kjkrol/goke/actions">
-    <img src="https://github.com/kjkrol/gokebiten/actions/workflows/go.yml/badge.svg" alt="Go Quality Check">
+    <img src="https://github.com/kjkrol/gram/actions/workflows/go.yml/badge.svg" alt="Go Quality Check">
   </a>
 </p>
 
 ## Description
 
-**gokebiten** is a modular game engine for Go: a small `Game` core wraps
+**gram** is a modular game engine for Go: a small `Game` core wraps
 [goke](https://github.com/kjkrol/goke) — a type-safe, archetype-based Entity Component System —
 into [Ebitengine](https://ebitengine.org/)'s `Update`/`Draw`/`Layout` loop. The standard, and only,
 way to add functionality is a `Plugin`: everything beyond the tick loop and a typed `Resources`
@@ -44,7 +44,7 @@ The library ships three built-in plugins:
 ## Installation
 
 ```bash
-go get github.com/kjkrol/gokebiten
+go get github.com/kjkrol/gram
 ```
 
 ## Example

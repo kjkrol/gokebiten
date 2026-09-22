@@ -2,7 +2,7 @@ package selection
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/kjkrol/gokebiten/control"
+	"github.com/kjkrol/gram/control"
 )
 
 // DefaultEventHandler turns left-click and left-drag input into Resources.

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kjkrol/gokebiten/plugins/world/kind"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/render"
 	"github.com/kjkrol/uid"
 )
 

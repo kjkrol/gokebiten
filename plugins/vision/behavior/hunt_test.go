@@ -8,11 +8,11 @@ import (
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/plugin"
-	"github.com/kjkrol/gokebiten/plugins/vision"
-	"github.com/kjkrol/gokebiten/plugins/vision/behavior"
-	"github.com/kjkrol/gokebiten/plugins/world"
-	"github.com/kjkrol/gokebiten/plugins/world/kind"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/vision"
+	"github.com/kjkrol/gram/plugins/vision/behavior"
+	"github.com/kjkrol/gram/plugins/world"
+	"github.com/kjkrol/gram/plugins/world/kind"
 )
 
 type huntBody struct{ x, y float64 }

@@ -2,12 +2,12 @@ package world
 
 import (
 	"fmt"
-	"github.com/kjkrol/gokebiten/plugin"
+	"github.com/kjkrol/gram/plugin"
 	"time"
 
 	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind"
 	"github.com/kjkrol/uid"
 )
 

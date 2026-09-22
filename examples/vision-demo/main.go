@@ -1,5 +1,5 @@
 package main
 
-import "github.com/kjkrol/gokebiten"
+import "github.com/kjkrol/gram"
 
-func main() { gokebiten.Run(NewDemo()) }
+func main() { gram.Run(NewDemo()) }

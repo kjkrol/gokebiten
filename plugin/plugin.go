@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gokebiten/control"
-	"github.com/kjkrol/gokebiten/render"
+	"github.com/kjkrol/gram/control"
+	"github.com/kjkrol/gram/render"
 )
 
 // Plugin extends a Game: Install wires an ECS module, setup, renderers and resources as one unit.
