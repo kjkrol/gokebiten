@@ -16,7 +16,7 @@ func testSpace(t *testing.T) *aabbworld.Space {
 	t.Helper()
 	space, err := aabbworld.NewSpace(aabbworld.Config{
 		Width: 1000, Height: 1000,
-		BucketSize: 64, BucketCapacity: 16, OpsBufferSize: 64,
+		BucketSize: 64, BucketCapacity: 16,
 	})
 	if err != nil {
 		t.Fatalf("aabbworld.NewSpace: %v", err)

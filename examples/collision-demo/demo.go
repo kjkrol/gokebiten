@@ -40,7 +40,7 @@ var rng = rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
 // RectSize, FillPercent and the EntityCount they imply are what the demo runs with;
 // a benchmark sets them to tick this same Stage at another scale.
 var (
-	RectSize    uint32 = 10
+	RectSize    uint32 = 5
 	FillPercent        = 20.0
 	EntityCount        = countFor(RectSize, FillPercent)
 )

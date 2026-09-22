@@ -30,6 +30,7 @@ type Renderer struct {
 	state     *RenderState
 	batch     *render.QuadBatch
 	gridLines []gridLine
+	quads     []camera.Quad
 }
 
 type gridLine struct{ x0, y0, x1, y1 float32 }
@@ -81,7 +82,8 @@ func (l *Renderer) drawCell(c CellID) {
 	l.batch.AppendQuad(float32(x0), float32(y0), float32(x1), float32(y1), l.board.Kind(c).SpriteID)
 
 	if l.state.ShowGridLines {
-		for _, q := range l.camera.ToScreenQuads(float32(x0), float32(y0), float32(x1), float32(y1)) {
+		l.quads = l.camera.ToScreenQuads(float32(x0), float32(y0), float32(x1), float32(y1), l.quads[:0])
+		for _, q := range l.quads {
 			l.gridLines = append(l.gridLines, gridLine{q.X0, q.Y0, q.X1, q.Y1})
 		}
 	}

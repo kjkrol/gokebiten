@@ -74,7 +74,11 @@ func TestCollider_AttachedAndDetachedMidGame(t *testing.T) {
 	})
 
 	offered := func() (n int) {
-		collide.BroadPhase(w.Space(), world.StepReach, aabbworld.CanCollide, func(_, _ uid.UID64) { n++ })
+		var e collide.Engine
+		e.Tick(w.Space(), world.StepReach, aabbworld.CanCollide, 0, func(_, _ uid.UID64) (collide.Body, collide.Body, bool) {
+			n++
+			return collide.Body{}, collide.Body{}, false
+		}, nil, nil)
 		return n
 	}
 	tick := func() int {

@@ -159,25 +159,29 @@ shows how much of it is boilerplate vs. real behavior.
   `world.Plugin.Camera()`.
 - **`board`** — optional grid + terrain over `world`; its grids wrap per axis,
   following the world's `Edges` (`SetWrap(x, y)`). Depends on `world`.
-- **`collision`** — optional broad/narrow-phase detection over `world`'s
-  space. An entity collides exactly while it carries `Collider` —
+- **`collision`** — optional collision detection over `world`'s space, one
+  `Detector` system a tick. An entity collides exactly while it carries `Collider` —
   `kind.Const(collision.Collider{})`, or `Attach`/`Detach` mid-game; the plugin
-  tells the index itself, either way. The broad phase is one `collide.BroadPhase(space, world.StepReach,
-  aabbworld.CanCollide, …)` a tick — every pair whose reaches touch, once — into a
-  `Candidates` list the narrow phase resolves by `Seek` and hands, as `collide.Pair`s, to a
-  `collide.NarrowPhase` whose `Separate` tests each exactly, pushes the overlapping apart and tells
-  the index where they came to rest — `Left()` names whoever it pushed out through an open edge
-  (both from `github.com/kjkrol/aabbworld/collide`). An entity carrying `Physics` (`Mass`, `Restitution` 0–1) is pushed out
-  of overlaps and bounces — the bounce is the engine's own, an infinite `Mass`
-  is a wall; one without `Physics` is only ever detected (a town, a trigger).
-  Separation is always an even split. Reactions are behaviors hosted inside the
-  engine's own passes: `plugin.Between[A, B]` of a `Meeting` per contact between
-  two tags (narrow phase, `plugin.Anything` as the wildcard), `plugin.Each[T]`
-  of a `Struck` per entity per tick (broad phase). A strategy exports a plain
-  function of the flat `collision/behavior` package (`CountContacts`, `LogContacts`, `ShowHits`) — the tags it runs between
-  are named where it is registered, `RegisterBehavior(plugin.Between[A, B](fn), ...)`.
-  `Collider` is the plugin's one aggregate: this tick's candidates plus what the
-  entity struck (`Collider.Contacts()`). Depends on `world`.
+  tells the index itself, either way. The tick is one `collide.Engine.Tick` (from
+  `github.com/kjkrol/aabbworld/collide`): the engine names every pair whose reaches
+  touch (`world.StepReach`), the `Detector` resolves each by `Seek` into two
+  `collide.Body`s, the engine tests them exactly, pushes the overlapping apart and
+  tells the index where they came to rest — `Left()` names whoever it pushed out
+  through an open edge. Between the exact box test and the push sits the plugin's
+  `ShapeTest` (`WithShapeTest`; `BoxesTouch` by default, at no cost): asked once per
+  overlapping pair with both `Contactee`s, it may refuse the contact (an alpha mask
+  saying the pixels miss) or refine the penetration (an SDF). An entity carrying
+  `Physics` (`Mass`, `Restitution` 0–1) is pushed out of overlaps and bounces — the
+  bounce is the engine's own, an infinite `Mass` is a wall; one without `Physics`
+  is only ever detected (a town, a trigger). Separation is always an even split.
+  Reactions are behaviors hosted inside the `Detector`'s own pass:
+  `plugin.Between[A, B]` of a `Meeting` per confirmed contact between two tags
+  (`plugin.Anything` as the wildcard), `plugin.Each[T]` of a `Struck` per entity per
+  tick, with what it struck the tick before. A strategy exports a plain function of
+  the flat `collision/behavior` package (`CountContacts`, `LogContacts`, `ShowHits`) —
+  the tags it runs between are named where it is registered,
+  `RegisterBehavior(plugin.Between[A, B](fn), ...)`. `Collider` is the plugin's one
+  aggregate: what the entity struck (`Collider.Contacts()`). Depends on `world`.
 - **`navigation`** — pathfinding/movement toward a `MoveOrder` across a
   `board`. Depends on `board` and `world`.
 - **`selection`** — mouse click/drag → `Selected` tag on `world` entities.
@@ -199,7 +203,10 @@ Each package has a `doc.go` describing the gameplay capability it adds.
 ### Stage / Scene
 
 A `game.Game` also supplies `Props()` (window/tick-rate config, read
-once at startup by `gokebiten.Run(g)`) alongside a named collection of
+once at startup by `gokebiten.Run(g)`; `TargetTPS` is the engine's own fixed
+step — Ebitengine runs one `Update` per frame (`SyncWithFPS`), and a frame that
+falls behind runs at most 5 steps and drops the rest, so the game slows down
+instead of spiralling) alongside a named collection of
 `game.Stage`s plus which one starts active (`Stages() (map[string]Stage,
 string)`) — every game writes its own small `Game` implementation, even
 for a single Stage, since only a concrete type can supply its own `Props`.

@@ -18,6 +18,7 @@ type Plugin struct {
 
 	pairs    plugin.PairHost[Meeting]
 	entities plugin.EachHost[Struck]
+	shapes   ShapeTest
 }
 
 var _ plugin.Plugin = (*Plugin)(nil)
@@ -36,8 +37,15 @@ func (p *Plugin) Name() string { return "gokebiten.collision" }
 func (p *Plugin) Install(ctx plugin.Installer) error {
 	p.module = newModule(p.worldPlugin.Space(), ctx.ECS(), &p.pairs, &p.entities)
 	p.module.tracked = p.worldPlugin.Tracked
+	p.module.shapes = p.shapes
 	ctx.UseModule(p.module)
 	return nil
+}
+
+// WithShapeTest runs test on every overlapping pair before it is separated; call before Use.
+func (p *Plugin) WithShapeTest(test ShapeTest) *Plugin {
+	p.shapes = test
+	return p
 }
 
 // RunPlan runs the collision engine for this tick — call from your own Game.Loop closure.

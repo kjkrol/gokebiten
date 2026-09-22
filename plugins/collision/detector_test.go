@@ -16,13 +16,13 @@ import (
 
 const epsilon = 1e-9
 
-// thing is one entity of a narrow-phase fixture — a 10x10 box at y=100 — and,
+// thing is one entity of a detector fixture — a 10x10 box at y=100 — and,
 // once the tick has run, what became of it.
 type thing struct {
-	x        float64
-	delta    geom.Vec
-	physics  *collision.Physics // nil: only ever detected
-	touching []int              // fixture indices the broad phase paired it with
+	x       float64
+	delta   geom.Vec
+	physics *collision.Physics // nil: only ever detected
+	first   bool               // spawned before the others
 
 	id       uid.UID64
 	base     world.Base
@@ -33,8 +33,8 @@ func elastic(mass float64) *collision.Physics {
 	return &collision.Physics{Mass: mass, Restitution: 1}
 }
 
-// narrowTick spawns things in order, runs one narrow-phase tick over them and reads each back.
-func narrowTick(t *testing.T, things ...*thing) {
+// detectTick spawns things, runs one detector tick over them and reads each back.
+func detectTick(t *testing.T, things ...*thing) {
 	t.Helper()
 	space := testSpace(t)
 
@@ -68,22 +68,7 @@ func narrowTick(t *testing.T, things ...*thing) {
 		read = si.NewQueryBuilder(&base, &seen).Build()
 	}})
 
-	var found collision.Candidates
-	listed := map[collision.Candidate]bool{}
-	for _, th := range things {
-		for _, other := range th.touching {
-			pair := collision.Candidate{A: th.id, B: things[other].id}
-			if pair.A.Index() > pair.B.Index() {
-				pair.A, pair.B = pair.B, pair.A
-			}
-			if !listed[pair] {
-				listed[pair] = true
-				found.Add(pair.A, pair.B)
-			}
-		}
-	}
-
-	handle := ecs.RegSys(collision.NewNarrowPhase(space, &found))
+	handle := ecs.RegSys(collision.NewDetector(space))
 	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(handle, d)
 		ctx.Sync()
@@ -110,22 +95,22 @@ func (th *thing) left() float64 { return float64(th.base.Pos.TopLeft.X) }
 
 func (th *thing) speedX() float64 { return th.base.Vel.Delta().X }
 
-func TestNarrowPhase_PhysicalPair_IsPushedApart(t *testing.T) {
-	a := &thing{x: 100, physics: elastic(1), touching: []int{1}}
+func TestDetector_PhysicalPair_IsPushedApart(t *testing.T) {
+	a := &thing{x: 100, physics: elastic(1)}
 	b := &thing{x: 105, physics: elastic(1)}
 
-	narrowTick(t, a, b)
+	detectTick(t, a, b)
 
 	if a.left() >= 100 || b.left() <= 105 {
 		t.Errorf("a at %v, b at %v — want both pushed out of a 5-unit overlap", a.left(), b.left())
 	}
 }
 
-func TestNarrowPhase_ImmovableSide_StaysPutAndReflectsTheOther(t *testing.T) {
-	ball := &thing{x: 100, delta: geom.NewVec(4, 0), physics: elastic(1), touching: []int{1}}
+func TestDetector_ImmovableSide_StaysPutAndReflectsTheOther(t *testing.T) {
+	ball := &thing{x: 100, delta: geom.NewVec(4, 0), physics: elastic(1)}
 	wall := &thing{x: 105, physics: elastic(math.Inf(1))}
 
-	narrowTick(t, ball, wall)
+	detectTick(t, ball, wall)
 
 	if wall.left() != 105 {
 		t.Errorf("the wall moved to %v, want it left at 105", wall.left())
@@ -141,11 +126,11 @@ func TestNarrowPhase_ImmovableSide_StaysPutAndReflectsTheOther(t *testing.T) {
 	}
 }
 
-func TestNarrowPhase_ImmovableSpawnedFirst_StillStopsWhatRunsIntoIt(t *testing.T) {
-	wall := &thing{x: 105, physics: elastic(math.Inf(1)), touching: []int{1}}
-	ball := &thing{x: 100, delta: geom.NewVec(4, 0), physics: elastic(1), touching: []int{0}}
+func TestDetector_ImmovableSpawnedFirst_StillStopsWhatRunsIntoIt(t *testing.T) {
+	wall := &thing{x: 105, physics: elastic(math.Inf(1))}
+	ball := &thing{x: 100, delta: geom.NewVec(4, 0), physics: elastic(1)}
 
-	narrowTick(t, wall, ball)
+	detectTick(t, wall, ball)
 
 	if wall.id.Index() >= ball.id.Index() {
 		t.Fatalf("fixture broken: wall index %d, ball index %d — the wall has to come first", wall.id.Index(), ball.id.Index())
@@ -158,20 +143,19 @@ func TestNarrowPhase_ImmovableSpawnedFirst_StillStopsWhatRunsIntoIt(t *testing.T
 	}
 }
 
-func TestNarrowPhase_SideWithoutPhysics_IsDetectedButNeverPushed(t *testing.T) {
+func TestDetector_SideWithoutPhysics_IsDetectedButNeverPushed(t *testing.T) {
 	for name, town := range map[string]*thing{
 		"spawned after the walker":  {x: 105},
-		"spawned before the walker": {x: 105, touching: []int{1}},
+		"spawned before the walker": {x: 105, first: true},
 	} {
 		t.Run(name, func(t *testing.T) {
-			walker := &thing{x: 100, delta: geom.NewVec(4, 0), physics: elastic(1), touching: []int{1}}
+			walker := &thing{x: 100, delta: geom.NewVec(4, 0), physics: elastic(1)}
 			order := []*thing{walker, town}
-			if len(town.touching) > 0 {
-				walker.touching = []int{0}
+			if town.first {
 				order = []*thing{town, walker}
 			}
 
-			narrowTick(t, order...)
+			detectTick(t, order...)
 
 			if walker.left() != 100 || town.left() != 105 {
 				t.Errorf("walker at %v, town at %v — want neither pushed", walker.left(), town.left())
@@ -191,12 +175,12 @@ func TestNarrowPhase_SideWithoutPhysics_IsDetectedButNeverPushed(t *testing.T) {
 	}
 }
 
-func TestNarrowPhase_KeepsIteratingWhileSeparationCreatesNewOverlap(t *testing.T) {
-	a := &thing{x: 100, physics: elastic(1), touching: []int{1, 2}}
-	b := &thing{x: 102, physics: elastic(1), touching: []int{0, 2}}
-	c := &thing{x: 104, physics: elastic(1), touching: []int{0, 1}}
+func TestDetector_KeepsIteratingWhileSeparationCreatesNewOverlap(t *testing.T) {
+	a := &thing{x: 100, physics: elastic(1)}
+	b := &thing{x: 102, physics: elastic(1)}
+	c := &thing{x: 104, physics: elastic(1)}
 
-	narrowTick(t, a, b, c)
+	detectTick(t, a, b, c)
 
 	for _, pair := range []struct {
 		name string
@@ -208,12 +192,12 @@ func TestNarrowPhase_KeepsIteratingWhileSeparationCreatesNewOverlap(t *testing.T
 	}
 }
 
-func TestNarrowPhase_SqueezedEntity_BouncesOffBothNeighboursInTurn(t *testing.T) {
-	left := &thing{x: 93, delta: geom.NewVec(5, 0), physics: elastic(1), touching: []int{1}}
-	middle := &thing{x: 100, physics: elastic(1), touching: []int{0, 2}}
-	right := &thing{x: 107, delta: geom.NewVec(-5, 0), physics: elastic(1), touching: []int{1}}
+func TestDetector_SqueezedEntity_BouncesOffBothNeighboursInTurn(t *testing.T) {
+	left := &thing{x: 93, delta: geom.NewVec(5, 0), physics: elastic(1)}
+	middle := &thing{x: 100, physics: elastic(1)}
+	right := &thing{x: 107, delta: geom.NewVec(-5, 0), physics: elastic(1)}
 
-	narrowTick(t, left, middle, right)
+	detectTick(t, left, middle, right)
 
 	for i, want := range []float64{0, -5, 5} {
 		if got := []*thing{left, middle, right}[i].speedX(); math.Abs(got-want) > epsilon {
@@ -233,11 +217,11 @@ func TestNarrowPhase_SqueezedEntity_BouncesOffBothNeighboursInTurn(t *testing.T)
 	}
 }
 
-func TestNarrowPhase_EqualMasses_ExchangeVelocitiesAlongTheNormal(t *testing.T) {
-	a := &thing{x: 100, delta: geom.NewVec(5, 2), physics: elastic(1), touching: []int{1}}
+func TestDetector_EqualMasses_ExchangeVelocitiesAlongTheNormal(t *testing.T) {
+	a := &thing{x: 100, delta: geom.NewVec(5, 2), physics: elastic(1)}
 	b := &thing{x: 107, delta: geom.NewVec(-5, 2), physics: elastic(1)}
 
-	narrowTick(t, a, b)
+	detectTick(t, a, b)
 
 	if math.Abs(a.speedX()+5) > epsilon || math.Abs(b.speedX()-5) > epsilon {
 		t.Errorf("X = (%v, %v), want (-5, 5) swapped", a.speedX(), b.speedX())
@@ -247,12 +231,12 @@ func TestNarrowPhase_EqualMasses_ExchangeVelocitiesAlongTheNormal(t *testing.T) 
 	}
 }
 
-func TestNarrowPhase_HeavyAgainstLight_ConservesMomentumAndEnergy(t *testing.T) {
+func TestDetector_HeavyAgainstLight_ConservesMomentumAndEnergy(t *testing.T) {
 	const heavyMass, lightMass = 9, 1
-	heavy := &thing{x: 100, delta: geom.NewVec(2, 0), physics: elastic(heavyMass), touching: []int{1}}
+	heavy := &thing{x: 100, delta: geom.NewVec(2, 0), physics: elastic(heavyMass)}
 	light := &thing{x: 107, delta: geom.NewVec(-2, 0), physics: elastic(lightMass)}
 
-	narrowTick(t, heavy, light)
+	detectTick(t, heavy, light)
 
 	h, l := heavy.speedX(), light.speedX()
 	if got, want := heavyMass*h+lightMass*l, float64(heavyMass*2+lightMass*-2); math.Abs(got-want) > epsilon {
@@ -267,7 +251,7 @@ func TestNarrowPhase_HeavyAgainstLight_ConservesMomentumAndEnergy(t *testing.T) 
 }
 
 // A pair bounces by the softer of its two sides, all the way down to not at all.
-func TestNarrowPhase_Restitution_DampsTheBounce(t *testing.T) {
+func TestDetector_Restitution_DampsTheBounce(t *testing.T) {
 	cases := map[string]struct {
 		restitutionA, restitutionB float64
 		wantA, wantB               float64
@@ -279,10 +263,10 @@ func TestNarrowPhase_Restitution_DampsTheBounce(t *testing.T) {
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			a := &thing{x: 107, delta: geom.NewVec(-3, 0), physics: &collision.Physics{Restitution: c.restitutionA}, touching: []int{1}}
+			a := &thing{x: 107, delta: geom.NewVec(-3, 0), physics: &collision.Physics{Restitution: c.restitutionA}}
 			b := &thing{x: 100, delta: geom.NewVec(4, 0), physics: &collision.Physics{Restitution: c.restitutionB}}
 
-			narrowTick(t, a, b)
+			detectTick(t, a, b)
 
 			if math.Abs(a.speedX()-c.wantA) > epsilon || math.Abs(b.speedX()-c.wantB) > epsilon {
 				t.Errorf("speeds = (%v, %v), want (%v, %v)", a.speedX(), b.speedX(), c.wantA, c.wantB)
@@ -291,22 +275,22 @@ func TestNarrowPhase_Restitution_DampsTheBounce(t *testing.T) {
 	}
 }
 
-func TestNarrowPhase_Material_IsReadPerSide(t *testing.T) {
-	a := &thing{x: 100, delta: geom.NewVec(5, 0), physics: &collision.Physics{Mass: 4, Restitution: 0.5}, touching: []int{1}}
+func TestDetector_Material_IsReadPerSide(t *testing.T) {
+	a := &thing{x: 100, delta: geom.NewVec(5, 0), physics: &collision.Physics{Mass: 4, Restitution: 0.5}}
 	b := &thing{x: 105, delta: geom.NewVec(-5, 0), physics: &collision.Physics{Restitution: 1}}
 
-	narrowTick(t, a, b)
+	detectTick(t, a, b)
 
 	if len(a.contacts) != 1 || math.Abs(a.contacts[0].Impact-12) > epsilon {
 		t.Errorf("contacts = %+v, want one at impact 12", a.contacts)
 	}
 }
 
-func TestNarrowPhase_Contacts_PublishedToBothSides(t *testing.T) {
-	a := &thing{x: 100, delta: geom.NewVec(5, 0), physics: elastic(1), touching: []int{1}}
+func TestDetector_Contacts_PublishedToBothSides(t *testing.T) {
+	a := &thing{x: 100, delta: geom.NewVec(5, 0), physics: elastic(1)}
 	b := &thing{x: 105, delta: geom.NewVec(-5, 0), physics: elastic(1)}
 
-	narrowTick(t, a, b)
+	detectTick(t, a, b)
 
 	for _, side := range []struct {
 		self, other *thing
@@ -328,7 +312,7 @@ func TestNarrowPhase_Contacts_PublishedToBothSides(t *testing.T) {
 	}
 }
 
-func TestNarrowPhase_Contacts_DoNotSurviveTheNextTick(t *testing.T) {
+func TestDetector_Contacts_DoNotSurviveTheNextTick(t *testing.T) {
 	space := testSpace(t)
 	ecs := goke.New()
 	var struck goke.Comp[collision.Collider]
@@ -341,13 +325,9 @@ func TestNarrowPhase_Contacts_DoNotSurviveTheNextTick(t *testing.T) {
 		q = si.NewQueryBuilder(&struck).Build()
 	}})
 
-	var found collision.Candidates
-	broad := ecs.RegSys(collision.NewBroadPhase(space, &found))
-	narrow := ecs.RegSys(collision.NewNarrowPhase(space, &found))
+	detect := ecs.RegSys(collision.NewDetector(space))
 	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
-		ctx.Run(broad, d)
-		ctx.Sync()
-		ctx.Run(narrow, d)
+		ctx.Run(detect, d)
 		ctx.Sync()
 	})
 

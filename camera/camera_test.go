@@ -293,7 +293,7 @@ func TestToScreenQuads_PartialViewportClipsInsteadOfWrapping(t *testing.T) {
 	c := newBasicCamera(surface, testViewport(0, 0, 768, 512), aabbworld.Torus)
 	c.Translate(400, 0)
 
-	quads := c.ToScreenQuads(395, 10, 405, 20)
+	quads := c.ToScreenQuads(395, 10, 405, 20, nil)
 
 	if len(quads) != 1 {
 		t.Fatalf("len(quads) = %d, want 1 (no wrap split — this isn't near the world's own edge)", len(quads))
@@ -433,7 +433,7 @@ func TestToScreenQuads_NoSplitWhenNotStraddlingReference(t *testing.T) {
 	c := NewFromSpace(1024, 1024, aabbworld.Torus)
 	c.Translate(1000, 0)
 
-	quads := c.ToScreenQuads(1, 0, 11, 10)
+	quads := c.ToScreenQuads(1, 0, 11, 10, nil)
 
 	if len(quads) != 1 {
 		t.Fatalf("len(quads) = %d, want 1", len(quads))
@@ -451,7 +451,7 @@ func TestToScreenQuads_SplitsOnSingleAxis(t *testing.T) {
 	c := NewFromSpace(1024, 1024, aabbworld.Torus)
 	c.Translate(1000, 0)
 
-	quads := c.ToScreenQuads(998, 0, 1010, 10)
+	quads := c.ToScreenQuads(998, 0, 1010, 10, nil)
 
 	if len(quads) != 2 {
 		t.Fatalf("len(quads) = %d, want 2", len(quads))
@@ -479,7 +479,7 @@ func TestToScreenQuads_SplitsOnBothAxes(t *testing.T) {
 	c := NewFromSpace(1024, 1024, aabbworld.Torus)
 	c.Translate(1000, 1000)
 
-	quads := c.ToScreenQuads(998, 998, 1010, 1010)
+	quads := c.ToScreenQuads(998, 998, 1010, 1010, nil)
 
 	if len(quads) != 4 {
 		t.Fatalf("len(quads) = %d, want 4", len(quads))
@@ -532,7 +532,7 @@ func TestCamera_WrapsOnlyAlongAWrappingAxis(t *testing.T) {
 	if c.Visible(geom.NewAABBAt(geom.NewVec(960, 10), 20, 20)) {
 		t.Error("a box at the top is visible from the bottom of a world that does not wrap in Y")
 	}
-	if got := len(c.ToScreenQuads(940, 850, 1010, 870)); got != 1 {
+	if got := len(c.ToScreenQuads(940, 850, 1010, 870, nil)); got != 1 {
 		t.Errorf("a box inside the window drew as %d quads, want 1", got)
 	}
 }

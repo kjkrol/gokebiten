@@ -1,6 +1,7 @@
 package collision_test
 
 import (
+	"github.com/kjkrol/aabbworld/collide"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ func testSpace(t *testing.T) *aabbworld.Space {
 	t.Helper()
 	space, err := aabbworld.NewSpace(aabbworld.Config{
 		Width: 1000, Height: 1000,
-		BucketSize: 64, BucketCapacity: 16, OpsBufferSize: 64,
+		BucketSize: 64, BucketCapacity: 16,
 	})
 	if err != nil {
 		t.Fatalf("aabbworld.NewSpace: %v", err)
@@ -71,8 +72,21 @@ func seedMovingCollidableEntity(t *testing.T, si *goke.SysInit, space *aabbworld
 	return id
 }
 
-// broadTick seeds a world, runs ticks of movement and broad phase, and returns the last pairs.
-func broadTick(t *testing.T, ticks int, seed func(si *goke.SysInit, space *aabbworld.Space)) []collision.Candidate {
+type candidate struct{ A, B uid.UID64 }
+
+// candidates lists the pairs the engine asks about, refusing each so nothing is tested or moved.
+func candidates(space *aabbworld.Space) []candidate {
+	var found []candidate
+	var e collide.Engine
+	e.Tick(space, world.StepReach, aabbworld.CanCollide, 0, func(a, b uid.UID64) (collide.Body, collide.Body, bool) {
+		found = append(found, candidate{a, b})
+		return collide.Body{}, collide.Body{}, false
+	}, nil, nil)
+	return found
+}
+
+// broadTick seeds a world, runs ticks of movement and detection, and lists who may then touch.
+func broadTick(t *testing.T, ticks int, seed func(si *goke.SysInit, space *aabbworld.Space)) []candidate {
 	t.Helper()
 	space := testSpace(t)
 	ecs := goke.New()
@@ -81,22 +95,21 @@ func broadTick(t *testing.T, ticks int, seed func(si *goke.SysInit, space *aabbw
 		space.Flush(nil)
 	}})
 
-	var found collision.Candidates
 	move := ecs.RegSys(world.NewMoveSystem(space))
-	broad := ecs.RegSys(collision.NewBroadPhase(space, &found))
+	detect := ecs.RegSys(collision.NewDetector(space))
 	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(move, d)
-		ctx.Run(broad, d)
+		ctx.Run(detect, d)
 		ctx.Sync()
 	})
 	for range ticks {
 		ecs.Tick(time.Second)
 	}
-	return found.All()
+	return candidates(space)
 }
 
 // paired reports whether found names a and b as a pair, either way round.
-func paired(found []collision.Candidate, a, b uid.UID64) bool {
+func paired(found []candidate, a, b uid.UID64) bool {
 	for _, c := range found {
 		if (c.A == a && c.B == b) || (c.A == b && c.B == a) {
 			return true
@@ -105,7 +118,7 @@ func paired(found []collision.Candidate, a, b uid.UID64) bool {
 	return false
 }
 
-func TestBroadPhase_Update_NamesOverlappingNeighborsOnce(t *testing.T) {
+func TestCandidates_Update_NamesOverlappingNeighborsOnce(t *testing.T) {
 	var idA, idB uid.UID64
 	found := broadTick(t, 1, func(si *goke.SysInit, space *aabbworld.Space) {
 		idA = seedBroadPhaseEntity(t, si, space, posAt(0, 0, 10, 10))
@@ -117,7 +130,7 @@ func TestBroadPhase_Update_NamesOverlappingNeighborsOnce(t *testing.T) {
 	}
 }
 
-func TestBroadPhase_Update_StartsTheListAfreshEachTick(t *testing.T) {
+func TestCandidates_Update_StartsTheListAfreshEachTick(t *testing.T) {
 	found := broadTick(t, 3, func(si *goke.SysInit, space *aabbworld.Space) {
 		seedBroadPhaseEntity(t, si, space, posAt(0, 0, 10, 10))
 		seedBroadPhaseEntity(t, si, space, posAt(5, 0, 10, 10))
@@ -128,7 +141,7 @@ func TestBroadPhase_Update_StartsTheListAfreshEachTick(t *testing.T) {
 	}
 }
 
-func TestBroadPhase_Update_FarApart_NothingNamed(t *testing.T) {
+func TestCandidates_Update_FarApart_NothingNamed(t *testing.T) {
 	found := broadTick(t, 1, func(si *goke.SysInit, space *aabbworld.Space) {
 		seedBroadPhaseEntity(t, si, space, posAt(0, 0, 10, 10))
 		seedBroadPhaseEntity(t, si, space, posAt(900, 900, 10, 10))
@@ -139,7 +152,7 @@ func TestBroadPhase_Update_FarApart_NothingNamed(t *testing.T) {
 	}
 }
 
-func TestBroadPhase_Update_SingleEntity_NeverPairsWithItself(t *testing.T) {
+func TestCandidates_Update_SingleEntity_NeverPairsWithItself(t *testing.T) {
 	found := broadTick(t, 1, func(si *goke.SysInit, space *aabbworld.Space) {
 		seedBroadPhaseEntity(t, si, space, posAt(0, 0, 10, 10))
 	})
@@ -149,7 +162,7 @@ func TestBroadPhase_Update_SingleEntity_NeverPairsWithItself(t *testing.T) {
 	}
 }
 
-func TestBroadPhase_Update_IgnoresNonCollidableNeighbor(t *testing.T) {
+func TestCandidates_Update_IgnoresNonCollidableNeighbor(t *testing.T) {
 	found := broadTick(t, 1, func(si *goke.SysInit, space *aabbworld.Space) {
 		seedBroadPhaseEntity(t, si, space, posAt(0, 0, 10, 10))
 		seedNonCollidableEntity(t, si, space, posAt(5, 0, 10, 10))
@@ -160,7 +173,7 @@ func TestBroadPhase_Update_IgnoresNonCollidableNeighbor(t *testing.T) {
 	}
 }
 
-func TestBroadPhase_Update_FollowsAnEntityMovedByMoveSystem(t *testing.T) {
+func TestCandidates_Update_FollowsAnEntityMovedByMoveSystem(t *testing.T) {
 	var idA, idB uid.UID64
 	found := broadTick(t, 1, func(si *goke.SysInit, space *aabbworld.Space) {
 		idA = seedMovingCollidableEntity(t, si, space, posAt(78, 0, 10, 10), world.Velocity{Dir: geom.NewVec(1, 0), Value: 1000})
@@ -172,7 +185,7 @@ func TestBroadPhase_Update_FollowsAnEntityMovedByMoveSystem(t *testing.T) {
 	}
 }
 
-func TestBroadPhase_ReachIsOneTickOfClosing(t *testing.T) {
+func TestCandidates_ReachIsOneTickOfClosing(t *testing.T) {
 	const size = 10
 	for gap, want := range map[float64]bool{size: true, size + 1: false} {
 		var idA, idB uid.UID64
@@ -187,7 +200,7 @@ func TestBroadPhase_ReachIsOneTickOfClosing(t *testing.T) {
 	}
 }
 
-func TestBroadPhase_ReachFollowsEachEntitysOwnSize(t *testing.T) {
+func TestCandidates_ReachFollowsEachEntitysOwnSize(t *testing.T) {
 	var small, big, otherSmall uid.UID64
 	found := broadTick(t, 1, func(si *goke.SysInit, space *aabbworld.Space) {
 		small = seedBroadPhaseEntity(t, si, space, posAt(100, 300, 2, 2))

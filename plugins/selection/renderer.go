@@ -30,10 +30,10 @@ var highlightColor = color.RGBA{R: 220, G: 40, B: 40, A: 255}
 // DefaultHighlightStyle draws a thin red outline around box.
 func DefaultHighlightStyle() HighlightStyle {
 	return HighlightStyleFn(func(screen *ebiten.Image, cam camera.Camera, box camera.AABB) {
-		quads := cam.ToScreenQuads(
+		var buf [4]camera.Quad
+		for _, q := range cam.ToScreenQuads(
 			float32(box.TopLeft.X), float32(box.TopLeft.Y),
-			float32(box.BottomRight.X), float32(box.BottomRight.Y))
-		for _, q := range quads {
+			float32(box.BottomRight.X), float32(box.BottomRight.Y), buf[:0]) {
 			vector.StrokeRect(screen, q.X0, q.Y0, q.X1-q.X0, q.Y1-q.Y0, 2, highlightColor, true)
 		}
 	})

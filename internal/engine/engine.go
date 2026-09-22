@@ -107,8 +107,9 @@ func (e *Engine) SwitchStage(name string) error {
 	return nil
 }
 
-// Init calls Game.Stages and enters the initial Stage, without starting the Ebitengine loop.
+// Init enters the initial Stage and makes the engine's step the only clock, loop not yet started.
 func (e *Engine) Init() error {
+	ebiten.SetTPS(ebiten.SyncWithFPS)
 	stages, initial := e.game.Stages()
 	stage, ok := stages[initial]
 	if !ok {

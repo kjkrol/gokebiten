@@ -13,20 +13,18 @@ import (
 
 var _ goke.Module = (*module)(nil)
 
-// module is the optional broad/narrow-phase collision engine, run over a
-// *aabbworld.Space borrowed from world.Module — see Plugin.Install.
+// module is the optional collision engine, run over a *aabbworld.Space borrowed from world.
 type module struct {
 	space *aabbworld.Space
 	ecs   *goke.ECS
-	found Candidates
 
 	pairs    *plugin.PairHost[Meeting]
 	entities *plugin.EachHost[Struck]
 
-	broadPhase  goke.Runnable
-	narrowPhase goke.Runnable
-	tracked     func(t plugin.Tick, id uid.UID64, inside bool)
-	built       bool
+	detector goke.Runnable
+	tracked  func(t plugin.Tick, id uid.UID64, inside bool)
+	shapes   ShapeTest
+	built    bool
 }
 
 // New builds the collision engine over space.
@@ -50,10 +48,7 @@ func (m *module) RegSystems(ecs *goke.ECS) {
 }
 
 func (m *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
-	ctx.Run(m.broadPhase, d)
-	ctx.Sync()
-
-	ctx.Run(m.narrowPhase, d)
+	ctx.Run(m.detector, d)
 	ctx.Sync()
 }
 
@@ -113,11 +108,10 @@ func host(pairs *plugin.PairHost[Meeting], entities *plugin.EachHost[Struck], be
 }
 
 func (m *module) build() {
-	m.broadPhase = m.ecs.RegSys(newBroadPhase(m.space, &m.found, m.entities))
-	narrow := newNarrowPhase(m.space, &m.found, m.pairs)
+	detector := newDetector(m.space, m.pairs, m.entities, m.shapes)
 	if m.tracked != nil {
-		narrow.tracked = m.tracked
+		detector.tracked = m.tracked
 	}
-	m.narrowPhase = m.ecs.RegSys(narrow)
+	m.detector = m.ecs.RegSys(detector)
 	m.built = true
 }

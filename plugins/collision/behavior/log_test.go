@@ -23,7 +23,7 @@ func collide(t *testing.T, opts ...behavior.LogOption) (idA, idB uid.UID64) {
 	t.Helper()
 	space, err := aabbworld.NewSpace(aabbworld.Config{
 		Width: 1000, Height: 1000,
-		BucketSize: 64, BucketCapacity: 16, OpsBufferSize: 64,
+		BucketSize: 64, BucketCapacity: 16,
 	})
 	if err != nil {
 		t.Fatalf("aabbworld.NewSpace: %v", err)

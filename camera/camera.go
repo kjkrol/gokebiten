@@ -30,8 +30,8 @@ type Camera interface {
 	ToScreen(x, y float32) (float32, float32)
 	// FromScreen inverts ToScreen: screen coordinates back to world coordinates.
 	FromScreen(sx, sy float32) (float32, float32)
-	// ToScreenQuads projects a rectangle to screen space, split at a toroidal wrap seam if needed.
-	ToScreenQuads(x0, y0, x1, y1 float32) []Quad
+	// ToScreenQuads appends to dst the rectangle projected to screen space, split at a wrap seam.
+	ToScreenQuads(x0, y0, x1, y1 float32, dst []Quad) []Quad
 	Visible(box AABB) bool
 	// Bounds returns the current effective (post-zoom) world-space viewport.
 	Bounds() AABB
@@ -171,31 +171,31 @@ func (c *basicCamera) ToScreen(x, y float32) (float32, float32) {
 	return (x - float32(c.effective.TopLeft.X)) * c.zoom, (y - float32(c.effective.TopLeft.Y)) * c.zoom
 }
 
-func (c *basicCamera) ToScreenQuads(x0, y0, x1, y1 float32) []Quad {
+func (c *basicCamera) ToScreenQuads(x0, y0, x1, y1 float32, dst []Quad) []Quad {
 	if c.edges&aabbworld.Torus == 0 {
 		sx0, sy0 := c.ToScreen(x0, y0)
-		return []Quad{{sx0, sy0, sx0 + (x1-x0)*c.zoom, sy0 + (y1-y0)*c.zoom, 0, 1, 0, 1}}
+		return append(dst, Quad{sx0, sy0, sx0 + (x1-x0)*c.zoom, sy0 + (y1-y0)*c.zoom, 0, 1, 0, 1})
 	}
 	u0 := c.offsetX(x0)
 	u1 := u0 + (x1 - x0)
 	v0 := c.offsetY(y0)
 	v1 := v0 + (y1 - y0)
 
-	var quads []Quad
-	for _, xp := range axisPieces(u0, u1, float32(c.world.X), c.edges.WrapsX()) {
-		for _, yp := range axisPieces(v0, v1, float32(c.world.Y), c.edges.WrapsY()) {
+	var xs, ys [2]rangePiece
+	for _, xp := range axisPieces(u0, u1, float32(c.world.X), c.edges.WrapsX(), &xs) {
+		for _, yp := range axisPieces(v0, v1, float32(c.world.Y), c.edges.WrapsY(), &ys) {
 			sx0 := xp.screenLo * c.zoom
 			sx1 := sx0 + (xp.hi-xp.lo)*c.zoom
 			sy0 := yp.screenLo * c.zoom
 			sy1 := sy0 + (yp.hi-yp.lo)*c.zoom
-			quads = append(quads, Quad{
+			dst = append(dst, Quad{
 				X0: sx0, Y0: sy0, X1: sx1, Y1: sy1,
 				T0X: (xp.lo - u0) / (u1 - u0), T1X: (xp.hi - u0) / (u1 - u0),
 				T0Y: (yp.lo - v0) / (v1 - v0), T1Y: (yp.hi - v0) / (v1 - v0),
 			})
 		}
 	}
-	return quads
+	return dst
 }
 
 type rangePiece struct{ lo, hi, screenLo float32 }
@@ -218,18 +218,14 @@ func (c *basicCamera) offsetY(y float32) float32 {
 	return windowOffset(y, ref, float32(c.world.Y), float32(c.effective.Size.Y))
 }
 
-func axisPieces(u0, u1, size float32, wraps bool) []rangePiece {
-	if !wraps {
-		return []rangePiece{{u0, u1, u0}}
+// axisPieces fills buf with the one or two pieces [u0, u1] falls into along an axis.
+func axisPieces(u0, u1, size float32, wraps bool, buf *[2]rangePiece) []rangePiece {
+	if wraps && u1 > size {
+		buf[0], buf[1] = rangePiece{u0, size, u0}, rangePiece{size, u1, 0}
+		return buf[:2]
 	}
-	return splitRange(u0, u1, size)
-}
-
-func splitRange(u0, u1, size float32) []rangePiece {
-	if u1 <= size {
-		return []rangePiece{{u0, u1, u0}}
-	}
-	return []rangePiece{{u0, size, u0}, {size, u1, 0}}
+	buf[0] = rangePiece{u0, u1, u0}
+	return buf[:1]
 }
 
 func (c *basicCamera) FromScreen(sx, sy float32) (float32, float32) {

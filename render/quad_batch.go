@@ -12,6 +12,7 @@ type QuadBatch struct {
 	camera   camera.Camera
 	vertices []ebiten.Vertex
 	indices  []uint16
+	quads    []camera.Quad
 	triOpts  *ebiten.DrawTrianglesOptions
 }
 
@@ -26,7 +27,8 @@ func (b *QuadBatch) AppendQuadUV(x0, y0, x1, y1 float32, id SpriteID, u0, v0, u1
 	sx0, sy0, sx1, sy1 := b.atlas.UV(id)
 	spriteW, spriteH := sx1-sx0, sy1-sy0
 
-	for _, q := range b.camera.ToScreenQuads(x0, y0, x1, y1) {
+	b.quads = b.camera.ToScreenQuads(x0, y0, x1, y1, b.quads[:0])
+	for _, q := range b.quads {
 		pu0, pu1 := u0+q.T0X*(u1-u0), u0+q.T1X*(u1-u0)
 		pv0, pv1 := v0+q.T0Y*(v1-v0), v0+q.T1Y*(v1-v0)
 		fsx0, fsy0 := sx0+pu0*spriteW, sy0+pv0*spriteH
