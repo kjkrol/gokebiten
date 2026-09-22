@@ -39,3 +39,6 @@ bin/
 
 # codecov
 coverage.txt
+
+# Raw benchmark output of make bench-save
+bench_results/

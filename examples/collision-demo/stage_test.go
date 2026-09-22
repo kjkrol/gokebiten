@@ -93,47 +93,5 @@ func buildStage(tb testing.TB) (*goke.ECS, *mainStage) {
 	return ctx.ecs, stage
 }
 
-// withScale runs fn with the demo sized to rect/percent, restoring the defaults afterwards.
-func withScale(rect uint32, percent float64, fn func()) {
-	oldRect, oldFill, oldCount := RectSize, FillPercent, EntityCount
-	RectSize, FillPercent, EntityCount = rect, percent, countFor(rect, percent)
-	defer func() { RectSize, FillPercent, EntityCount = oldRect, oldFill, oldCount }()
-	fn()
-}
-
-// benchScales are the two configurations the slowdown report is about: the
-// demo's own defaults, and the one where TPS collapses.
-var benchScales = []struct {
-	name    string
-	rect    uint32
-	percent float64
-}{
-	{"rect=20,fill=20%", 20, 20},
-	{"rect=10,fill=20%", 10, 20},
-	{"rect=20,fill=40%", 20, 40},
-	{"rect=10,fill=40%", 10, 40},
-	{"rect=8,fill=20%", 8, 20},
-	{"rect=5,fill=20%", 5, 20},
-}
-
+// benchStep is one tick at the demo's TPS.
 const benchStep = time.Second / TPS
-
-func BenchmarkStageTick(b *testing.B) {
-	for _, sc := range benchScales {
-		b.Run(sc.name, func(b *testing.B) {
-			withScale(sc.rect, sc.percent, func() {
-				ecs, stage := buildStage(b)
-				for range 120 {
-					ecs.Tick(benchStep)
-				}
-				b.ReportMetric(float64(EntityCount), "entities")
-				b.ResetTimer()
-				for b.Loop() {
-					ecs.Tick(benchStep)
-				}
-				b.StopTimer()
-				_ = stage
-			})
-		})
-	}
-}
