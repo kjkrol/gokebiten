@@ -20,17 +20,14 @@ func buildSpace(cfg Config) *aabbworld.Space {
 	capacity := uint32(math.Max(minCapacity, math.Min(maxCapacity, raw)))
 	bucketSide := uint32(1) << bits.Len32(cfg.Entities.MaxSize*capacity-1)
 
-	log.Printf("[world] maxEntities=%d, density=%.2f%%, capacity=%d → bucket=%dx%d, bucketCap=%d",
-		cfg.Entities.MaxCount, density*100, capacity,
-		bucketSide, bucketSide,
-		capacity*capacity)
+	log.Printf("[world] maxEntities=%d, density=%.2f%%, capacity=%d → bucket=%dx%d",
+		cfg.Entities.MaxCount, density*100, capacity, bucketSide, bucketSide)
 
 	space, err := aabbworld.NewSpace(aabbworld.Config{
-		Width:          cfg.Space.Width,
-		Height:         cfg.Space.Height,
-		Edges:          cfg.Space.Edges,
-		BucketSize:     bucketSide,
-		BucketCapacity: int(capacity * capacity),
+		Width:      cfg.Space.Width,
+		Height:     cfg.Space.Height,
+		Edges:      cfg.Space.Edges,
+		BucketSize: bucketSide,
 	})
 	if err != nil {
 		panic(fmt.Sprintf("world: invalid space configuration: %v", err))

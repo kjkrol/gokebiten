@@ -61,9 +61,7 @@ func detectTick(t *testing.T, things ...*thing) {
 			if th.physics != nil {
 				physics.Slice(&f.Cursor)[0] = *th.physics
 			}
-			space.Insert(th.id, &placed.Pos.AABB)
 		}
-		space.Flush(nil)
 
 		read = si.NewQueryBuilder(&base, &seen).Build()
 	}})
@@ -321,7 +319,6 @@ func TestDetector_Contacts_DoNotSurviveTheNextTick(t *testing.T) {
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		seedPhysical(t, si, space, posAt(100, 100, 10, 10), geom.NewVec(5, 0))
 		seedPhysical(t, si, space, posAt(105, 100, 10, 10), geom.NewVec(-5, 0))
-		space.Flush(nil)
 		q = si.NewQueryBuilder(&struck).Build()
 	}})
 
@@ -354,9 +351,7 @@ func seedPhysical(t *testing.T, si *goke.SysInit, space *aabbworld.Space, pos wo
 	baseComp.Slice(&f.Cursor)[0].Pos = pos
 	baseComp.Slice(&f.Cursor)[0].Vel.SetDelta(delta)
 	physicsComp.Slice(&f.Cursor)[0] = collision.Physics{Restitution: 1}
-	id := f.IDs[0]
-	space.Insert(id, &pos.AABB)
-	return id
+	return f.IDs[0]
 }
 
 func countContacts(q *goke.Query, comp goke.Comp[collision.Collider]) int {

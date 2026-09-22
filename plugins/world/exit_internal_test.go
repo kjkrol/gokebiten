@@ -57,7 +57,6 @@ func TestExit_AnEntityLeavingByAnOpenEdgeIsDespawnedByDefault(t *testing.T) {
 	if got := len(living(query)); got != 0 {
 		t.Errorf("%d entities alive once it has wholly left, want 0", got)
 	}
-	p.module.space.Flush(nil)
 	if got := everywhere(p.module.space); got != 0 {
 		t.Errorf("the index still holds %d entities", got)
 	}
@@ -90,7 +89,6 @@ func TestExit_AClosedEdgeStopsTheEntityWhole(t *testing.T) {
 	if got := len(living(query)); got != 1 {
 		t.Fatalf("%d entities alive, want 1", got)
 	}
-	p.module.space.Flush(nil)
 	if got := everywhere(p.module.space); got != 1 {
 		t.Errorf("the index holds %d entities, want the one resting against the edge", got)
 	}

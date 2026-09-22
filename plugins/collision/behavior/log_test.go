@@ -23,7 +23,7 @@ func collide(t *testing.T, opts ...behavior.LogOption) (idA, idB uid.UID64) {
 	t.Helper()
 	space, err := aabbworld.NewSpace(aabbworld.Config{
 		Width: 1000, Height: 1000,
-		BucketSize: 64, BucketCapacity: 16,
+		BucketSize: 64,
 	})
 	if err != nil {
 		t.Fatalf("aabbworld.NewSpace: %v", err)
@@ -47,11 +47,9 @@ func collide(t *testing.T, opts ...behavior.LogOption) (idA, idB uid.UID64) {
 			box := plane.NewAABB(geom.NewVec(x, 100), 10, 10)
 			base.Slice(&f.Cursor)[i].Pos = world.Position{AABB: box}
 			physics.Slice(&f.Cursor)[i] = collision.Physics{Restitution: 1}
-			space.Insert(f.IDs[i], &box)
 		}
 		base.Slice(&f.Cursor)[0].Vel.SetDelta(geom.NewVec(5, 0))
 		base.Slice(&f.Cursor)[1].Vel.SetDelta(geom.NewVec(-5, 0))
-		space.Flush(nil)
 	}})
 	engine.RegSystems(ecs)
 	ecs.SetPlan(engine.RunPlan)

@@ -30,6 +30,7 @@ type module struct {
 
 	// despawned is this tick's removals.
 	despawned map[uid.UID64]struct{}
+	items     []aabbworld.Item
 	exits     exits
 
 	kinds *Kinds
@@ -100,26 +101,19 @@ func (w *module) LoadComps() []goke.CompToken {
 // plugin.PostLoader contract
 // =================================================================
 
-// PostLoad recomputes Count and reinserts every loaded entity's Position into space.
+// PostLoad recomputes Count and hands the space every loaded entity.
 func (w *module) PostLoad() goke.System {
 	return goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		w.remapTypes(si)
-
-		var base goke.Comp[Base]
-		query := si.NewQueryBuilder(&base).Build()
-		query.All()
-		count := 0
-		for query.Next() {
-			cursor := query.Cursor()
-			bases := base.Slice(cursor)
-			for i, id := range cursor.IDs {
-				w.space.Insert(id, &bases[i].Pos.AABB)
-			}
-			count += len(cursor.IDs)
-		}
-		w.space.Flush(nil)
-		w.telemetry.Count = count
+		w.telemetry.Count = len(w.reindex(si))
 	}}
+}
+
+// reindex hands the space every entity there is, and returns them.
+func (w *module) reindex(si *goke.SysInit) []aabbworld.Item {
+	var base goke.Comp[Base]
+	w.items = rebuild(w.space, si.NewQueryBuilder(&base).Build(), &base, w.items)
+	return w.items
 }
 
 // remapTypes rewrites every loaded Base.TypeID from the saved kind order to this build's.
@@ -165,7 +159,7 @@ func (w *module) RegisterSpeedModifier(m SpeedModifier) { w.modifiers = append(w
 // RegisterBehavior adds b to the decision pass that runs before movement.
 func (w *module) RegisterBehavior(b Behavior) { w.behaviors = append(w.behaviors, b) }
 
-// despawn drops id from the ECS and from the spatial index, once per tick.
+// despawn drops id from the ECS, once per tick.
 func (w *module) despawn(cb *goke.CmdBuf, id uid.UID64) {
 	if _, gone := w.despawned[id]; gone {
 		return
@@ -173,12 +167,11 @@ func (w *module) despawn(cb *goke.CmdBuf, id uid.UID64) {
 	w.despawned[id] = struct{}{}
 	w.exits.forget(id)
 	cb.RemoveOne(id)
-	w.space.Remove(id)
 	w.spawnedCount--
 	w.telemetry.Count--
 }
 
-// tracked takes what Space.Translate or Reindex said of id and handles each leaver once.
+// tracked takes what the space said of id's box and handles each leaver once.
 func (w *module) tracked(t plugin.Tick, id uid.UID64, inside bool) {
 	if w.exits.left(id, inside) {
 		w.leave(t, id)
@@ -223,14 +216,14 @@ func (w *module) populate(k registered, rows []any) {
 				pos := k.position.Resolve(row, id)
 				w.validateSize(id, pos)
 				bases[i] = Base{Pos: pos, Vel: k.velocity.Resolve(row, id), TypeID: k.typeID}
-				w.space.Insert(id, &bases[i].Pos.AABB)
+				w.space.Place(&bases[i].Pos.AABB)
 				for _, wr := range writers {
 					wr.Write(&factory.Cursor, i, row, id)
 				}
 				index++
 			}
 		}
-		w.space.Flush(nil)
+		w.reindex(si)
 	}})
 }
 

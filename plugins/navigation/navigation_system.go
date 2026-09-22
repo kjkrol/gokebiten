@@ -103,7 +103,6 @@ func (s *navigationSystem) Init(si *goke.SysInit) {
 func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 	s.clearEnteredTags(cb)
 
-	snapped := false
 	s.query.All()
 	for s.query.Next() {
 		cursor := s.query.Cursor()
@@ -218,8 +217,7 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 			bases[i].Vel.Value = 0
 
 			if s.space != nil && (dx != 0 || dy != 0) {
-				s.space.Translate(id, &bases[i].Pos.AABB, geom.NewVec(dx, dy))
-				snapped = true
+				s.space.Move(&bases[i].Pos.AABB, geom.NewVec(dx, dy))
 			}
 
 			if leg.Active {
@@ -260,10 +258,6 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 			}
 			buf.Commit(s.arrivedEditor)
 		}
-	}
-
-	if snapped {
-		s.space.Flush(nil)
 	}
 }
 

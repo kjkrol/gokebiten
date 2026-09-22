@@ -183,16 +183,16 @@ func compID[T any](p *Plugin) goke.CompID {
 	return p.module.ecs.RegComp[T]()
 }
 
-// Despawn takes an entity out of the ECS at the end of the tick, and out of the spatial index.
+// Despawn takes an entity out of the ECS at the end of the tick.
 func (p *Plugin) Despawn(cb *goke.CmdBuf, id uid.UID64) { p.module.despawn(cb, id) }
 
 // OnExit sets what happens, once, to an entity leaving by an open edge; unset, it is despawned.
 func (p *Plugin) OnExit(fn func(t plugin.Tick, id uid.UID64)) { p.module.exits.onExit = fn }
 
-// Tracked takes the result of a Space.Translate or Reindex a sibling plugin made for id.
+// Tracked takes what the space said of a move a sibling plugin made for id.
 func (p *Plugin) Tracked(t plugin.Tick, id uid.UID64, inside bool) { p.module.tracked(t, id, inside) }
 
-// Space returns world's shared spatial index — every Populate entity is kept in sync with it.
+// Space returns world's shared space, rebuilt from every entity each tick after movement.
 func (p *Plugin) Space() *aabbworld.Space { return p.module.space }
 
 // EntityRenderer returns the entity renderer for further chaining, or nil.

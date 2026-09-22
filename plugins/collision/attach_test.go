@@ -1,11 +1,11 @@
 package collision_test
 
 import (
-	"github.com/kjkrol/aabbworld/collide"
 	"testing"
 	"time"
 
 	"github.com/kjkrol/aabbworld"
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/plugins/collision"
@@ -73,13 +73,8 @@ func TestCollider_AttachedAndDetachedMidGame(t *testing.T) {
 		c.RunPlan(rc, d)
 	})
 
-	offered := func() (n int) {
-		var e collide.Engine
-		e.Tick(w.Space(), world.StepReach, aabbworld.CanCollide, 0, func(_, _ uid.UID64) (collide.Body, collide.Body, bool) {
-			n++
-			return collide.Body{}, collide.Body{}, false
-		}, nil, nil)
-		return n
+	collidable := func() int {
+		return w.Space().Query(geom.NewAABBAt(geom.NewVec(90, 90), 40, 40), aabbworld.CanCollide, func(uid.UID64) {})
 	}
 	tick := func() int {
 		contacts = 0
@@ -95,8 +90,8 @@ func TestCollider_AttachedAndDetachedMidGame(t *testing.T) {
 	if got := tick(); got != 0 {
 		t.Errorf("%d contacts on the tick Collider came off, want 0", got)
 	}
-	if got := offered(); got != 0 {
-		t.Errorf("the index still offers %d pairs after the tick Collider came off, want 0", got)
+	if got := collidable(); got != 1 {
+		t.Errorf("the space lists %d collidable entities after the tick Collider came off, want the other one", got)
 	}
 	if got := tick(); got != 0 {
 		t.Errorf("%d contacts a tick later, want 0", got)

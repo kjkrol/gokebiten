@@ -1,11 +1,15 @@
 package world
 
-import "github.com/kjkrol/gokebiten/plugins/world/kind"
+import (
+	"github.com/kjkrol/aabbworld"
+	"github.com/kjkrol/gokebiten/plugins/world/kind"
+)
 
 // Base is what every entity in the world is made of: where it is, how it moves,
-// and which kind it was spawned from.
+// which kind it was spawned from and what the space may do with it.
 type Base struct {
 	Pos    Position
 	Vel    Velocity
 	TypeID kind.ID
+	Caps   aabbworld.Capability
 }

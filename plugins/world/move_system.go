@@ -14,13 +14,14 @@ import (
 var _ goke.System = (*MoveSystem)(nil)
 
 // MoveSystem integrates each entity's already speed-scaled Velocity into
-// Position, translating through space (which keeps its spatial index in sync).
+// Position under the space's edge rules, then rebuilds the space from every Base.
 type MoveSystem struct {
 	space     *aabbworld.Space
 	moveQuery *goke.Query
 	base      goke.Comp[Base]
 	exits     *exits
 	leave     func(t plugin.Tick, id uid.UID64)
+	items     []aabbworld.Item
 }
 
 // NewMoveSystem builds world's movement system; no entity moves past its Position.MaxStep a tick.
@@ -34,7 +35,6 @@ func (s *MoveSystem) Init(si *goke.SysInit) {
 
 func (s *MoveSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 	dt := d.Seconds()
-	moved := false
 	s.moveQuery.All()
 	for s.moveQuery.Next() {
 		cursor := s.moveQuery.Cursor()
@@ -45,17 +45,27 @@ func (s *MoveSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 			if step.X == 0 && step.Y == 0 {
 				continue
 			}
-
-			inside := s.space.Translate(id, &bases[i].Pos.AABB, step)
+			inside := s.space.Move(&bases[i].Pos.AABB, step)
 			if (!inside || !s.exits.quiet()) && s.exits.left(id, inside) {
 				s.leave(plugin.Tick{Cmd: cb, Now: time.Now(), Dt: d}, id)
 			}
-			moved = true
 		}
 	}
-	if moved {
-		s.space.Flush(nil)
+	s.items = rebuild(s.space, s.moveQuery, &s.base, s.items)
+}
+
+// rebuild hands space every Base the query finds, reusing items.
+func rebuild(space *aabbworld.Space, q *goke.Query, base *goke.Comp[Base], items []aabbworld.Item) []aabbworld.Item {
+	items = items[:0]
+	q.All()
+	for q.Next() {
+		cursor := q.Cursor()
+		for i, b := range base.Slice(cursor) {
+			items = append(items, aabbworld.Item{ID: cursor.IDs[i], Box: b.Pos.AABB, Caps: b.Caps})
+		}
 	}
+	space.Rebuild(items)
+	return items
 }
 
 // clampStep scales step down to magnitude max if it exceeds it.

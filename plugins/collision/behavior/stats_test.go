@@ -19,7 +19,7 @@ func overlapping(t *testing.T, s *behavior.ContactStats, ticks int) {
 	t.Helper()
 	space, err := aabbworld.NewSpace(aabbworld.Config{
 		Width: 1000, Height: 1000,
-		BucketSize: 64, BucketCapacity: 16,
+		BucketSize: 64,
 	})
 	if err != nil {
 		t.Fatalf("aabbworld.NewSpace: %v", err)
@@ -40,9 +40,7 @@ func overlapping(t *testing.T, s *behavior.ContactStats, ticks int) {
 		for i, x := range []float64{100, 105} {
 			box := plane.NewAABB(geom.NewVec(x, 100), 10, 10)
 			base.Slice(&f.Cursor)[i].Pos = world.Position{AABB: box}
-			space.Insert(f.IDs[i], &box)
 		}
-		space.Flush(nil)
 	}})
 	engine.RegSystems(ecs)
 	ecs.SetPlan(engine.RunPlan)

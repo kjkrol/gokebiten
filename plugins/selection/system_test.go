@@ -33,13 +33,14 @@ type harness struct {
 	selectedQ *goke.Query
 	handle    goke.Runnable
 	pending   []pendingSeed
+	items     []aabbworld.Item
 }
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
 	space, err := aabbworld.NewSpace(aabbworld.Config{
 		Width: 1000, Height: 1000,
-		BucketSize: 64, BucketCapacity: 16,
+		BucketSize: 64,
 	})
 	if err != nil {
 		t.Fatalf("aabbworld.NewSpace: %v", err)
@@ -79,12 +80,12 @@ func (h *harness) start() {
 				*spec.id = id
 				aabb := plane.NewAABB(geom.NewVec(spec.x, spec.y), spec.size, spec.size)
 				positions[j].Pos = world.Position{AABB: aabb}
-				h.space.Insert(id, &aabb)
+				h.items = append(h.items, aabbworld.Item{ID: id, Box: aabb})
 				i++
 			}
 		}
+		h.space.Rebuild(h.items)
 	}})
-	h.space.Flush(nil)
 
 	h.handle = h.ecs.RegSys(h.sys)
 	h.ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
@@ -289,16 +290,17 @@ func TestSystem_DragBox_TracksLiveDragState(t *testing.T) {
 func TestSelectionSystem_WorldBox_SelectsOnBothSidesOfTheSeam(t *testing.T) {
 	space, err := aabbworld.NewSpace(aabbworld.Config{
 		Width: 1000, Height: 1000, Edges: aabbworld.Torus,
-		BucketSize: 64, BucketCapacity: 16,
+		BucketSize: 64,
 	})
 	if err != nil {
 		t.Fatalf("aabbworld.NewSpace: %v", err)
 	}
 	before, after, elsewhere := uid.UID64(1), uid.UID64(2), uid.UID64(3)
-	space.Insert(before, ptr(plane.NewAABB(geom.NewVec(960, 502), 5, 5)))
-	space.Insert(after, ptr(plane.NewAABB(geom.NewVec(20, 502), 5, 5)))
-	space.Insert(elsewhere, ptr(plane.NewAABB(geom.NewVec(500, 502), 5, 5)))
-	space.Flush(nil)
+	space.Rebuild([]aabbworld.Item{
+		{ID: before, Box: plane.NewAABB(geom.NewVec(960, 502), 5, 5)},
+		{ID: after, Box: plane.NewAABB(geom.NewVec(20, 502), 5, 5)},
+		{ID: elsewhere, Box: plane.NewAABB(geom.NewVec(500, 502), 5, 5)},
+	})
 
 	cam := camera.NewFromSpaceWithConfig(1000, 1000, aabbworld.Torus, camera.Config{ViewportWidth: 200, ViewportHeight: 200})
 	cam.MoveTo(950, 500)

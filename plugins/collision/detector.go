@@ -6,6 +6,7 @@ import (
 	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/aabbworld/collide"
 	"github.com/kjkrol/aabbworld/geom"
+	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugin"
 	"github.com/kjkrol/gokebiten/plugins/world"
@@ -13,20 +14,22 @@ import (
 )
 
 var _ goke.System = (*Detector)(nil)
+var _ collide.Handler = (*handler)(nil)
 
 // solverIterations caps the passes one tick spends separating chained overlaps.
 const solverIterations = 16
 
-// Detector runs one tick of collisions: what each entity struck last tick, who may touch now,
-// who really overlaps, the bounce, the push apart, and the contacts left behind for behaviors.
+// Detector runs one tick of collisions: what each entity struck last tick, who really
+// overlaps now, the bounce, the push apart, and the contacts left behind for behaviors.
 type Detector struct {
 	space  *aabbworld.Space
 	engine collide.Engine
 
-	// walk is the pass over every Collider: its Each behaviors and its mark in the index.
+	// walk is the pass over every Collider: its Each behaviors and its capabilities.
 	walk     *goke.Query
 	base     goke.Comp[world.Base]
 	collider goke.Comp[Collider]
+	physics  goke.OptComp[Physics]
 	each     *plugin.EachHost[Struck]
 	walking  struct {
 		ids       []uid.UID64
@@ -34,24 +37,37 @@ type Detector struct {
 	}
 	struckAt func(i int) Struck
 
-	// lookup resolves both sides of a candidate from their ids.
+	// all is every entity of the world, for rebuilding the space and retiring lost Colliders.
+	all     *goke.Query
+	allBase goke.Comp[world.Base]
+	items   []aabbworld.Item
+
+	// lookup resolves a side of a contact from its id.
 	lookup         *goke.Query
 	lookupBase     goke.Comp[world.Base]
 	lookupCollider goke.Comp[Collider]
 	lookupPhysics  goke.OptComp[Physics]
 	lookupHot      bool
 
-	// sides is who each pair handed to the engine belongs to, and how its contact went.
-	sides   []pairSides
-	between *plugin.PairHost[Meeting]
-	tracked func(t plugin.Tick, id uid.UID64, inside bool)
-	shapes  ShapeTest
+	// pair is the contact being settled; contacts is what this tick confirmed.
+	pair     pairSides
+	contacts []pairSides
+	between  *plugin.PairHost[Meeting]
+	tracked  func(t plugin.Tick, id uid.UID64, inside bool)
+	shapes   ShapeTest
 
-	tick      plugin.Tick
-	resolve   collide.Resolve
-	touch     collide.Touch
-	onContact func(i int, pen geom.Vec)
+	tick  plugin.Tick
+	stale bool
 }
+
+// handler is the Detector as the engine talks to it.
+type handler Detector
+
+func (h *handler) Touch(a, b uid.UID64, pen geom.Vec) (geom.Vec, bool) {
+	return (*Detector)(h).resolve(a, b, pen)
+}
+func (h *handler) Contact(_, _ uid.UID64, pen geom.Vec) { (*Detector)(h).contact(pen) }
+func (h *handler) Moved(id uid.UID64, box plane.AABB)   { (*Detector)(h).moved(id, box) }
 
 // sought is the one query the detector offers its hosted behaviors.
 const sought = 0
@@ -63,19 +79,17 @@ func NewDetector(space *aabbworld.Space) *Detector {
 
 func newDetector(space *aabbworld.Space, between *plugin.PairHost[Meeting], each *plugin.EachHost[Struck], shapes ShapeTest) *Detector {
 	d := &Detector{space: space, between: between, each: each, shapes: shapes, tracked: func(plugin.Tick, uid.UID64, bool) {}}
+	d.engine = space.CollideEngine((*handler)(d), collide.Config{Reach: world.StepReach, Iterations: solverIterations})
 	d.struckAt = d.struck
-	d.resolve = d.resolvePair
-	d.onContact = d.contact
-	if shapes != nil {
-		d.touch = d.shapesTouch
-	}
 	return d
 }
 
 func (d *Detector) Init(si *goke.SysInit) {
-	qb := si.NewQueryBuilder(&d.base, &d.collider)
+	qb := si.NewQueryBuilder(&d.base, &d.collider).Optional(&d.physics)
 	d.each.Bind(qb)
 	d.walk = qb.Build()
+
+	d.all = si.NewQueryBuilder(&d.allBase).Build()
 
 	seek := si.NewQueryBuilder(&d.lookupBase, &d.lookupCollider).Optional(&d.lookupPhysics)
 	d.between.Bind(seek)
@@ -84,47 +98,66 @@ func (d *Detector) Init(si *goke.SysInit) {
 
 func (d *Detector) Update(cb *goke.CmdBuf, dt time.Duration) {
 	d.tick = plugin.Tick{Cmd: cb, Now: time.Now(), Dt: dt}
-	d.mark()
+	if d.mark() {
+		d.rebuild()
+	}
 
-	d.sides = d.sides[:0]
-	d.lookupHot = false
-	d.engine.Tick(d.space, world.StepReach, aabbworld.CanCollide, solverIterations, d.resolve, d.touch, d.onContact)
+	d.contacts = d.contacts[:0]
+	d.lookupHot, d.stale = false, false
+	d.engine.Tick()
 	for _, id := range d.engine.Left() {
 		d.tracked(d.tick, id, false)
 	}
-
-	for i := range d.sides {
-		if s := &d.sides[i]; s.confirmed {
-			d.between.DispatchEitherWay(d.tick, s.tagsA, s.tagsB,
-				Meeting{Self: s.A.Entity, Other: s.B.Entity, Impact: s.impact, Normal: s.normal},
-				Meeting{Self: s.B.Entity, Other: s.A.Entity, Impact: s.impact, Normal: geom.NewVec(-s.normal.X, -s.normal.Y)})
-		}
+	if d.stale {
+		d.rebuild()
 	}
-	d.space.Flush(nil)
+
+	for i := range d.contacts {
+		s := &d.contacts[i]
+		d.between.DispatchEitherWay(d.tick, s.tagsA, s.tagsB,
+			Meeting{Self: s.A.Entity, Other: s.B.Entity, Impact: s.impact, Normal: s.normal},
+			Meeting{Self: s.B.Entity, Other: s.A.Entity, Impact: s.impact, Normal: geom.NewVec(-s.normal.X, -s.normal.Y)})
+	}
 }
 
-// mark runs the Each behaviors over every Collider, clears its contacts and indexes new ones.
-func (d *Detector) mark() {
-	marked := false
+// mark runs the Each behaviors over every Collider and settles its capabilities; true if changed.
+func (d *Detector) mark() bool {
+	changed := false
 	d.walk.All()
 	for d.walk.Next() {
 		cursor := d.walk.Cursor()
-		colliders := d.collider.Slice(cursor)
+		bases, colliders, physics := d.base.Slice(cursor), d.collider.Slice(cursor), d.physics.Slice(cursor)
 
 		d.walking.ids, d.walking.colliders = cursor.IDs, colliders
 		d.each.Run(d.tick, cursor, d.struckAt)
-		for i, id := range cursor.IDs {
-			c := &colliders[i]
-			c.clearContacts()
-			if !c.Indexed {
-				d.space.SetCapabilities(id, aabbworld.CanCollide)
-				c.Indexed, marked = true, true
+		for i := range cursor.IDs {
+			colliders[i].clearContacts()
+			caps := aabbworld.CanCollide
+			switch {
+			case physics == nil:
+				caps |= aabbworld.Sensor
+			case physics[i].Immovable():
+				caps |= aabbworld.Static
+			}
+			if bases[i].Caps != caps {
+				bases[i].Caps, changed = caps, true
 			}
 		}
 	}
-	if marked {
-		d.space.Flush(nil)
+	return changed
+}
+
+// rebuild hands the space every entity again, capabilities as they stand now.
+func (d *Detector) rebuild() {
+	d.items = d.items[:0]
+	d.all.All()
+	for d.all.Next() {
+		cursor := d.all.Cursor()
+		for i, b := range d.allBase.Slice(cursor) {
+			d.items = append(d.items, aabbworld.Item{ID: cursor.IDs[i], Box: b.Pos.AABB, Caps: b.Caps})
+		}
 	}
+	d.space.Rebuild(d.items)
 }
 
 // struck is what the hosted behaviors are told about the i-th entity of the chunk being walked.
@@ -132,15 +165,13 @@ func (d *Detector) struck(i int) Struck {
 	return Struck{ID: d.walking.ids[i], Contacts: d.walking.colliders[i].Contacts()}
 }
 
-// pairSides is who the two boxes of a pair belong to, what they carry,
-// and how the contact went once confirmed.
+// pairSides is who the two boxes of a contact belong to, what they carry, and how it went.
 type pairSides struct {
 	A, B         contactSide
 	tagsA, tagsB uint64
 
-	confirmed bool
-	impact    float64
-	normal    geom.Vec
+	impact float64
+	normal geom.Vec
 }
 
 // detectOnly reports a pair in which either side takes no part in the physical world.
@@ -154,70 +185,68 @@ type contactSide struct {
 	Physics *Physics
 }
 
-// immovable reports a side the engine must not push: nothing shifts an infinite mass.
-func (s contactSide) immovable() bool { return s.Physics != nil && s.Physics.Immovable() }
-
-func (s contactSide) body(sensor bool) collide.Body {
-	return collide.Body{Box: &s.Base.Pos.AABB, Static: s.immovable(), Sensor: sensor}
+// resolve looks both sides of an overlapping pair up and asks the shapes; a lost Collider vetoes.
+func (d *Detector) resolve(a, b uid.UID64, pen geom.Vec) (geom.Vec, bool) {
+	sideA, tagsA, ok := d.side(a)
+	if !ok {
+		return pen, false
+	}
+	sideB, tagsB, ok := d.side(b)
+	if !ok {
+		return pen, false
+	}
+	d.pair = pairSides{A: sideA, B: sideB, tagsA: tagsA, tagsB: tagsB}
+	if d.shapes == nil {
+		return pen, true
+	}
+	return d.shapes(d.tick, Contactee{ID: a, Base: sideA.Base}, Contactee{ID: b, Base: sideB.Base}, pen)
 }
 
-// resolvePair looks both sides of a candidate up and keeps them beside the engine's pair.
-func (d *Detector) resolvePair(a, b uid.UID64) (collide.Body, collide.Body, bool) {
-	sideA, tagsA, ok := d.resolveSide(a)
-	if !ok {
-		return collide.Body{}, collide.Body{}, false
-	}
-	sideB, tagsB, ok := d.resolveSide(b)
-	if !ok {
-		return collide.Body{}, collide.Body{}, false
-	}
-	sides := pairSides{A: sideA, B: sideB, tagsA: tagsA, tagsB: tagsB}
-	d.sides = append(d.sides, sides)
-	sensor := sides.detectOnly()
-	return sideA.body(sensor), sideB.body(sensor), true
-}
-
-// resolveSide looks one side of a candidate up, refusing one that no longer carries a Collider.
-func (d *Detector) resolveSide(id uid.UID64) (contactSide, uint64, bool) {
-	ok := d.lookupHot && d.lookup.SeekH(id)
-	if !ok {
-		ok = d.lookup.Seek(id)
-		d.lookupHot = ok
-	}
-	var collider *Collider
-	if ok {
-		collider = d.lookupCollider.At(d.lookup.Cursor())
-	}
-	if collider == nil {
-		d.space.SetCapabilities(id, aabbworld.Plain)
+// side looks one entity up, refusing one that no longer carries a Collider.
+func (d *Detector) side(id uid.UID64) (contactSide, uint64, bool) {
+	if !d.seek(id) {
+		if d.all.Seek(id) {
+			d.allBase.At(d.all.Cursor()).Caps, d.stale = aabbworld.Plain, true
+		}
 		return contactSide{}, 0, false
 	}
 	cur := d.lookup.Cursor()
 	return contactSide{
 		Entity: id, Base: d.lookupBase.At(cur),
-		Collider: collider, Physics: d.lookupPhysics.At(cur),
+		Collider: d.lookupCollider.At(cur), Physics: d.lookupPhysics.At(cur),
 	}, d.between.At(sought, cur), true
 }
 
-// shapesTouch asks the plugin's ShapeTest about the i-th pair.
-func (d *Detector) shapesTouch(i int, pen geom.Vec) (geom.Vec, bool) {
-	s := &d.sides[i]
-	return d.shapes(d.tick, Contactee{ID: s.A.Entity, Base: s.A.Base}, Contactee{ID: s.B.Entity, Base: s.B.Base}, pen)
+func (d *Detector) seek(id uid.UID64) bool {
+	ok := d.lookupHot && d.lookup.SeekH(id)
+	if !ok {
+		ok = d.lookup.Seek(id)
+		d.lookupHot = ok
+	}
+	return ok
 }
 
-// contact settles the i-th pair's confirmed contact: the bounce, and a Contact on each side.
-func (d *Detector) contact(i int, pen geom.Vec) {
-	sides := &d.sides[i]
+// contact settles the pair resolve just confirmed: the bounce, and a Contact on each side.
+func (d *Detector) contact(pen geom.Vec) {
+	sides := d.pair
 
 	normal, aligned := normalOf(pen)
 	var impact float64
 	if aligned && !sides.detectOnly() {
 		impact = bounce(sides.A, sides.B, normal)
 	}
-	sides.confirmed, sides.impact, sides.normal = true, impact, normal
+	sides.impact, sides.normal = impact, normal
 
 	sides.A.Collider.addContact(sides.B.Entity, impact, normal)
 	sides.B.Collider.addContact(sides.A.Entity, impact, geom.NewVec(-normal.X, -normal.Y))
+	d.contacts = append(d.contacts, sides)
+}
+
+// moved writes a box the engine pushed back to its entity.
+func (d *Detector) moved(id uid.UID64, box plane.AABB) {
+	if d.seek(id) {
+		d.lookupBase.At(d.lookup.Cursor()).Pos.AABB = box
+	}
 }
 
 // bounce trades the contact's impulse between two physical sides and returns it.

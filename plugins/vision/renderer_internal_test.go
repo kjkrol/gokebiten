@@ -32,7 +32,7 @@ func testSpace(t *testing.T, w, h uint32, toroidal bool) *aabbworld.Space {
 	t.Helper()
 	space, err := aabbworld.NewSpace(aabbworld.Config{
 		Width: w, Height: h, Edges: torusIf(toroidal),
-		BucketSize: 256, BucketCapacity: 8,
+		BucketSize: 256,
 	})
 	if err != nil {
 		t.Fatal(err)

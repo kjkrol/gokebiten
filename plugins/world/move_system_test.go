@@ -10,13 +10,14 @@ import (
 	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gokebiten/plugins/world"
+	"github.com/kjkrol/uid"
 )
 
 func testSpace(t *testing.T) *aabbworld.Space {
 	t.Helper()
 	space, err := aabbworld.NewSpace(aabbworld.Config{
 		Width: 1000, Height: 1000,
-		BucketSize: 64, BucketCapacity: 16,
+		BucketSize: 64,
 	})
 	if err != nil {
 		t.Fatalf("aabbworld.NewSpace: %v", err)
@@ -32,7 +33,12 @@ type testHandles struct {
 // newTestWorld seeds one side x side entity moving at vel under world.MoveSystem.
 func newTestWorld(t *testing.T, vel world.Velocity, side float64) (*goke.ECS, *goke.Query, testHandles) {
 	t.Helper()
-	space := testSpace(t)
+	ecs, q, h, _ := newTestWorldIn(t, testSpace(t), vel, side)
+	return ecs, q, h
+}
+
+func newTestWorldIn(t *testing.T, space *aabbworld.Space, vel world.Velocity, side float64) (*goke.ECS, *goke.Query, testHandles, *aabbworld.Space) {
+	t.Helper()
 
 	ecs := goke.New()
 	var base goke.Comp[world.Base]
@@ -56,7 +62,7 @@ func newTestWorld(t *testing.T, vel world.Velocity, side float64) (*goke.ECS, *g
 		ctx.Sync()
 	})
 
-	return ecs, q, testHandles{base: &base}
+	return ecs, q, testHandles{base: &base}, space
 }
 
 func readFirst(t *testing.T, q *goke.Query, h testHandles) (world.Position, world.Velocity) {
@@ -95,6 +101,29 @@ func TestMoveSystem_Update_TranslatesWholeUnits(t *testing.T) {
 	p, _ := readFirst(t, q, h)
 	if math.Abs(p.TopLeft.X-6) > 1e-9 {
 		t.Errorf("TopLeft.X = %v, want 6 (three ticks of two units)", p.TopLeft.X)
+	}
+}
+
+func TestMoveSystem_Update_HandsTheSpaceEveryEntityWhereItNowIs(t *testing.T) {
+	vel := world.Velocity{Dir: geom.NewVec(1, 0), Value: 100}
+	ecs, _, _, space := newTestWorldIn(t, testSpace(t), vel, 5)
+
+	at := func(x float64) int {
+		return space.Query(geom.NewAABB(geom.NewVec(x, 0), geom.NewVec(x+5, 5)), aabbworld.AnyCapability, func(uid.UID64) {})
+	}
+	if got := at(0); got != 0 {
+		t.Fatalf("the space holds %d entities before the first tick, want none", got)
+	}
+	ecs.Tick(20 * time.Millisecond)
+	if got := at(2); got != 1 {
+		t.Errorf("the space finds %d entities where the entity moved to, want 1", got)
+	}
+	ecs.Tick(20 * time.Millisecond)
+	if got := at(4); got != 1 {
+		t.Errorf("the space finds %d entities after the second move, want 1", got)
+	}
+	if got := at(-8); got != 0 {
+		t.Errorf("the space still finds %d entities where the entity was, want 0", got)
 	}
 }
 

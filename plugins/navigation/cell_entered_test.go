@@ -57,8 +57,6 @@ func newEnteredWorld(t *testing.T, w, h uint32, start, target board.CellID) *ent
 		pos.Slice(&f.Cursor)[0].Pos = p
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(start, ew.id)
-		space.Insert(ew.id, &p.AABB)
-		space.Flush(nil)
 
 		enteredQ = si.NewQueryBuilder(&enteredComp).Build()
 		orderQ = si.NewQueryBuilder(&cellComp).Optional(&orderComp).Build()

@@ -27,7 +27,7 @@ func run(t *testing.T, entities ...entity) []behavior.HitMark {
 	t.Helper()
 	space, err := aabbworld.NewSpace(aabbworld.Config{
 		Width: 1000, Height: 1000,
-		BucketSize: 64, BucketCapacity: 16,
+		BucketSize: 64,
 	})
 	if err != nil {
 		t.Fatalf("aabbworld.NewSpace: %v", err)
@@ -51,9 +51,7 @@ func run(t *testing.T, entities ...entity) []behavior.HitMark {
 			box := plane.NewAABB(geom.NewVec(e.x, 100), 10, 10)
 			base.Slice(&f.Cursor)[i].Pos = world.Position{AABB: box}
 			marks.Slice(&f.Cursor)[i] = e.mark
-			space.Insert(f.IDs[i], &box)
 		}
-		space.Flush(nil)
 		q = si.NewQueryBuilder(&marks).Build()
 	}})
 	engine.RegSystems(ecs)

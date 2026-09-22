@@ -67,9 +67,7 @@ func meetWith(t *testing.T, register func(engine registrar), boxes ...*tagged) {
 			box.id = f.IDs[0]
 			placed := posAt(box.x, 100, 10, 10)
 			base.Slice(&f.Cursor)[0].Pos = placed
-			space.Insert(box.id, &placed.AABB)
 		}
-		space.Flush(nil)
 	}})
 	engine.RegSystems(ecs)
 	ecs.SetPlan(engine.RunPlan)

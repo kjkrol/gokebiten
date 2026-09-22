@@ -64,24 +64,6 @@ func (m *module) LoadComps() []goke.CompToken {
 }
 
 // =================================================================
-// plugin.PostLoader contract
-// =================================================================
-
-// PostLoad has every loaded Collider announced to the spatial index again on the first tick.
-func (m *module) PostLoad() goke.System {
-	return goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		var collider goke.Comp[Collider]
-		query := si.NewQueryBuilder(&collider).Build()
-		for query.All(); query.Next(); {
-			loaded := collider.Slice(query.Cursor())
-			for i := range loaded {
-				loaded[i].Indexed = false
-			}
-		}
-	}}
-}
-
-// =================================================================
 // collision-specific
 // =================================================================
 

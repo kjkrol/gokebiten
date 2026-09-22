@@ -140,40 +140,54 @@ shows how much of it is boilerplate vs. real behavior.
   calls it gets no world. `SpaceCfg.Edges` (`aabbworld.Edges`) sets the edge rule
   per axis — `aabbworld.Torus`, `WrapX`/`WrapY` alone, `OpenX`/`OpenY`, a closed
   axis by default: a box stops whole at a closed edge, wraps at a wrapping one,
-  and may leave by an open one. An entity wholly past an open edge is dropped
-  from the index and handed, once, to `world.Plugin.OnExit(fn)` — despawned when
-  no handler is set; a sibling plugin that moves boxes itself (collision's solver)
-  reports through `world.Plugin.Tracked`:
+  and may leave by an open one. An entity wholly past an open edge is handed,
+  once, to `world.Plugin.OnExit(fn)` — despawned when no handler is set; a
+  sibling plugin that moves boxes itself (collision's solver) reports through
+  `world.Plugin.Tracked`:
   `Base` — the one component every entity carries, holding its `Position`,
-  `Velocity` and `TypeID`, so a host hands it to whatever it hosts instead of
-  anyone binding it twice — plus Appearance, entity spawning and `Despawn` (which clears
-  both the ECS and the index, so nothing goes on seeing a ghost),
-  `Attach(cb, id, v)`/`Detach[T](cb, id)` — the mid-game counterparts of a
+  `Velocity`, `TypeID` and `Caps` (the `aabbworld.Capability` bits the space
+  indexes it under; `collision` writes them), so a host hands it to whatever it
+  hosts instead of anyone binding it twice — plus Appearance, entity spawning and
+  `Despawn`, `Attach(cb, id, v)`/`Detach[T](cb, id)` — the mid-game counterparts of a
   kind's `k.Const`, for game logic that has a `plugin.Tick` and no `CompID`
   (`Declare[T]()` in `Stage.Init` tells saves about a type only ever attached) — the shared
-  `*aabbworld.Space` index, per-tick movement — capped per entity at half its own
+  `*aabbworld.Space`, per-tick movement — capped per entity at half its own
   shorter side (`world.StepReach`, `Position.MaxStep`/`MaxSpeed`), so mixed
   sizes share a world without the smallest slowing the rest — and the shared `camera.Camera` (a
   root package, not a plugin of its own; it keeps its own window arithmetic —
   wrapping on a wrapping axis, held inside the world on any other) exposed via
-  `world.Plugin.Camera()`.
+  `world.Plugin.Camera()`. The space keeps no state of its own between ticks:
+  `MoveSystem` moves every box under the edge rules (`Space.Move`), then hands
+  the space every `Base` as an `aabbworld.Item` (`Space.Rebuild`) — `Query`,
+  `Scan` and collisions read that grid until the next tick. `Populate` and
+  `PostLoad` rebuild it too, so it is whole before the first tick; a despawned
+  entity is gone from it on the next. Anything reading the space in its own pass
+  sees the boxes as they were after the last rebuild.
 - **`board`** — optional grid + terrain over `world`; its grids wrap per axis,
   following the world's `Edges` (`SetWrap(x, y)`). Depends on `world`.
 - **`collision`** — optional collision detection over `world`'s space, one
   `Detector` system a tick. An entity collides exactly while it carries `Collider` —
-  `kind.Const(collision.Collider{})`, or `Attach`/`Detach` mid-game; the plugin
-  tells the index itself, either way. The tick is one `collide.Engine.Tick` (from
-  `github.com/kjkrol/aabbworld/collide`): the engine names every pair whose reaches
-  touch (`world.StepReach`), the `Detector` resolves each by `Seek` into two
-  `collide.Body`s, the engine tests them exactly, pushes the overlapping apart and
-  tells the index where they came to rest — `Left()` names whoever it pushed out
-  through an open edge. Between the exact box test and the push sits the plugin's
-  `ShapeTest` (`WithShapeTest`; `BoxesTouch` by default, at no cost): asked once per
-  overlapping pair with both `Contactee`s, it may refuse the contact (an alpha mask
-  saying the pixels miss) or refine the penetration (an SDF). An entity carrying
-  `Physics` (`Mass`, `Restitution` 0–1) is pushed out of overlaps and bounces — the
-  bounce is the engine's own, an infinite `Mass` is a wall; one without `Physics`
-  is only ever detected (a town, a trigger). Separation is always an even split.
+  `kind.Const(collision.Collider{})`, or `Attach`/`Detach` mid-game. The `Detector`
+  first settles every `Collider`'s `Base.Caps` (`CanCollide`, plus `Static` for an
+  immovable `Physics`, `Sensor` for none) and rebuilds the space when any changed,
+  so a `Collider` counts from the tick it is carried. The tick is then one
+  `collide.Engine.Tick` (`github.com/kjkrol/aabbworld/collide` holds the contract —
+  `Handler`, `Config`, `Engine`; the `Detector` builds the engine once with
+  `space.CollideEngine(handler, collide.Config{Reach: world.StepReach, Iterations})`
+  and is its `Handler`) over the space's items: the engine pairs up whoever carries
+  `CanCollide` and may touch within a step, tests the pairs exactly, pushes the overlapping apart and reports each
+  pushed box (`Moved`), which the `Detector` writes back to `Base.Pos` by `Seek` —
+  `Left()` names whoever it pushed out through an open edge. Every overlap first
+  passes the `Detector`'s `Touch`: both sides are resolved by `Seek`, and a side
+  that lost its `Collider` since the last rebuild vetoes the pair, is marked
+  `Plain`, and the space is rebuilt after the tick (so it partners nobody again); then
+  the plugin's `ShapeTest` (`WithShapeTest`; `BoxesTouch` by default, at no cost),
+  asked once per overlapping pair with both `Contactee`s, may refuse the contact (an
+  alpha mask saying the pixels miss) or refine the penetration (an SDF). An entity
+  carrying `Physics` (`Mass`, `Restitution` 0–1) is pushed out of overlaps and
+  bounces — the bounce is the engine's own, an infinite `Mass` is a wall; one without
+  `Physics` is only ever detected (a town, a trigger). Separation is always an even
+  split.
   Reactions are behaviors hosted inside the `Detector`'s own pass:
   `plugin.Between[A, B]` of a `Meeting` per confirmed contact between two tags
   (`plugin.Anything` as the wildcard), `plugin.Each[T]` of a `Struck` per entity per

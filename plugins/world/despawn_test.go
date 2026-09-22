@@ -10,7 +10,7 @@ import (
 	"github.com/kjkrol/uid"
 )
 
-// despawnWorld spawns n indexed entities and returns their ids with a live Position query.
+// despawnWorld spawns n entities and returns their ids with a live Position query.
 func despawnWorld(t *testing.T, wm *module, n int) ([]uid.UID64, *goke.ECS, *goke.Query, *goke.Comp[Base]) {
 	t.Helper()
 	wm.populate(testKind(spawnerTestPos(), Velocity{}), make([]any, n))
@@ -23,24 +23,20 @@ func despawnWorld(t *testing.T, wm *module, n int) ([]uid.UID64, *goke.ECS, *gok
 		q = si.NewQueryBuilder(base).Build()
 		q.All()
 		for q.Next() {
-			cursor := q.Cursor()
-			bases := base.Slice(cursor)
-			for i, id := range cursor.IDs {
-				ids = append(ids, id)
-				wm.space.Insert(id, &bases[i].Pos.AABB)
-			}
+			ids = append(ids, q.Cursor().IDs...)
 		}
-		wm.space.Flush(nil)
 	}})...)
+	wm.RegSystems(ecs)
 	return ids, ecs, q, base
 }
 
-// run ticks ecs once with act as its whole plan.
-func run(ecs *goke.ECS, act func(*goke.CmdBuf)) {
+// run ticks ecs once with act followed by the world's own plan.
+func run(ecs *goke.ECS, wm *module, act func(*goke.CmdBuf)) {
 	handle := ecs.RegSys(goke.SystemFn{OnUpdate: func(cb *goke.CmdBuf, _ time.Duration) { act(cb) }})
 	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(handle, d)
 		ctx.Sync()
+		wm.RunPlan(ctx, d)
 	})
 	ecs.Tick(time.Millisecond)
 }
@@ -64,7 +60,7 @@ func indexed(space *aabbworld.Space) map[uid.UID64]bool {
 		geom.NewVec(at.TopLeft.X+at.Size.X+100, at.TopLeft.Y+at.Size.Y+100),
 	)
 	found := map[uid.UID64]bool{}
-	space.Query(box, aabbworld.Plain, func(id uid.UID64) {
+	space.Query(box, aabbworld.AnyCapability, func(id uid.UID64) {
 		found[id] = true
 	})
 	return found
@@ -75,8 +71,8 @@ func TestDespawn_TakesTheEntityOutOfBothTheECSAndTheIndex(t *testing.T) {
 	ids, ecs, q, _ := despawnWorld(t, wm, 3)
 
 	gone := ids[1]
-	run(ecs, func(cb *goke.CmdBuf) { wm.despawn(cb, gone) })
-	wm.space.Flush(nil)
+	run(ecs, wm, func(cb *goke.CmdBuf) { wm.despawn(cb, gone) })
+	run(ecs, wm, func(*goke.CmdBuf) {})
 
 	if alive := living(q); alive[gone] || len(alive) != 2 {
 		t.Errorf("entities left = %v, want the two that were not despawned", alive)
@@ -93,7 +89,7 @@ func TestDespawn_TwiceInATickCountsOnce(t *testing.T) {
 	wm := testWorld()
 	ids, ecs, _, _ := despawnWorld(t, wm, 3)
 
-	run(ecs, func(cb *goke.CmdBuf) {
+	run(ecs, wm, func(cb *goke.CmdBuf) {
 		wm.despawn(cb, ids[0])
 		wm.despawn(cb, ids[0])
 	})

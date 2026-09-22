@@ -67,10 +67,8 @@ func newLegWorld(t *testing.T, w, h uint32, units ...legUnit) *legWorld {
 				order.Slice(&f.Cursor)[0] = MoveOrder{Target: u.target}
 			}
 			lw.occupancy.Enter(u.start, id)
-			space.Insert(id, &p.AABB)
 			lw.ids = append(lw.ids, id)
 		}
-		space.Flush(nil)
 		lw.q = si.NewQueryBuilder(&lw.pos, &lw.cell).Optional(&lw.order).Build()
 	}})
 

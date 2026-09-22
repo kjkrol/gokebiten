@@ -17,7 +17,7 @@ func testSpace(t *testing.T) *aabbworld.Space {
 	t.Helper()
 	space, err := aabbworld.NewSpace(aabbworld.Config{
 		Width: 1000, Height: 1000,
-		BucketSize: 64, BucketCapacity: 16,
+		BucketSize: 64,
 	})
 	if err != nil {
 		t.Fatalf("aabbworld.NewSpace: %v", err)
@@ -257,8 +257,6 @@ func TestNavigationSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
 		pos.Slice(&f.Cursor)[0].Pos = offCenter
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(target, id)
-		space.Insert(id, &offCenter.AABB)
-		space.Flush(nil)
 
 		q = si.NewQueryBuilder(&pos).Build()
 	}})
@@ -319,8 +317,6 @@ func TestNavigationSystem_Update_ArrivalGlidesSmoothlyToCellCenter(t *testing.T)
 		pos.Slice(&f.Cursor)[0].Pos = offCenter
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(target, id)
-		space.Insert(id, &offCenter.AABB)
-		space.Flush(nil)
 
 		q = si.NewQueryBuilder(&pos).Build()
 	}})
@@ -411,8 +407,6 @@ func TestNavigationSystem_Update_ReproducesBoardDemoWallScenario(t *testing.T) {
 		pos.Slice(&f.Cursor)[0].Pos = startPos
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		occupancy.Enter(start, id)
-		space.Insert(id, &startPos.AABB)
-		space.Flush(nil)
 
 		q = si.NewQueryBuilder(&cell, &pos, &order).Build()
 	}})

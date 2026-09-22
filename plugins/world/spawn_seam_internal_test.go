@@ -26,7 +26,6 @@ func TestSpawn_AnEntitySeededOnTheSeamIsWholeBeforeTheFirstTick(t *testing.T) {
 	ecs.Setup(append(wm.SetupSystems(), goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		query = si.NewQueryBuilder(&base).Build()
 	}})...)
-	wm.space.Flush(nil)
 
 	across := geom.NewAABB(geom.NewVec(2, 505), geom.NewVec(8, 510))
 	if n := wm.space.Query(across, aabbworld.AnyCapability, func(uid.UID64) {}); n != 1 {

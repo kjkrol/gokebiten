@@ -134,9 +134,8 @@ func placeOnPrey(t *testing.T, stage *mainStage, view bodyView) uid.UID64 {
 	view.hunters.All()
 	for view.hunters.Next() {
 		cursor := view.hunters.Cursor()
-		stage.world.Space().MoveTo(cursor.IDs[0], &view.hunterBase.Slice(cursor)[0].Pos.AABB, target.TopLeft)
+		stage.world.Space().MoveTo(&view.hunterBase.Slice(cursor)[0].Pos.AABB, target.TopLeft)
 	}
-	stage.world.Space().Flush(nil)
 	return caught
 }
 
@@ -203,9 +202,8 @@ func placeHunterAhead(t *testing.T, stage *mainStage, view bodyView, distance fl
 	view.hunters.All()
 	for view.hunters.Next() {
 		cursor := view.hunters.Cursor()
-		stage.world.Space().MoveTo(cursor.IDs[0], &view.hunterBase.Slice(cursor)[0].Pos.AABB, ahead)
+		stage.world.Space().MoveTo(&view.hunterBase.Slice(cursor)[0].Pos.AABB, ahead)
 	}
-	stage.world.Space().Flush(nil)
 	return watched, course
 }
 

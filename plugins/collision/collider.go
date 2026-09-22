@@ -10,9 +10,6 @@ import (
 type Collider struct {
 	Struck      [MaxContacts]Contact
 	StruckCount uint8
-
-	// Indexed is the broad phase's own note that the index knows this entity; leave it false.
-	Indexed bool
 }
 
 // Contacts is what this entity struck the tick before, in the order confirmed.
