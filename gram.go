@@ -1,6 +1,3 @@
-// Package gram wires a user-implemented game.Game into Ebitengine's
-// Update/Draw/Layout loop. See package game for the interfaces you
-// implement, and package plugin for the extension contract.
 package gram
 
 import (

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-**gram** is a public, modular Go game engine library: a
+**gram** (formerly gokebiten; module `github.com/kjkrol/gram`) is a public, modular Go game engine library: a
 user-implemented `game.Game` — a named collection of `game.Stage`s, each
 with its own lifecycle (`Init`/`Restore`/`Spawn`/`Update`) and its own
 `game.Scene`s (`Stack`/`Composition`, the sole entry point for input) — is
@@ -28,13 +28,16 @@ in `internal/engine`; root `gram` just re-exports `Engine`/`Props`/
 ```bash
 go build ./... && go vet ./... && gofmt -l . && go test ./...   # standard verification sequence
 go test ./plugins/world/... -run TestName -v                     # a single test
-make demo                                                          # go mod tidy && run examples/collision-demo
-make demo-nav                                                     # go mod tidy && run examples/board-navigation-demo
+make demo-collision                                                # go mod tidy && run examples/collision-demo
+make demo-navigation                                               # go mod tidy && run examples/navigation-demo
 make demo-scenes                                                  # go mod tidy && run examples/scenes-demo
 make demo-vision                                                  # go mod tidy && run examples/vision-demo
+make demo-minimal                                                 # the README example
+make bench                                                        # every benchmark once, with allocations
+make bench-save                                                   # 5 repeats into bench_results/ (ignored by git)
 ```
 
-The four `examples/*` programs are real Ebitengine GUI apps (open a window)
+The five `examples/*` programs are real Ebitengine GUI apps (open a window)
 — `go test` alone can't exercise them. To sanity-check one still runs after
 a change in a headless environment: build to a temp path, run under
 `timeout <n>s`, treat exit 124 (still running, not crashed) as healthy.
@@ -296,3 +299,17 @@ shortcuts when what's under test is install-order or wiring behavior —
 real regressions here have only shown up through the actual
 `Install` → `ecs.Setup` → `RunPlan` sequence, not lower-level unit tests
 that bypass it.
+
+## Docs, benchmarks and commits
+
+Every package has a `doc.go` with `# Type` sections describing what it brings; the root `doc.go`
+carries the concepts, the tick lifecycle and the layered package graph. README leads with what the
+library is; its code example is `examples/minimal`, so change that program first and keep the
+README in step. All benchmarks live in `bench/` (package `bench_test`), built on a headless
+`game.Initializer` there; `BENCHMARKS.md` records the results and the method (this machine drifts
+~10% between runs — compare a baseline copy and the working tree alternately). `CHANGELOG.md` gets
+an entry per tag. The headless installer in `bench/headless_test.go` is the fifth copy of the same
+helper (the others are in the demo's and plugins' tests) — a candidate for one exported test helper.
+
+Commit messages use the conventional prefixes (`feat`, `fix`, `docs`, `refactor`, `perf`, `test`,
+`chore`) and carry no `Co-Authored-By` trailer.

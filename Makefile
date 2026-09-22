@@ -6,11 +6,13 @@ DIRTY       := $(shell git diff --quiet || echo "-dirty")
 RESULT_FILE := bench_results/bench_$(COMMIT_DATE)_$(COMMIT_HASH)$(DIRTY).txt
 BENCH_COUNT ?= 5
 
-.PHONY: all demo-collision demo-navigation demo-scenes demo-vision deps tidy test bench bench-save clean
+.PHONY: all demo-minimal demo-collision demo-navigation demo-scenes demo-vision deps tidy test bench bench-save clean
 
 all: demo-collision
 
 ## demo: Alias for run — fetches dependencies and launches the collision-demo example
+demo-minimal: run-minimal
+
 demo-collision: run-collision
 
 demo-navigation: run-navigation
@@ -20,6 +22,9 @@ demo-scenes: run-scenes
 demo-vision: run-vision
 
 ## run: Fetches dependencies and launches the collision-demo example
+run-minimal: deps
+	$(GO) run ./examples/minimal
+
 run-collision: deps
 	$(GO) run ./examples/collision-demo
 
