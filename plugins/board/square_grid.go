@@ -84,6 +84,8 @@ func (g *squareGrid) CellOutline(c CellID, dst []geom.Vec) []geom.Vec {
 	return append(dst, geom.NewVec(x0, y0), geom.NewVec(x0+size, y0), geom.NewVec(x0+size, y0+size), geom.NewVec(x0, y0+size))
 }
 
+func (g *squareGrid) CellsUnder(box geom.AABB, fn func(c CellID)) { cellsUnder(g, box, fn) }
+
 // CellBoxes is the cell's own square.
 func (g *squareGrid) CellBoxes(c CellID, dst []geom.AABB) []geom.AABB {
 	x, y := g.cellXY(c)

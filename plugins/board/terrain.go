@@ -23,10 +23,35 @@ type CellKind struct {
 	// Opaque blocks sight without blocking movement — a forest; see Plugin.WithCollision.
 	Opaque   bool
 	SpriteID render.SpriteID
+	// Costs overrides Cost for entities moving in a domain — Costs[i] for the domain bit i, when
+	// set; see Costing and CostFor.
+	Costs [8]float64
 }
 
 // Admits reports whether an entity moving in d may stand on this kind.
 func (k CellKind) Admits(d Domain) bool { return k.Allows&d != 0 }
+
+// Costing returns the kind with cost for the domains in d: elves through a forest, a witch over snow.
+func (k CellKind) Costing(d Domain, cost float64) CellKind {
+	for i := range k.Costs {
+		if d&(1<<i) != 0 {
+			k.Costs[i] = cost
+		}
+	}
+	return k
+}
+
+// CostFor is what an entity moving in d pays here: the cheapest of its domains this kind admits
+// and prices, else Cost.
+func (k CellKind) CostFor(d Domain) float64 {
+	cost, priced := k.Cost, false
+	for i := range k.Costs {
+		if k.Costs[i] != 0 && d&k.Allows&(1<<i) != 0 && (!priced || k.Costs[i] < cost) {
+			cost, priced = k.Costs[i], true
+		}
+	}
+	return cost
+}
 
 // CellKindDict is a Plugin's registered set of CellKinds, keyed by Name —
 // reached via Plugin.CellKindDict, never built directly by the game.
@@ -91,16 +116,25 @@ func (t *TerrainMap) Kind(c CellID) CellKind {
 
 // Set assigns c's terrain kind, taking effect immediately.
 func (t *TerrainMap) Set(c CellID, kind CellKind) {
+	if t.Cells[c] == kind {
+		return
+	}
 	t.Cells[c] = kind
 	t.version++
 }
 
 // SetMany assigns kind to every cell in cells in one call, instead of looping Set per cell.
 func (t *TerrainMap) SetMany(cells []CellID, kind CellKind) {
+	changed := false
 	for _, c := range cells {
-		t.Cells[c] = kind
+		if t.Cells[c] != kind {
+			t.Cells[c] = kind
+			changed = true
+		}
 	}
-	t.version++
+	if changed {
+		t.version++
+	}
 }
 
 // SetAll resets every cell's terrain kind to kind, discarding any prior Set/SetMany overrides.
@@ -110,5 +144,6 @@ func (t *TerrainMap) SetAll(kind CellKind) {
 	t.version++
 }
 
-// Version counts the changes made through Set, SetMany and SetAll; a load starts it over.
+// Version counts the changes made through Set, SetMany and SetAll — a write that changes nothing
+// does not count; a load starts it over.
 func (t *TerrainMap) Version() uint64 { return t.version }

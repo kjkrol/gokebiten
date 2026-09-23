@@ -55,7 +55,7 @@ func (p *pathFinder) transitionsFor(entity uid.UID64, domain board.Domain) astar
 					continue
 				}
 			}
-			buf = append(buf, astar.Transition[board.CellID]{To: n, Cost: kind.Cost * p.grid.NeighborCost(from, n)})
+			buf = append(buf, astar.Transition[board.CellID]{To: n, Cost: kind.CostFor(domain) * p.grid.NeighborCost(from, n)})
 		}
 		return buf
 	}

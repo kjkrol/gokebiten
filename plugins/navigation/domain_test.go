@@ -1,6 +1,7 @@
 package navigation
 
 import (
+	"github.com/kjkrol/gram/plugin"
 	"testing"
 	"time"
 
@@ -64,12 +65,12 @@ func TestCommandSystem_Update_IgnoresATargetTheUnitsDomainMayNotEnter(t *testing
 	terrain.Set(lake, board.CellKind{Name: "water", Cost: 1, Allows: board.Water})
 
 	cmdState := &Resources{}
-	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, &board.SingleOccupancy{}), cmdState)
+	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, &board.SingleOccupancy{}), cmdState, selTags.Selected)
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Base]
 	var mover goke.Comp[board.Mover]
-	var selected goke.Comp[selection.Selected]
+	var selected goke.Comp[plugin.Tags[selection.Family]]
 	var order goke.OptComp[MoveOrder]
 	var readQuery *goke.Query
 
@@ -78,6 +79,7 @@ func TestCommandSystem_Update_IgnoresATargetTheUnitsDomainMayNotEnter(t *testing
 		f := si.NewFactory(&cell, &pos, &mover, &selected)
 		f.Create(1)
 		f.Next()
+		selected.Slice(&f.Cursor)[0] = selectedMarks
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: start}
 		pos.Slice(&f.Cursor)[0].Pos = world.Position{AABB: board.CellAABB(grid, start, 8)}
 		mover.Slice(&f.Cursor)[0] = board.Mover{Domain: board.Land}
@@ -97,5 +99,35 @@ func TestCommandSystem_Update_IgnoresATargetTheUnitsDomainMayNotEnter(t *testing
 		if order.Present(readQuery.Cursor()) {
 			t.Fatal("a land unit was ordered onto water")
 		}
+	}
+}
+
+func TestFindPath_PricesTheRouteForTheUnitsDomain(t *testing.T) {
+	const frost = board.Domain(1 << 3)
+	grid := board.DefaultGrids{}.Square(3, 3, 10)
+	terrain := board.NewTerrainMap()
+	terrain.SetAll(board.CellKind{Name: "grass", Cost: 1, Allows: board.Land | frost})
+	at := func(x, y uint32) board.CellID { c, _ := grid.CellIndex(x, y); return c }
+	// The middle row is snow: slow for anyone on foot, a highway for the frost-born.
+	for x := range uint32(3) {
+		terrain.Set(at(x, 1), board.CellKind{Name: "snow", Cost: 5, Allows: board.Land | frost}.Costing(frost, 0.2))
+	}
+	pf := newPathFinder(grid, terrain, &board.MultipleOccupancy{})
+
+	walker, _ := pf.findPath(uid.UID64(1), board.Land, at(0, 0), at(2, 0))
+	for _, step := range walker.Steps[:walker.Length] {
+		if terrain.Kind(step).Name == "snow" {
+			t.Fatalf("a walker's route dips into the snow at %v", step)
+		}
+	}
+	witch, _ := pf.findPath(uid.UID64(2), board.Land|frost, at(0, 0), at(2, 0))
+	onSnow := 0
+	for _, step := range witch.Steps[:witch.Length] {
+		if terrain.Kind(step).Name == "snow" {
+			onSnow++
+		}
+	}
+	if onSnow == 0 {
+		t.Error("the witch's route never takes the snow she is fast on")
 	}
 }

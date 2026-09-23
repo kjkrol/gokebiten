@@ -146,3 +146,68 @@ func TestTerrainBoxes_OpaqueCellsAreBodiesButNotSolid(t *testing.T) {
 		t.Errorf("solid by kind = %v, want wall solid and forest not", solid)
 	}
 }
+
+func TestCellsUnder_SquareAndHex(t *testing.T) {
+	sq := newSquareGrid(4, 4, 10)
+	count := func(g Grid, box geom.AABB) (n int) { g.CellsUnder(box, func(CellID) { n++ }); return }
+	if n := count(sq, geom.NewAABB(geom.NewVec(2, 2), geom.NewVec(8, 8))); n != 1 {
+		t.Errorf("a box inside one square touches %d cells, want 1", n)
+	}
+	if n := count(sq, geom.NewAABB(geom.NewVec(8, 8), geom.NewVec(12, 12))); n != 4 {
+		t.Errorf("a box over a corner of four squares touches %d cells, want 4", n)
+	}
+	if n := count(sq, geom.NewAABB(geom.NewVec(1, 1), geom.NewVec(39, 9))); n != 4 {
+		t.Errorf("a box along the top row touches %d cells, want 4", n)
+	}
+
+	hx := newHexGrid(3, 3, 20)
+	c := packAxial(1, 1)
+	center := hx.CellCenter(c)
+	tip := geom.NewAABB(geom.NewVec(center.X-1, center.Y-hx.Size+0.5), geom.NewVec(center.X+1, center.Y-hx.Size+2))
+	found := false
+	hx.CellsUnder(tip, func(got CellID) { found = found || got == c })
+	if !found {
+		t.Error("a box on the very tip of a hex does not touch it")
+	}
+	beside := geom.NewAABB(geom.NewVec(center.X+hx.Size, center.Y-1), geom.NewVec(center.X+hx.Size+2, center.Y+1))
+	hx.CellsUnder(beside, func(got CellID) {
+		if got == c {
+			t.Error("a box past the hex's side touches it")
+		}
+	})
+}
+
+func TestTerrainMap_VersionMovesOnlyWhenTheKindChanges(t *testing.T) {
+	tm := NewTerrainMap()
+	grass := CellKind{Name: "grass", Allows: Land}
+	before := tm.Version()
+	tm.Set(1, grass)
+	tm.Set(1, grass)
+	tm.SetMany([]CellID{1, 1}, grass)
+	if got := tm.Version() - before; got != 1 {
+		t.Errorf("version moved %d times for one real change, want 1", got)
+	}
+	tm.SetMany([]CellID{1, 2}, CellKind{Name: "snow", Allows: Land})
+	if got := tm.Version() - before; got != 2 {
+		t.Errorf("version moved %d times after a second change, want 2", got)
+	}
+}
+
+func TestCellKind_CostForPicksTheCheapestOfTheEntitysAdmittedDomains(t *testing.T) {
+	const sylvan = Domain(1 << 3)
+	forest := CellKind{Name: "forest", Cost: 3, Allows: Land | sylvan}.Costing(sylvan, 1)
+	for _, tc := range []struct {
+		d    Domain
+		want float64
+	}{
+		{Land, 3}, {sylvan, 1}, {Land | sylvan, 1}, {Water, 3}, {Water | sylvan, 1},
+	} {
+		if got := forest.CostFor(tc.d); got != tc.want {
+			t.Errorf("CostFor(%08b) = %v, want %v", tc.d, got, tc.want)
+		}
+	}
+	snow := CellKind{Name: "snow", Cost: 3, Allows: Land}.Costing(Air, 1) // priced for Air, but not admitted
+	if got := snow.CostFor(Air); got != 3 {
+		t.Errorf("a domain the kind does not admit pays %v, want the plain Cost 3", got)
+	}
+}

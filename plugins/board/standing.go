@@ -3,18 +3,21 @@ package board
 import (
 	"time"
 
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/uid"
 )
 
-// Standing is where an entity on the board stands this tick: the cell under its centre and that
-// cell's kind. Board hosts plugin.Each behaviors of it; one over Mover knows the entity's domain.
+// Standing is where an entity on the board stands this tick: the cell under its centre, that
+// cell's kind, and its box (Grid.CellsUnder lists every cell it touches). Board hosts plugin.Each
+// behaviors of it; one over Mover knows the entity's domain.
 type Standing struct {
 	ID   uid.UID64
 	Cell CellID
 	Kind CellKind
+	Box  geom.AABB
 }
 
 // Fell reports whether an entity moving in d stands where it may not: in a hole, in water on foot.
@@ -66,5 +69,5 @@ func (s *standingSystem) at(i int) Standing {
 	if !ok {
 		c = s.cells[i].ID
 	}
-	return Standing{ID: s.ids[i], Cell: c, Kind: s.brd.Kind(c)}
+	return Standing{ID: s.ids[i], Cell: c, Kind: s.brd.Kind(c), Box: s.bases[i].Pos.AABB.AABB}
 }

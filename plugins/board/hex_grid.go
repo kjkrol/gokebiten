@@ -92,6 +92,8 @@ func (g *hexGrid) CellOutline(c CellID, dst []geom.Vec) []geom.Vec {
 	return dst
 }
 
+func (g *hexGrid) CellsUnder(box geom.AABB, fn func(c CellID)) { cellsUnder(g, box, fn) }
+
 // HexCapStrips is how many boxes cover each pointed end of a hex; more is a closer fit.
 const HexCapStrips = 3
 
