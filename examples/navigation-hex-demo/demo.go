@@ -132,9 +132,9 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 // registerCellKinds defines every terrain kind the board can hold.
 func (s *mainStage) registerCellKinds() {
 	s.board.CellKindDict().Create(
-		board.CellKind{Name: "grass", Cost: 2, Passable: true},
-		board.CellKind{Name: "wall", Cost: 1, Passable: false},
-		board.CellKind{Name: "road", Cost: 1, Passable: true},
+		board.CellKind{Name: "grass", Cost: 2, Allows: board.Land},
+		board.CellKind{Name: "wall", Cost: 1, Solid: true},
+		board.CellKind{Name: "road", Cost: 1, Allows: board.Land},
 	)
 }
 
@@ -171,6 +171,7 @@ func (s *mainStage) defineKinds() {
 		kind.Const(selection.Selected{}),
 		kind.Const(collision.Collider{}),
 		kind.Const(collision.Physics{}),
+		kind.Const(board.Mover{Domain: board.Land}),
 	}
 	kinds := s.world.Kinds()
 	s.red = kind.Define[unit](kinds, "red", unitSpec)

@@ -39,8 +39,8 @@ func newSeedTestPlugin(t *testing.T) (*Plugin, CellID) {
 	})
 	p := NewPlugin(grid, &SingleOccupancy{}, worldPlugin)
 	p.CellKindDict().Create(
-		CellKind{Name: "grass", Cost: 1, Passable: true},
-		CellKind{Name: "wall", Cost: 1, Passable: false},
+		CellKind{Name: "grass", Cost: 1, Allows: Land},
+		CellKind{Name: "wall", Cost: 1, Solid: true},
 	)
 	cell, _ := grid.CellIndex(2, 2)
 	return p, cell

@@ -263,11 +263,11 @@ colliding boxes at a fixed 120 TPS, with save and load on F5.
 | [`minimal`](examples/minimal) | One Stage, one Scene, a world with collisions: the README example | `make demo-minimal` |
 | [`collision-demo`](examples/collision-demo) | Thousands of bouncing boxes of many kinds, hit overlays, telemetry, save and load | `make demo-collision` |
 | [`scenes-demo`](examples/scenes-demo) | A menu Stage switching into a gameplay Stage, a modal Scene over the ticking world, a non-focusable HUD | `make demo-scenes` |
-| [`navigation-demo`](examples/navigation-demo) | A board with terrain, units selected by click and marquee, right-click move orders along re-routing paths | `make demo-navigation` |
+| [`navigation-demo`](examples/navigation-demo) | A board with terrain, units selected by click and marquee, right-click move orders along re-routing paths, holes the planner avoids and H opens under the units | `make demo-navigation` |
 | [`navigation-hex-demo`](examples/navigation-hex-demo) | The same on a hex board: hex cells and route arrows at 60°, a wall of merged hex bodies | `make demo-navigation-hex` |
 | [`navigation-vision-demo`](examples/navigation-vision-demo) | Navigated units with sight cones that stop at walls and forests | `make demo-navigation-vision` |
 | [`navigation-vision-hex-demo`](examples/navigation-vision-hex-demo) | The same sight cones on a hex board | `make demo-navigation-vision-hex` |
-| [`island-demo`](examples/island-demo) | An island of fields, forests, slow hills and slower mountains larger than the window, under a zooming, panning camera | `make demo-island` |
+| [`island-demo`](examples/island-demo) | An island of fields, forests, slow hills and slower mountains in a sea that drowns whoever is pushed in, larger than the window, under a zooming, panning camera | `make demo-island` |
 | [`vision-demo`](examples/vision-demo) | Entities keeping out of each other's way by sight, and a hunter living off the ones that fail | `make demo-vision` |
 
 Every demo opens a window, so `go test` cannot exercise it; each ships its own tests of the

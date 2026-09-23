@@ -23,9 +23,10 @@ func newPathFinder(grid board.Grid, terrain board.Terrain, occupancy board.Occup
 	}
 }
 
-// findPath computes a route from 'from' toward 'to' for entity — ok=false if unreachable.
-func (p *pathFinder) findPath(entity uid.UID64, from, to board.CellID) (Path, bool) {
-	full := p.solver.Solve(from, to, p.transitionsFor(entity))
+// findPath computes a route from 'from' toward 'to' for entity moving in domain — ok=false if
+// unreachable.
+func (p *pathFinder) findPath(entity uid.UID64, domain board.Domain, from, to board.CellID) (Path, bool) {
+	full := p.solver.Solve(from, to, p.transitionsFor(entity, domain))
 	if len(full) < 2 {
 		return Path{}, false
 	}
@@ -38,7 +39,7 @@ func (p *pathFinder) findPath(entity uid.UID64, from, to board.CellID) (Path, bo
 }
 
 // transitionsFor adapts the grid, terrain and occupancy into astar's Transitions for entity.
-func (p *pathFinder) transitionsFor(entity uid.UID64) astar.Transitions[board.CellID] {
+func (p *pathFinder) transitionsFor(entity uid.UID64, domain board.Domain) astar.Transitions[board.CellID] {
 	return func(from, prev board.CellID, buf []astar.Transition[board.CellID]) []astar.Transition[board.CellID] {
 		buf = buf[:0]
 		for _, n := range p.grid.Neighbors(from) {
@@ -46,11 +47,11 @@ func (p *pathFinder) transitionsFor(entity uid.UID64) astar.Transitions[board.Ce
 				continue
 			}
 			kind := p.terrain.Kind(n)
-			if !kind.Passable || !p.occupancy.CanEnter(n, entity) {
+			if !kind.Admits(domain) || !p.occupancy.CanEnter(n, entity) {
 				continue
 			}
 			if c1, c2, ok := p.grid.DiagonalNeighbors(from, n); ok {
-				if !p.enterable(c1, entity) || !p.enterable(c2, entity) {
+				if !p.enterable(c1, entity, domain) || !p.enterable(c2, entity, domain) {
 					continue
 				}
 			}
@@ -60,27 +61,27 @@ func (p *pathFinder) transitionsFor(entity uid.UID64) astar.Transitions[board.Ce
 	}
 }
 
-// enterable reports whether entity may hold c: passable terrain nobody else occupies.
-func (p *pathFinder) enterable(c board.CellID, entity uid.UID64) bool {
-	return p.terrain.Kind(c).Passable && p.occupancy.CanEnter(c, entity)
+// enterable reports whether entity may hold c: terrain admitting its domain, nobody else there.
+func (p *pathFinder) enterable(c board.CellID, entity uid.UID64, domain board.Domain) bool {
+	return p.terrain.Kind(c).Admits(domain) && p.occupancy.CanEnter(c, entity)
 }
 
 // maxVisitedCells bounds how many cells nearestFree inspects around its target.
 const maxVisitedCells = 64
 
 // nearestFree returns the free cell nearest target that entity can reach, and the route to it.
-func (p *pathFinder) nearestFree(entity uid.UID64, from, target board.CellID, taken map[board.CellID]bool) (board.CellID, Path, bool) {
+func (p *pathFinder) nearestFree(entity uid.UID64, domain board.Domain, from, target board.CellID, taken map[board.CellID]bool) (board.CellID, Path, bool) {
 	var path Path
-	passable := func(c board.CellID) bool { return p.terrain.Kind(c).Passable }
+	passable := func(c board.CellID) bool { return p.terrain.Kind(c).Admits(domain) }
 	reachableFree := func(c board.CellID) bool {
-		if taken[c] || !p.enterable(c, entity) {
+		if taken[c] || !p.enterable(c, entity, domain) {
 			return false
 		}
 		if c == from {
 			path = Path{}
 			return true
 		}
-		found, ok := p.findPath(entity, from, c)
+		found, ok := p.findPath(entity, domain, from, c)
 		path = found
 		return ok
 	}

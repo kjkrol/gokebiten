@@ -2,8 +2,9 @@ package world
 
 import (
 	"fmt"
-	"github.com/kjkrol/gram/plugin"
 	"time"
+
+	"github.com/kjkrol/gram/plugin"
 
 	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/goke/v3"
@@ -186,7 +187,7 @@ func (w *module) tracked(t plugin.Tick, id uid.UID64, inside bool) {
 
 func (w *module) leave(t plugin.Tick, id uid.UID64) {
 	if w.exits.onExit == nil {
-		w.despawn(t.Cmd, id)
+		w.despawn(t.CmdBuf, id)
 		return
 	}
 	w.exits.onExit(t, id)

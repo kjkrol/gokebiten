@@ -36,6 +36,9 @@ type EachHost[P any] struct {
 	bound   bool
 }
 
+// Empty reports whether no behavior was added.
+func (h *EachHost[P]) Empty() bool { return len(h.runners) == 0 }
+
 // Add takes an Each behavior for P; ErrUnhostedBehavior for another, ErrHostBuilt after Bind.
 func (h *EachHost[P]) Add(b Behavior) error {
 	runner, ok := b.(eachRunner[P])

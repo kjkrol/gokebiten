@@ -9,6 +9,7 @@ import (
 	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/board"
 	"github.com/kjkrol/gram/plugins/collision"
 	"github.com/kjkrol/gram/plugins/vision"
@@ -35,11 +36,13 @@ func (c *installCtx) Setup(providers ...goke.SetupProvider) {
 func (c *installCtx) RegSys(factory func() goke.System) goke.Runnable { return c.ecs.RegSys(factory()) }
 func (c *installCtx) ECS() *goke.ECS                                  { return c.ecs }
 
-// mover is a unit's row: where it starts and, when heading is set, where it keeps driving.
+// mover is a unit's row: where it starts, where it keeps driving when heading is set, what it
+// sees, and how it moves (zero: Land).
 type mover struct {
 	cell    board.CellID
 	heading geom.Vec
 	sight   *vision.Sight
+	domain  board.Domain
 }
 
 const unitSize = 22
@@ -56,7 +59,7 @@ type bodiesWorld struct {
 	q     *goke.Query
 }
 
-func newBodiesWorld(t *testing.T, grid board.Grid, width, height uint32, terrain func(*board.Board), units []mover) *bodiesWorld {
+func newBodiesWorld(t *testing.T, grid board.Grid, width, height uint32, terrain func(*board.Board), units []mover, behaviors ...plugin.Behavior) *bodiesWorld {
 	t.Helper()
 	bw := &bodiesWorld{t: t}
 	bw.w = world.NewPlugin(world.Config{
@@ -66,6 +69,9 @@ func newBodiesWorld(t *testing.T, grid board.Grid, width, height uint32, terrain
 	c := collision.NewPlugin(bw.w)
 	bw.brd = board.NewPlugin(grid, &board.MultipleOccupancy{}, bw.w).WithCollision(c)
 	terrain(bw.brd.Res.Logic.Board)
+	if err := bw.brd.RegisterBehavior(behaviors...); err != nil {
+		t.Fatal(err)
+	}
 	v := vision.NewPlugin(bw.w)
 
 	ctx := &installCtx{ecs: goke.New()}
@@ -88,6 +94,13 @@ func newBodiesWorld(t *testing.T, grid board.Grid, width, height uint32, terrain
 			kind.Const(world.Velocity{}),
 			kind.Const(collision.Collider{}),
 			kind.Const(collision.Physics{}),
+			kind.Load(func(m mover) board.Cell { return board.Cell{ID: m.cell} }),
+			kind.Load(func(m mover) board.Mover {
+				if m.domain == 0 {
+					return board.Mover{Domain: board.Land}
+				}
+				return board.Mover{Domain: m.domain}
+			}),
 		}
 		if u.heading != (geom.Vec{}) {
 			spec = append(spec, kind.Load(func(m mover) world.Steering {
@@ -194,6 +207,12 @@ const cellSize = 32
 
 func squareWorld(t *testing.T, units ...mover) (*bodiesWorld, board.CellID) {
 	t.Helper()
+	return squareWorldWith(t, nil, units...)
+}
+
+// squareWorldWith is squareWorld with a behavior registered on the board.
+func squareWorldWith(t *testing.T, behavior plugin.Behavior, units ...mover) (*bodiesWorld, board.CellID) {
+	t.Helper()
 	grid := board.DefaultGrids{}.Square(6, 16, cellSize)
 	cell := func(x, y uint32) board.CellID { c, _ := grid.CellIndex(x, y); return c }
 	for i := range units {
@@ -201,12 +220,16 @@ func squareWorld(t *testing.T, units ...mover) (*bodiesWorld, board.CellID) {
 			units[i].cell = cell(1, 7)
 		}
 	}
+	var behaviors []plugin.Behavior
+	if behavior != nil {
+		behaviors = append(behaviors, behavior)
+	}
 	bw := newBodiesWorld(t, grid, 6*cellSize, 16*cellSize, func(brd *board.Board) {
-		brd.SetAll(board.CellKind{Name: "grass", Cost: 1, Passable: true})
+		brd.SetAll(board.CellKind{Name: "grass", Cost: 1, Allows: board.Land})
 		for y := uint32(1); y <= 14; y++ {
-			brd.Set(cell(3, y), board.CellKind{Name: "wall", Cost: 1})
+			brd.Set(cell(3, y), board.CellKind{Name: "wall", Cost: 1, Solid: true})
 		}
-	}, units)
+	}, units, behaviors...)
 	return bw, cell(3, 7)
 }
 
@@ -250,8 +273,8 @@ func TestBodies_AHexIsCoveredAndKeepsAUnitOut(t *testing.T) {
 	hex, _ := grid.CellIndex(1, 1)
 	start, _ := grid.CellAt(geom.NewVec(20, grid.CellCenter(hex).Y))
 	bw := newBodiesWorld(t, grid, 320, 256, func(brd *board.Board) {
-		brd.SetAll(board.CellKind{Name: "grass", Cost: 1, Passable: true})
-		brd.Set(hex, board.CellKind{Name: "rock"})
+		brd.SetAll(board.CellKind{Name: "grass", Cost: 1, Allows: board.Land})
+		brd.Set(hex, board.CellKind{Name: "rock", Solid: true})
 	}, []mover{{cell: start, heading: east}})
 	bodies, _ := bw.snapshot()
 	if len(bodies) != 2*board.HexCapStrips+1 {
@@ -272,7 +295,7 @@ func TestBodies_AHexIsCoveredAndKeepsAUnitOut(t *testing.T) {
 func TestBodies_FollowTheTerrainAsItChanges(t *testing.T) {
 	bw, gap := squareWorld(t, mover{})
 	bw.tick()
-	bw.brd.Res.Logic.Board.Set(gap, board.CellKind{Name: "grass", Cost: 1, Passable: true})
+	bw.brd.Res.Logic.Board.Set(gap, board.CellKind{Name: "grass", Cost: 1, Allows: board.Land})
 	bw.tick()
 	bodies, units := bw.snapshot()
 	if len(bodies) != 2 {
@@ -296,7 +319,7 @@ func TestBodies_OccludeSight(t *testing.T) {
 	}
 
 	open := newBodiesWorld(t, grid, 6*cellSize, 16*cellSize, func(brd *board.Board) {
-		brd.SetAll(board.CellKind{Name: "grass", Cost: 1, Passable: true})
+		brd.SetAll(board.CellKind{Name: "grass", Cost: 1, Allows: board.Land})
 	}, []mover{observer, target})
 	open.tick()
 	if seen, ok := open.seen(); !ok || seen.Count != 1 {
@@ -308,9 +331,9 @@ func TestBodies_AnOpaqueCellOnlyBlocksSight(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(6, 16, cellSize)
 	cell := func(x, y uint32) board.CellID { c, _ := grid.CellIndex(x, y); return c }
 	forest := func(brd *board.Board) {
-		brd.SetAll(board.CellKind{Name: "grass", Cost: 1, Passable: true})
+		brd.SetAll(board.CellKind{Name: "grass", Cost: 1, Allows: board.Land})
 		for y := uint32(1); y <= 14; y++ {
-			brd.Set(cell(3, y), board.CellKind{Name: "forest", Cost: 1, Passable: true, Opaque: true})
+			brd.Set(cell(3, y), board.CellKind{Name: "forest", Cost: 1, Allows: board.Land, Opaque: true})
 		}
 	}
 	observer := mover{cell: cell(1, 7), sight: &vision.Sight{Facing: east, HalfAngle: math.Pi / 8, Radius: 300}}

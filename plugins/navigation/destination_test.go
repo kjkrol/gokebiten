@@ -24,7 +24,7 @@ func abs(v float64) float64 {
 
 func openTerrain() *board.TerrainMap {
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	return terrain
 }
 
@@ -81,15 +81,15 @@ func TestPathFinder_NearestFree_SkipsOccupiedTakenAndUnreachableCells(t *testing
 	const mover, other = uid.UID64(1), uid.UID64(2)
 	occupancy.Enter(at(0), mover)
 	occupancy.Enter(at(4), other)
-	terrain.Set(at(2), board.CellKind{Cost: 1, Passable: false})
+	terrain.Set(at(2), board.CellKind{Cost: 1, Solid: true})
 	taken := map[board.CellID]bool{at(5): true}
 
-	dest, _, ok := pf.nearestFree(mover, at(6), at(4), taken)
+	dest, _, ok := pf.nearestFree(mover, board.Land, at(6), at(4), taken)
 	if !ok || dest != at(6) {
 		t.Errorf("nearestFree = %v, %v, want %v (only free, reachable cell near the target)", dest, ok, at(6))
 	}
 
-	if _, _, ok := pf.nearestFree(mover, at(0), at(4), taken); ok {
+	if _, _, ok := pf.nearestFree(mover, board.Land, at(0), at(4), taken); ok {
 		t.Error("expected no result: every free cell near the target is behind the wall")
 	}
 }

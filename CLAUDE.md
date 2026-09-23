@@ -178,12 +178,16 @@ shows how much of it is boilerplate vs. real behavior.
   entity is gone from it on the next. Anything reading the space in its own pass
   sees the boxes as they were after the last rebuild.
 - **`board`** — optional grid + terrain over `world`; its grids wrap per axis,
-  following the world's `Edges` (`SetWrap(x, y)`). Built `WithCollision(c)`, it makes impassable
-  terrain solid: one immovable `Body` entity per merged run of impassable cells (boxes from
+  following the world's `Edges` (`SetWrap(x, y)`). A `CellKind` says which `Domain`s it admits
+  (`Land`, `Water`, `Air`, a game's own bits), whether it is `Solid` (a wall) and `Opaque` (a
+  forest); a unit's `Mover` says which domain it moves in (none: `Land`). Every tick, after
+  collision's `RunPlan`, `board.RunPlan` reports a `Standing` (cell under the centre and its kind) to
+  `plugin.Each` behaviors registered on the board, naturally `Each[board.Mover]`;
+  `Standing.Fell(domain)` is a land unit in water or in a hole, and the reaction is the game's. Built `WithCollision(c)`, it also makes
+  solid terrain physical: one immovable `Body` entity per merged run of solid cells (boxes from
   `Grid.CellBoxes`, so a hex is covered by strips; at most `MaxBodyCells` a side), spawned through
   `world.Bodies` under a kind from `Kinds.Reserve`, rebuilt when `TerrainMap.Version` moves and
-  once after a load; then `board.RunPlan` has work and runs after `collision.RunPlan`. Depends on
-  `world`, and on `collision` for the bodies.
+  once after a load. Depends on `world`, and on `collision` for the bodies.
 - **`collision`** — optional collision detection over `world`'s space, one
   `Detector` system a tick. An entity collides exactly while it carries `Collider` —
   `kind.Const(collision.Collider{})`, or `Attach`/`Detach` mid-game. The `Detector`

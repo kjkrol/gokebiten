@@ -23,8 +23,8 @@ type bodyBox struct {
 	count int
 }
 
-// embodied reports whether cells of k become bodies: impassable ones are solid, opaque ones block sight.
-func embodied(k CellKind) bool { return !k.Passable || k.Opaque }
+// embodied reports whether cells of k become bodies: solid ones push, opaque ones block sight.
+func embodied(k CellKind) bool { return k.Solid || k.Opaque }
 
 // terrainBoxes lists every embodied cell's boxes merged into as few bodies as MaxBodyCells allows.
 func terrainBoxes(brd *Board, dst []bodyBox) []bodyBox {
@@ -33,7 +33,7 @@ func terrainBoxes(brd *Board, dst []bodyBox) []bodyBox {
 	visit := func(c CellID, k CellKind) {
 		boxes = brd.CellBoxes(c, boxes[:0])
 		for _, b := range boxes {
-			dst = append(dst, bodyBox{box: b, kind: k.Name, solid: !k.Passable})
+			dst = append(dst, bodyBox{box: b, kind: k.Name, solid: k.Solid})
 		}
 	}
 	if embodied(brd.Default) {

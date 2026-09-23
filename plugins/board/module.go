@@ -8,20 +8,32 @@ import (
 
 var _ goke.Module = (*module)(nil)
 
-// module runs terrainBodies when the plugin was built WithCollision.
+// module runs the standing report every tick and, when the plugin was built WithCollision, the
+// terrain bodies before it.
 type module struct {
+	standing *standingSystem
 	bodies   *terrainBodies
-	runnable goke.Runnable
+
+	standingRunnable goke.Runnable
+	bodiesRunnable   goke.Runnable
 }
 
 // =================================================================
 // goke.Module contract
 // =================================================================
 
-func (m *module) RegSystems(ecs *goke.ECS) { m.runnable = ecs.RegSys(m.bodies) }
+func (m *module) RegSystems(ecs *goke.ECS) {
+	if m.bodies != nil {
+		m.bodiesRunnable = ecs.RegSys(m.bodies)
+	}
+	m.standingRunnable = ecs.RegSys(m.standing)
+}
 
 func (m *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
-	ctx.Run(m.runnable, d)
+	if m.bodies != nil {
+		ctx.Run(m.bodiesRunnable, d)
+	}
+	ctx.Run(m.standingRunnable, d)
 	ctx.Sync()
 }
 
@@ -29,4 +41,6 @@ func (m *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
 func (m *module) SetupSystems() []goke.System { return nil }
 
 // LoadComps lists the component types board owns — see [goke.CompProvider].
-func (m *module) LoadComps() []goke.CompToken { return []goke.CompToken{goke.LoadComp[Body]()} }
+func (m *module) LoadComps() []goke.CompToken {
+	return []goke.CompToken{goke.LoadComp[Cell](), goke.LoadComp[Body](), goke.LoadComp[Mover]()}
+}

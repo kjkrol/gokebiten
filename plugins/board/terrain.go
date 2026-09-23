@@ -7,17 +7,26 @@ type Terrain interface {
 	Kind(c CellID) CellKind
 }
 
-// CellKind is a named terrain kind: its movement properties and the sprite drawn for it.
+// CellKind is a named terrain kind: whom it admits, what it does to movement and sight, and the
+// sprite drawn for it. A wall is Solid; water Allows Water; a hole Allows nobody and is not
+// Solid; a forest Allows Land and is Opaque.
 type CellKind struct {
 	Name string
 	// Cost 1 is full speed and the baseline path weight; above 1 the cell slows an entity and costs
 	// more to plan through, below 1 is a boost — a game's choice, still capped by the move's step.
-	Cost     float64
-	Passable bool
+	Cost float64
+	// Allows is the domains that may stand here; the planner keeps the others out, and one that
+	// ends up here anyway has fallen in — see Standing.
+	Allows Domain
+	// Solid makes the cell a physical obstacle — a body pushing everyone; see Plugin.WithCollision.
+	Solid bool
 	// Opaque blocks sight without blocking movement — a forest; see Plugin.WithCollision.
 	Opaque   bool
 	SpriteID render.SpriteID
 }
+
+// Admits reports whether an entity moving in d may stand on this kind.
+func (k CellKind) Admits(d Domain) bool { return k.Allows&d != 0 }
 
 // CellKindDict is a Plugin's registered set of CellKinds, keyed by Name —
 // reached via Plugin.CellKindDict, never built directly by the game.

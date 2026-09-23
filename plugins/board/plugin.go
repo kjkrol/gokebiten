@@ -39,6 +39,7 @@ type Plugin struct {
 	worldPlugin *world.Plugin
 	collision   *collision.Plugin
 	module      *module
+	standing    plugin.EachHost[Standing]
 }
 
 var _ plugin.Plugin = (*Plugin)(nil)
@@ -68,25 +69,20 @@ func NewPlugin(grid Grid, occupancy Occupancy, worldPlugin *world.Plugin) *Plugi
 
 func (p *Plugin) Name() string { return "gram.board" }
 
-// Install wires the terrain bodies when WithCollision asked for them; otherwise board has no ECS
-// wiring of its own.
+// Install wires the standing report and, WithCollision, the terrain bodies.
 func (p *Plugin) Install(ctx plugin.Installer) error {
-	if p.collision == nil {
-		return nil
+	p.module = &module{standing: newStandingSystem(p.Res.Logic.Board, &p.standing)}
+	if p.collision != nil {
+		typeID := p.worldPlugin.Kinds().Reserve("board.terrain")
+		p.module.bodies = newTerrainBodies(p.Res.Logic.Board, p.worldPlugin, typeID)
 	}
-	typeID := p.worldPlugin.Kinds().Reserve("board.terrain")
-	p.module = &module{bodies: newTerrainBodies(p.Res.Logic.Board, p.worldPlugin, typeID)}
 	ctx.UseModule(p.module)
 	return nil
 }
 
-// RunPlan rebuilds the terrain bodies after a terrain change; call it after collision's RunPlan.
-// Without WithCollision it does nothing.
-func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
-	if p.module != nil {
-		p.module.RunPlan(ctx, d)
-	}
-}
+// RunPlan rebuilds the terrain bodies after a terrain change and reports where everyone stands;
+// call it after collision's RunPlan.
+func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) { p.module.RunPlan(ctx, d) }
 
 // WithRenderer builds the board renderer, drawing each cell's CellKind.SpriteID from atlas.
 func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
@@ -108,10 +104,13 @@ func (p *Plugin) EventHandler() control.EventHandler { return nil }
 // Serializable returns board's persistable state (its terrain).
 func (p *Plugin) Serializable() plugin.Serializable { return &p.Res }
 
-// RegisterBehavior reports ErrUnhostedBehavior — board hosts no behaviors.
+// RegisterBehavior hosts a plugin.Each of Standing, run every tick for every entity on the board;
+// register before Use.
 func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
 	for _, b := range behaviors {
-		return fmt.Errorf("%w: %T in %s", plugin.ErrUnhostedBehavior, b, p.Name())
+		if err := p.standing.Add(b); err != nil {
+			return fmt.Errorf("%w in %s — it takes Each for Standing", err, p.Name())
+		}
 	}
 	return nil
 }

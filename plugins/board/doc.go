@@ -16,15 +16,26 @@
 // # Cell, CellKind and Terrain
 //
 // A [CellID] names one cell; [Cell] is an entity's current one. A [CellKind] is a named terrain:
-// its movement cost, whether it is passable, whether it is opaque (a forest: passable, but sight
-// stops at it), and the sprite drawn for it; kinds are created
+// its movement cost, the [Domain]s it admits, whether it is solid (a wall) or opaque (a forest:
+// sight stops at it), and the sprite drawn for it; kinds are created
 // through the Plugin's [CellKindDict]. Cost 1 is full speed and the baseline path weight; above 1
 // slows and costs more to plan through; below 1 is a boost a game may choose to offer. [Terrain] is what a cell answers about itself.
 //
+// # Domains, Mover and Standing
+//
+// A [Domain] is a way of moving — [Land], [Water], [Air], or a game's own bit — and a cell's
+// Allows says which may stand on it: water admits Water, a hole nobody. An entity's [Mover] says
+// which it uses (none means Land); the planner keeps it to cells that admit it. Every tick, after
+// collisions, the board tells each entity carrying Cell where it stands as a [Standing] —
+// [Plugin.RegisterBehavior] takes a plugin.Each of it, naturally one over Mover — and
+// [Standing.Fell] says the entity is where its domain may not be: pushed into water, dropped
+// into a hole. What follows is the
+// game's: despawn, teleport, damage. Call [Plugin.RunPlan] every tick, after collision's.
+//
 // # Terrain bodies
 //
-// Built [Plugin.WithCollision], the board makes its impassable terrain solid: every run of
-// impassable cells becomes an immovable entity in the world — a [Body] with a collider and an
+// Built [Plugin.WithCollision], the board makes its Solid terrain physical: every run of solid
+// cells becomes an immovable entity in the world — a [Body] with a collider and an
 // infinite mass, no sprite, no kind — so no unit ends a tick inside a wall and walls occlude sight;
 // a run of opaque cells becomes a Body without a collider, occluding only.
 // A body is made of the boxes the grid gives for each cell ([Grid.CellBoxes]: one for a square,

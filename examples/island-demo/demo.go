@@ -1,5 +1,6 @@
 // Command island-demo is a map larger than the window: an island of fields, forests, slow hills
-// and slower mountains in a sea, a road round it, units under orders. Scroll with the wheel, drag with the
+// and slower mountains in a sea that drowns whoever is pushed in, a road round it, units under
+// orders. Scroll with the wheel, drag with the
 // middle button or push the cursor to an edge to move the camera.
 package main
 
@@ -13,6 +14,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/game"
+	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/board"
 	"github.com/kjkrol/gram/plugins/collision"
 	"github.com/kjkrol/gram/plugins/navigation"
@@ -35,9 +37,8 @@ const (
 	EntitySize   = 22
 	UnitSpeed    = CellSize * 3
 	UnitCount    = 6
-	// MaxEntCount is the units plus the terrain bodies: the sea round the island alone is a few
-	// hundred merged runs.
-	MaxEntCount = 2000
+	// MaxEntCount is the units plus the terrain bodies the forests make.
+	MaxEntCount = 400
 
 	saveBasePath = "island-demo"
 )
@@ -99,13 +100,16 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	grid := board.DefaultGrids{}.Square(GridWidth, GridHeight, CellSize)
 	s.board = board.NewPlugin(grid, &board.MultipleOccupancy{}, s.world).WithCollision(s.collision)
 	s.board.CellKindDict().Create(
-		board.CellKind{Name: "water", Cost: 1, Passable: false},
-		board.CellKind{Name: "field", Cost: 1.5, Passable: true},
-		board.CellKind{Name: "forest", Cost: 3, Passable: true, Opaque: true},
-		board.CellKind{Name: "hills", Cost: 4, Passable: true},
-		board.CellKind{Name: "mountain", Cost: 8, Passable: true},
-		board.CellKind{Name: "road", Cost: 1, Passable: true},
+		board.CellKind{Name: "water", Cost: 1, Allows: board.Water},
+		board.CellKind{Name: "field", Cost: 1.5, Allows: board.Land},
+		board.CellKind{Name: "forest", Cost: 3, Allows: board.Land, Opaque: true},
+		board.CellKind{Name: "hills", Cost: 4, Allows: board.Land},
+		board.CellKind{Name: "mountain", Cost: 8, Allows: board.Land},
+		board.CellKind{Name: "road", Cost: 1, Allows: board.Land},
 	)
+	if err := s.board.RegisterBehavior(plugin.Each[board.Mover](s.drown)); err != nil {
+		return err
+	}
 	if err := ctx.Use(s.board); err != nil {
 		return err
 	}
@@ -167,6 +171,7 @@ func (s *mainStage) defineKinds() {
 		kind.Const(selection.Selected{}),
 		kind.Const(collision.Collider{}),
 		kind.Const(collision.Physics{}),
+		kind.Const(board.Mover{Domain: board.Land}),
 	})
 }
 
@@ -181,6 +186,14 @@ func (s *mainStage) Spawn() error {
 	}
 	s.world.Seed(entries...)
 	return nil
+}
+
+// drown despawns a unit standing where its domain may not — pushed into the sea, say.
+func (s *mainStage) drown(t plugin.Tick, m *board.Mover, st board.Standing) {
+	if st.Fell(m.Domain) {
+		log.Printf("unit %d drowned in the %s at cell %d", st.ID, st.Kind.Name, st.Cell)
+		s.world.Despawn(t.CmdBuf, st.ID)
+	}
 }
 
 func (s *mainStage) Update(ctx goke.RunCtx, d time.Duration) {

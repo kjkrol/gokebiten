@@ -55,7 +55,7 @@ func (p *pushOnce) Update(_ *goke.CmdBuf, _ time.Duration) {
 func TestNavigationSystem_Update_DeviationTriggersRepath(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(5, 1, 10)
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	occupancy := &board.SingleOccupancy{}
 	steer := newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy)
 	pusher := &pushOnce{grid: grid, size: 8}
@@ -128,7 +128,7 @@ func TestNavigationSystem_Update_DeviationTriggersRepath(t *testing.T) {
 func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(5, 5, 10)
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	occupancy := &board.SingleOccupancy{}
 	steer := newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy)
 
@@ -186,7 +186,7 @@ func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *te
 func TestNavigationSystem_Update_ArrivalStopsEntity(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(5, 1, 10)
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	occupancy := &board.SingleOccupancy{}
 	steer := newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy)
 
@@ -245,7 +245,7 @@ func TestNavigationSystem_Update_ArrivalStopsEntity(t *testing.T) {
 func TestNavigationSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(5, 1, 10)
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	occupancy := &board.SingleOccupancy{}
 	steer := newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy)
 	space := testSpace(t)
@@ -309,7 +309,7 @@ func TestNavigationSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
 func TestNavigationSystem_Update_ArrivalGlidesSmoothlyToCellCenter(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(5, 1, 10)
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	occupancy := &board.SingleOccupancy{}
 	steer := newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy)
 	space := testSpace(t)
@@ -394,13 +394,13 @@ func TestNavigationSystem_Update_ReproducesBoardDemoWallScenario(t *testing.T) {
 	)
 	grid := board.DefaultGrids{}.Square(gridWidth, gridHeight, cellSize)
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	var wallCells []board.CellID
 	for y := uint32(2); y < gridHeight; y++ {
 		c, _ := grid.CellIndex(wallCol, y)
 		wallCells = append(wallCells, c)
 	}
-	terrain.SetMany(wallCells, board.CellKind{Cost: 1, Passable: false})
+	terrain.SetMany(wallCells, board.CellKind{Cost: 1, Solid: true})
 	occupancy := &board.SingleOccupancy{}
 
 	start, _ := grid.CellIndex(2, 4)
@@ -459,7 +459,7 @@ func TestNavigationSystem_Update_ReproducesBoardDemoWallScenario(t *testing.T) {
 			positions := pos.Slice(cur)
 			orders := order.Slice(cur)
 			for i := range cur.IDs {
-				if !terrain.Kind(cells[i].ID).Passable {
+				if !terrain.Kind(cells[i].ID).Admits(board.Land) {
 					t.Fatalf("tick %d: entity's logical Cell is inside impassable terrain: %v", tick, cells[i].ID)
 				}
 				path := orders[i].Path
@@ -517,14 +517,14 @@ func TestDirectionBetween(t *testing.T) {
 		want geom.Vec
 		dir  Direction
 	}{
-		{"east", geom.NewVec(60.0, 50.0), DirE},
-		{"west", geom.NewVec(40.0, 50.0), DirW},
-		{"north", geom.NewVec(50.0, 40.0), DirN},
-		{"south", geom.NewVec(50.0, 60.0), DirS},
-		{"north-east", geom.NewVec(60.0, 40.0), DirNE},
-		{"north-west", geom.NewVec(40.0, 40.0), DirNW},
-		{"south-east", geom.NewVec(60.0, 60.0), DirSE},
-		{"south-west", geom.NewVec(40.0, 60.0), DirSW},
+		{"east", geom.NewVec(60.0, 50.0), DirectionAt(0)},
+		{"west", geom.NewVec(40.0, 50.0), DirectionAt(180)},
+		{"north", geom.NewVec(50.0, 40.0), DirectionAt(90)},
+		{"south", geom.NewVec(50.0, 60.0), DirectionAt(270)},
+		{"north-east", geom.NewVec(60.0, 40.0), DirectionAt(45)},
+		{"north-west", geom.NewVec(40.0, 40.0), DirectionAt(135)},
+		{"south-east", geom.NewVec(60.0, 60.0), DirectionAt(315)},
+		{"south-west", geom.NewVec(40.0, 60.0), DirectionAt(225)},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -537,11 +537,11 @@ func TestDirectionBetween(t *testing.T) {
 	t.Run("wraps through the seam instead of straight across the map", func(t *testing.T) {
 		have := geom.NewVec(95.0, 50.0)
 		want := geom.NewVec(5.0, 50.0)
-		if got := directionBetween(have, want, 100, 100, aabbworld.Torus); got != DirE {
-			t.Errorf("directionBetween(%v, %v, toroidal) = %v, want DirE (short hop east through the wrap)", have, want, got)
+		if got := directionBetween(have, want, 100, 100, aabbworld.Torus); got != DirectionAt(0) {
+			t.Errorf("directionBetween(%v, %v, toroidal) = %v, want 0° (short hop east through the wrap)", have, want, got)
 		}
-		if got := directionBetween(have, want, 100, 100, 0); got != DirW {
-			t.Errorf("directionBetween(%v, %v, non-toroidal) = %v, want DirW (sanity: without wrap it's the long way west)", have, want, got)
+		if got := directionBetween(have, want, 100, 100, 0); got != DirectionAt(180) {
+			t.Errorf("directionBetween(%v, %v, non-toroidal) = %v, want 180° (sanity: without wrap it's the long way west)", have, want, got)
 		}
 	})
 }

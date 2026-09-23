@@ -21,9 +21,9 @@ var ErrHostBuilt = errors.New("plugin: behavior registered after its host was bu
 
 // Tick is what a hosted behavior is told about the pass it runs in.
 type Tick struct {
-	Cmd *goke.CmdBuf  // structural changes land when the pass is over
-	Now time.Time     // read once for the whole pass
-	Dt  time.Duration // length of this tick
+	CmdBuf *goke.CmdBuf  // structural changes land when the pass is over
+	Now    time.Time     // read once for the whole pass
+	Dt     time.Duration // length of this tick
 }
 
 // Anything stands for "whatever it is" on one side of Between, or both.

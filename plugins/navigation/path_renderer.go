@@ -49,6 +49,7 @@ type PathRenderer struct {
 	base  goke.Comp[world.Base]
 	cell  goke.Comp[board.Cell]
 	order goke.Comp[MoveOrder]
+	mover goke.OptComp[board.Mover]
 }
 
 var _ render.Renderer = (*PathRenderer)(nil)
@@ -61,6 +62,7 @@ func (r *PathRenderer) BindSpace(space *aabbworld.Space) { r.space = space }
 
 func (r *PathRenderer) Init(si *goke.SysInit) {
 	r.query = si.NewQueryBuilder(&r.base, &r.cell, &r.order).
+		Optional(&r.mover).
 		Include(goke.Include[selection.Selected]()).
 		Build()
 }
@@ -74,10 +76,11 @@ func (r *PathRenderer) Draw(screen *ebiten.Image) {
 			bases := r.base.Slice(cursor)
 			cells := r.cell.Slice(cursor)
 			orders := r.order.Slice(cursor)
+			movers := r.mover.Slice(cursor)
 			for i := range cursor.IDs {
 				center := board.Center(bases[i].Pos)
 				r.drawPath(center, bases[i].Vel.Dir, pathCells(cells[i], orders[i]))
-				for _, route := range r.queued(cursor.IDs[i], &orders[i]) {
+				for _, route := range r.queued(cursor.IDs[i], board.DomainAt(movers, i), &orders[i]) {
 					r.drawRoute(route)
 				}
 			}
@@ -133,7 +136,7 @@ type preview struct {
 
 // queued is the routes from the order's Target through each queued goal, planned once per change
 // of the goals; a goal no route reaches is drawn on its own.
-func (r *PathRenderer) queued(id uid.UID64, mt *MoveOrder) [][]board.CellID {
+func (r *PathRenderer) queued(id uid.UID64, domain board.Domain, mt *MoveOrder) [][]board.CellID {
 	if mt.Queued == 0 {
 		delete(r.previews, id)
 		return nil
@@ -149,7 +152,7 @@ func (r *PathRenderer) queued(id uid.UID64, mt *MoveOrder) [][]board.CellID {
 		from, to := goals[k], goals[k+1]
 		route := []board.CellID{from}
 		if r.finder != nil {
-			if path, ok := r.finder.findPath(id, from, to); ok {
+			if path, ok := r.finder.findPath(id, domain, from, to); ok {
 				for _, step := range path.Steps[:path.Length] {
 					route = append(route, step)
 				}

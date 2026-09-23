@@ -17,7 +17,7 @@ import (
 func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(10, 1, 10)
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	occupancy := &board.SingleOccupancy{}
 
 	start, _ := grid.CellIndex(0, 0)
@@ -109,7 +109,7 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(10, 1, 10)
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	occupancy := &board.SingleOccupancy{}
 
 	start, _ := grid.CellIndex(0, 0)
@@ -205,13 +205,13 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 func TestCommandSystem_Update_UnreachableTargetLeavesInFlightEntityUntouched(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(10, 1, 10)
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	occupancy := &board.SingleOccupancy{}
 
 	start, _ := grid.CellIndex(0, 0)
 	oldTarget, _ := grid.CellIndex(3, 0)
 	wall, _ := grid.CellIndex(8, 0)
-	terrain.Set(wall, board.CellKind{Cost: 1, Passable: false})
+	terrain.Set(wall, board.CellKind{Cost: 1, Solid: true})
 
 	cam := camera.NewFromSpace(1000, 1000, 0)
 

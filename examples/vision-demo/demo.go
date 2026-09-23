@@ -4,11 +4,12 @@
 package main
 
 import (
-	"github.com/kjkrol/aabbworld"
 	"image/color"
 	"math"
 	"math/rand/v2"
 	"time"
+
+	"github.com/kjkrol/aabbworld"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/aabbworld/geom"
@@ -197,7 +198,7 @@ func (s *mainStage) Update(ctx goke.RunCtx, d time.Duration) {
 
 // caught despawns the prey a hunter touches.
 func (s *mainStage) caught(t plugin.Tick, m collision.Meeting) {
-	s.world.Despawn(t.Cmd, m.Other)
+	s.world.Despawn(t.CmdBuf, m.Other)
 }
 
 // faceTravel points each entity's Sight where it is actually going.

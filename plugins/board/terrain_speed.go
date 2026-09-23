@@ -25,7 +25,7 @@ func (t *TerrainSpeedModifier) Apply(_ *goke.Cursor, _ int, base *world.Base, ac
 		return acc
 	}
 	kind := t.terrain.Kind(cell)
-	if !kind.Passable || kind.Cost <= 0 {
+	if kind.Cost <= 0 {
 		return acc
 	}
 	return acc / kind.Cost

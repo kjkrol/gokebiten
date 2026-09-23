@@ -30,7 +30,7 @@ func newEnteredWorld(t *testing.T, w, h uint32, start, target board.CellID) *ent
 	}
 	occupancy := &board.SingleOccupancy{}
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 
 	steer := newNavigationSystem(
 		newPathFinder(ew.grid, terrain, occupancy), ew.grid, terrain, occupancy)

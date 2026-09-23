@@ -1,10 +1,11 @@
 package world
 
 import (
-	"github.com/kjkrol/gram/plugin"
-	"github.com/kjkrol/uid"
 	"math"
 	"time"
+
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/uid"
 
 	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/aabbworld/geom"
@@ -47,7 +48,7 @@ func (s *MoveSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 			}
 			inside := s.space.Move(&bases[i].Pos.AABB, step)
 			if (!inside || !s.exits.quiet()) && s.exits.left(id, inside) {
-				s.leave(plugin.Tick{Cmd: cb, Now: time.Now(), Dt: d}, id)
+				s.leave(plugin.Tick{CmdBuf: cb, Now: time.Now(), Dt: d}, id)
 			}
 		}
 	}

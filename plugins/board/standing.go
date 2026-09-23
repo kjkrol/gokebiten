@@ -1,0 +1,70 @@
+package board
+
+import (
+	"time"
+
+	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/world"
+	"github.com/kjkrol/uid"
+)
+
+// Standing is where an entity on the board stands this tick: the cell under its centre and that
+// cell's kind. Board hosts plugin.Each behaviors of it; one over Mover knows the entity's domain.
+type Standing struct {
+	ID   uid.UID64
+	Cell CellID
+	Kind CellKind
+}
+
+// Fell reports whether an entity moving in d stands where it may not: in a hole, in water on foot.
+func (s Standing) Fell(d Domain) bool { return !s.Kind.Admits(d) }
+
+var _ goke.System = (*standingSystem)(nil)
+
+// standingSystem tells every Each behavior where each entity carrying Cell stands, after
+// movement and collisions have had their say.
+type standingSystem struct {
+	brd  *Board
+	host *plugin.EachHost[Standing]
+
+	query *goke.Query
+	base  goke.Comp[world.Base]
+	cell  goke.Comp[Cell]
+
+	ids   []uid.UID64
+	bases []world.Base
+	cells []Cell
+}
+
+func newStandingSystem(brd *Board, host *plugin.EachHost[Standing]) *standingSystem {
+	return &standingSystem{brd: brd, host: host}
+}
+
+func (s *standingSystem) Init(si *goke.SysInit) {
+	qb := si.NewQueryBuilder(&s.base, &s.cell)
+	s.host.Bind(qb)
+	s.query = qb.Build()
+}
+
+func (s *standingSystem) Update(cb *goke.CmdBuf, d time.Duration) {
+	if s.host.Empty() {
+		return
+	}
+	tick := plugin.Tick{CmdBuf: cb, Now: time.Now(), Dt: d}
+	s.query.All()
+	for s.query.Next() {
+		cursor := s.query.Cursor()
+		s.ids, s.bases, s.cells = cursor.IDs, s.base.Slice(cursor), s.cell.Slice(cursor)
+		s.host.Run(tick, cursor, s.at)
+	}
+}
+
+// at describes the i-th entity of the chunk being walked.
+func (s *standingSystem) at(i int) Standing {
+	c, ok := s.brd.CellAt(Center(s.bases[i].Pos))
+	if !ok {
+		c = s.cells[i].ID
+	}
+	return Standing{ID: s.ids[i], Cell: c, Kind: s.brd.Kind(c)}
+}

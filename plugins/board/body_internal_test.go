@@ -42,8 +42,8 @@ func TestHexGrid_CellBoxesCoverEveryVertexWithinTheBoundingBox(t *testing.T) {
 
 func wallBoard(w, h uint32, cells func(x, y uint32) bool) *Board {
 	brd := NewBoard(newSquareGrid(w, h, 10), NewTerrainMap())
-	brd.SetAll(CellKind{Name: "grass", Passable: true})
-	wall := CellKind{Name: "wall"}
+	brd.SetAll(CellKind{Name: "grass", Allows: Land})
+	wall := CellKind{Name: "wall", Solid: true}
 	for y := range h {
 		for x := range w {
 			if cells(x, y) {
@@ -80,9 +80,9 @@ func TestTerrainBoxes_CapsABodyAtMaxBodyCells(t *testing.T) {
 
 func TestTerrainBoxes_DefaultKindCountsWhenImpassable(t *testing.T) {
 	brd := NewBoard(newSquareGrid(4, 1, 10), NewTerrainMap())
-	brd.SetAll(CellKind{Name: "rock"})
+	brd.SetAll(CellKind{Name: "rock", Solid: true})
 	c, _ := brd.CellIndex(1, 0)
-	brd.Set(c, CellKind{Name: "grass", Passable: true})
+	brd.Set(c, CellKind{Name: "grass", Allows: Land})
 	got := terrainBoxes(brd, nil)
 	if len(got) != 2 {
 		t.Fatalf("%d bodies, want the rock either side of the grass", len(got))
@@ -98,7 +98,7 @@ func TestTerrainBoxes_NeverJoinsAcrossTheWrapSeamOrAcrossKinds(t *testing.T) {
 
 	brd = wallBoard(2, 1, func(x, y uint32) bool { return true })
 	c, _ := brd.CellIndex(1, 0)
-	brd.Set(c, CellKind{Name: "water"})
+	brd.Set(c, CellKind{Name: "water", Solid: true})
 	if got := terrainBoxes(brd, nil); len(got) != 2 {
 		t.Errorf("%d bodies of two kinds, want 2", len(got))
 	}
@@ -133,7 +133,7 @@ func TestHexGrid_CellOutlineAndBounds(t *testing.T) {
 func TestTerrainBoxes_OpaqueCellsAreBodiesButNotSolid(t *testing.T) {
 	brd := wallBoard(3, 1, func(x, y uint32) bool { return x == 0 })
 	c, _ := brd.CellIndex(2, 0)
-	brd.Set(c, CellKind{Name: "forest", Passable: true, Opaque: true})
+	brd.Set(c, CellKind{Name: "forest", Allows: Land, Opaque: true})
 	got := terrainBoxes(brd, nil)
 	if len(got) != 2 {
 		t.Fatalf("%d bodies, want a wall and a forest", len(got))

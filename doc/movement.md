@@ -124,10 +124,16 @@ decision (`board.CellKind`). Walls are done; holes and sight through terrain are
   are rebuilt whenever `TerrainMap.Version` moves, and once after a load, where the saved ones are
   replaced by what the terrain says. Their `Caps` are settled by collision on the next tick, so an
   edit to the terrain mid-game is solid one tick late.
-- **A hole — open.** Not a body: a body would occlude sight, and a `Sensor` would fire the moment a
-  unit touched its edge. A unit falls when its **centre** stands over a hole (its centre of mass
-  is unsupported); the board reports `Fell{ID, Cell, Kind}` to `plugin.Each` behaviors, and the
-  game decides: despawn, teleport, damage.
+- **A hole, water — done, as domains.** Who may stand where is a relation between the unit and
+  the terrain, not a property of the cell: a `CellKind` says which `board.Domain`s it admits
+  (`Land`, `Water`, `Air`, a game's own bits) and whether it is `Solid`; a unit's `board.Mover`
+  says which it moves in. The planner keeps a unit to cells admitting its domain, so water and a
+  hole are forbidden ground for a land unit and open water for a boat. Neither is a body — a body
+  would occlude sight and push — so a collision can shove a land unit into either. Every tick,
+  after collisions, the board reports `Standing{ID, Cell, Kind}` (the cell under the unit's
+  **centre**) to `plugin.Each` behaviors — `Each[board.Mover]`, so the reaction holds the unit's
+  domain — and `Standing.Fell(domain)` says the unit stands where its domain may not. It is a state, not an event, because `Each` runs for every entity the host
+  walks — as `Struck` does in collision. The reaction is the game's: despawn, teleport, damage.
 - **A forest — an interim step.** `CellKind.Opaque` makes a passable cell a body without a
   `Collider`: it occludes and nothing else. Every entry in the space occludes completely today, so
   a unit inside a forest sees nothing until §12 lands.
@@ -207,12 +213,11 @@ none, a wall all. That needs three things, in this order.
   kind. Terrain bodies then get one `TypeID` per `CellKind`, not one for the whole board.
 - **Range is the unit's.** `Sight.Radius` already is; `vision.MaxSightRadius` caps it at 300 for
   the outline buffers and moves into configuration or grows with the largest radius defined.
-- **Flying units.** A `world.Flying` tag (or a `Base.Caps` bit): collision's `Touch` vetoes its pairs
-  with terrain bodies the way it vetoes a lost `Collider`, vision does not attenuate its sight, and
-  the planner ignores `Passable` and `Cost` for it — `pathFinder` takes a per-order filter
-  (`MoveOrder.Flying`, or the tag read at planning). Cells taken by static entities (§5) still
-  count for it. Order of work: 4b holes, 4c cells taken by static entities, 4d transparency and
-  flying.
+- **Flying units.** `board.Mover{Domain: Air}` already keeps the planner on cells admitting Air
+  (a game admits Air over walls and water alike); what is left is collision's `Touch` vetoing its
+  pairs with `Solid` terrain bodies the way it vetoes a lost `Collider`, vision not attenuating
+  its sight, and terrain cost not slowing it. Cells taken by static entities (§5) still count for
+  it. Order of work: 4c cells taken by static entities, 4d transparency and flying.
 
 ## Who owns what
 

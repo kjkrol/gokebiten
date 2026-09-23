@@ -65,7 +65,7 @@ func (s *ScanSystem) Init(si *goke.SysInit) {
 }
 
 func (s *ScanSystem) Update(cb *goke.CmdBuf, d time.Duration) {
-	t := plugin.Tick{Cmd: cb, Now: time.Now(), Dt: d}
+	t := plugin.Tick{CmdBuf: cb, Now: time.Now(), Dt: d}
 	hosting := !s.host.Empty()
 	s.lookupHot = false
 

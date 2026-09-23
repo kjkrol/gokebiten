@@ -28,7 +28,7 @@ func newCommandWorld(t *testing.T) *commandWorld {
 	t.Helper()
 	cw := &commandWorld{grid: board.DefaultGrids{}.Square(10, 1, 10), state: &Resources{}}
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	cmds := newMoveCommandSystem(newPathFinder(cw.grid, terrain, &board.SingleOccupancy{}), cw.state)
 	cw.oldTarget = cw.cellAt(3)
 

@@ -28,7 +28,7 @@ func newProfiledWorld(t *testing.T, w, h uint32, start board.CellID, mt MoveOrde
 	t.Helper()
 	pw := &profiledWorld{grid: board.DefaultGrids{}.Square(w, h, legCellSize)}
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	occupancy := &board.SingleOccupancy{}
 	nav := newNavigationSystem(newPathFinder(pw.grid, terrain, occupancy), pw.grid, terrain, occupancy)
 	space := testSpace(t)
@@ -122,7 +122,7 @@ func TestNavigation_TurnsBeforeTheBendAndNeverStops(t *testing.T) {
 func TestNavigation_PassesAWaypointByProjectionNotDistance(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(5, 1, 10)
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	occupancy := &board.SingleOccupancy{}
 	nav := newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy)
 	at := func(x uint32) board.CellID { c, _ := grid.CellIndex(x, 0); return c }
@@ -282,7 +282,7 @@ func TestNavigation_RunsThroughQueuedGoalsWithoutStopping(t *testing.T) {
 func TestNavigation_QueuedGoalIsPassedByProjection(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(6, 1, 10)
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	occupancy := &board.SingleOccupancy{}
 	nav := newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy)
 	at := func(x uint32) board.CellID { c, _ := grid.CellIndex(x, 0); return c }
@@ -398,7 +398,7 @@ func TestPassed_WithinTheLookaheadCountsAsPassed(t *testing.T) {
 func TestNavigation_ALegIsTurnedRoundWhenTheRouteGoesBack(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(5, 1, 10)
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	occupancy := &board.SingleOccupancy{}
 	nav := newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy)
 	at := func(x uint32) board.CellID { c, _ := grid.CellIndex(x, 0); return c }

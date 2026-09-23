@@ -40,7 +40,7 @@ func newLegWorld(t *testing.T, w, h uint32, units ...legUnit) *legWorld {
 	t.Helper()
 	lw := &legWorld{grid: board.DefaultGrids{}.Square(w, h, legCellSize), occupancy: &board.SingleOccupancy{}}
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	lw.terrain = terrain
 	steer := newNavigationSystem(newPathFinder(lw.grid, terrain, lw.occupancy), lw.grid, terrain, lw.occupancy)
 	space := testSpace(t)
@@ -119,7 +119,7 @@ func (lw *legWorld) tick() map[uid.UID64]legState {
 // walls makes cells impassable, taking effect from the next tick.
 func (lw *legWorld) walls(cells ...board.CellID) {
 	for _, c := range cells {
-		lw.terrain.Set(c, board.CellKind{Cost: 1, Passable: false})
+		lw.terrain.Set(c, board.CellKind{Cost: 1, Solid: true})
 	}
 }
 
@@ -251,7 +251,7 @@ func TestNavigation_Leg_DiagonalHoldsCorners(t *testing.T) {
 func TestCommandSystem_Update_RetargetMidLegKeepsLeg(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(10, 1, legCellSize)
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	occupancy := &board.SingleOccupancy{}
 	cmdState := &Resources{}
 	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
@@ -305,7 +305,7 @@ func TestCommandSystem_Update_RetargetMidLegKeepsLeg(t *testing.T) {
 func TestModule_PostLoad_RestoresLegCells(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(3, 3, legCellSize)
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	occupancy := &board.SingleOccupancy{}
 	m := &module{navigationSystem: newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy)}
 

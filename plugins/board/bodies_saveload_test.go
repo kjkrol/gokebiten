@@ -58,8 +58,8 @@ func (g *bodiesStage) Init(ctx game.Initializer) error {
 	}
 	g.board = board.NewPlugin(g.grid, &board.MultipleOccupancy{}, g.world).WithCollision(g.collision)
 	g.board.CellKindDict().Create(
-		board.CellKind{Name: "grass", Cost: 1, Passable: true},
-		board.CellKind{Name: "wall", Cost: 1},
+		board.CellKind{Name: "grass", Cost: 1, Allows: board.Land},
+		board.CellKind{Name: "wall", Cost: 1, Solid: true},
 	)
 	if err := ctx.Use(g.board); err != nil {
 		return err

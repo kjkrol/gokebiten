@@ -84,6 +84,7 @@ type navigationSystem struct {
 	base  goke.Comp[world.Base]
 	steer goke.Comp[world.Steering]
 	order goke.OptComp[MoveOrder]
+	mover goke.OptComp[board.Mover]
 	route []geom.Vec // the centres ahead, unwrapped, reused each entity
 
 	cellEnteredAdd goke.Comp[CellEntered]
@@ -115,6 +116,7 @@ func (s *navigationSystem) BindSpace(space *aabbworld.Space) { s.space = space }
 func (s *navigationSystem) Init(si *goke.SysInit) {
 	s.query = si.NewQueryBuilder(&s.cell, &s.base, &s.steer).
 		Optional(&s.order).
+		Optional(&s.mover).
 		Build()
 	s.arrivedEditor = s.query.NewEditorBuilder().Remove(goke.Remove[MoveOrder]()).Build()
 	s.enterVM = s.query.NewValueEditorBuilder(&s.cellEnteredAdd).Build()
@@ -147,9 +149,11 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 		var bothVals []CellEntered
 
 		steers := s.steer.Slice(cursor)
+		movers := s.mover.Slice(cursor)
 		dt := d.Seconds()
 
 		for i, id := range cursor.IDs {
+			domain := board.DomainAt(movers, i)
 			target := orders[i].Target
 			p := &orders[i].Path
 			leg := &orders[i].Leg
@@ -192,14 +196,14 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 			}
 
 			if !leg.Active && (p.Length == 0 || p.Index >= p.Length) && cells[i].ID != target {
-				newPath, found := s.pathFinder.findPath(id, cells[i].ID, target)
+				newPath, found := s.pathFinder.findPath(id, domain, cells[i].ID, target)
 				if !found {
 					st.RequestSpeed(0)
 					orders[i].Waited += d
 					if orders[i].Waited < targetWaitTimeout {
 						continue
 					}
-					dest, destPath, ok := s.pathFinder.nearestFree(id, cells[i].ID, target, nil)
+					dest, destPath, ok := s.pathFinder.nearestFree(id, domain, cells[i].ID, target, nil)
 					if !ok {
 						arrivedIDs = append(arrivedIDs, id)
 						continue
@@ -225,7 +229,7 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 			}
 
 			if !leg.Active && waypoint != cells[i].ID {
-				reserved, ok := s.reserveLeg(cells[i].ID, waypoint, id)
+				reserved, ok := s.reserveLeg(cells[i].ID, waypoint, id, domain)
 				if !ok {
 					st.RequestSpeed(0)
 					p.Length = 0
@@ -452,13 +456,13 @@ func approach(st *world.Steering, dist float64) float64 {
 }
 
 // reserveLeg claims every cell a step from→to can touch, or none of them and false.
-func (s *navigationSystem) reserveLeg(from, to board.CellID, id uid.UID64) (Leg, bool) {
+func (s *navigationSystem) reserveLeg(from, to board.CellID, id uid.UID64, domain board.Domain) (Leg, bool) {
 	leg := Leg{From: from, To: to, Active: true}
 	if c1, c2, diag := s.grid.DiagonalNeighbors(from, to); diag {
 		leg.C1, leg.C2, leg.Diagonal = c1, c2, true
 	}
 	for _, c := range leg.cells()[1:] {
-		if !s.terrain.Kind(c).Passable || !s.occupancy.CanEnter(c, id) {
+		if !s.terrain.Kind(c).Admits(domain) || !s.occupancy.CanEnter(c, id) {
 			return Leg{}, false
 		}
 	}

@@ -97,7 +97,7 @@ func (d *Detector) Init(si *goke.SysInit) {
 }
 
 func (d *Detector) Update(cb *goke.CmdBuf, dt time.Duration) {
-	d.tick = plugin.Tick{Cmd: cb, Now: time.Now(), Dt: dt}
+	d.tick = plugin.Tick{CmdBuf: cb, Now: time.Now(), Dt: dt}
 	if d.mark() {
 		d.rebuild()
 	}

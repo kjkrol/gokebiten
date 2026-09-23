@@ -99,10 +99,10 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	grid := board.DefaultGrids{}.Square(GridWidth, GridHeight, CellSize)
 	s.board = board.NewPlugin(grid, &board.SingleOccupancy{}, s.world).WithCollision(s.collision)
 	s.board.CellKindDict().Create(
-		board.CellKind{Name: "grass", Cost: 2, Passable: true},
-		board.CellKind{Name: "wall", Cost: 1, Passable: false},
-		board.CellKind{Name: "forest", Cost: 3, Passable: true, Opaque: true},
-		board.CellKind{Name: "road", Cost: 1, Passable: true},
+		board.CellKind{Name: "grass", Cost: 2, Allows: board.Land},
+		board.CellKind{Name: "wall", Cost: 1, Solid: true},
+		board.CellKind{Name: "forest", Cost: 3, Allows: board.Land, Opaque: true},
+		board.CellKind{Name: "road", Cost: 1, Allows: board.Land},
 	)
 	if err := ctx.Use(s.board); err != nil {
 		return err
@@ -169,6 +169,7 @@ func (s *mainStage) defineKinds() {
 		kind.Const(selection.Selected{}),
 		kind.Const(collision.Collider{}),
 		kind.Const(collision.Physics{}),
+		kind.Const(board.Mover{Domain: board.Land}),
 		kind.Const(vision.Sight{Facing: geom.NewVec(1, 0), HalfAngle: sightHalf, Radius: sightRadius}),
 		kind.Const(vision.SightOutline{}),
 		kind.Const(unitTag{}),

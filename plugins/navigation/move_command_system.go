@@ -21,6 +21,7 @@ type moveCommandSystem struct {
 	query   *goke.Query
 	cell    goke.Comp[board.Cell]
 	order   goke.OptComp[MoveOrder]
+	mover   goke.OptComp[board.Mover]
 	orderID goke.CompID
 }
 
@@ -32,7 +33,7 @@ func newMoveCommandSystem(pathFinder *pathFinder, state *Resources) *moveCommand
 }
 
 func (s *moveCommandSystem) Init(si *goke.SysInit) {
-	s.query = si.NewQueryBuilder(&s.cell).Optional(&s.order).Include(goke.Include[selection.Selected]()).Build()
+	s.query = si.NewQueryBuilder(&s.cell).Optional(&s.order).Optional(&s.mover).Include(goke.Include[selection.Selected]()).Build()
 	s.orderID = si.RegComp[MoveOrder]()
 }
 
@@ -45,9 +46,7 @@ func (s *moveCommandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 	s.state.Pending = nil
 
 	pf := s.pathFinder
-	if !pf.terrain.Kind(target).Passable {
-		return
-	}
+	at := pf.terrain.Kind(target)
 
 	var moves []pendingMove
 	s.query.All()
@@ -55,12 +54,17 @@ func (s *moveCommandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 		cursor := s.query.Cursor()
 		cells := s.cell.Slice(cursor)
 		orders := s.order.Slice(cursor)
+		movers := s.mover.Slice(cursor)
 		for i, id := range cursor.IDs {
+			domain := board.DomainAt(movers, i)
+			if !at.Admits(domain) {
+				continue
+			}
 			if cmd.Append && orders != nil {
 				orders[i].Enqueue(target)
 				continue
 			}
-			m := pendingMove{id: id, from: cells[i].ID}
+			m := pendingMove{id: id, from: cells[i].ID, domain: domain}
 			if orders != nil && orders[i].Leg.Active {
 				m.leg, m.from = orders[i].Leg, orders[i].Leg.To
 			}
@@ -77,10 +81,10 @@ func (s *moveCommandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 		var path Path
 		ok := false
 		if n == 0 {
-			path, ok = pf.findPath(m.id, m.from, target)
+			path, ok = pf.findPath(m.id, m.domain, m.from, target)
 		}
 		if !ok {
-			dest, path, ok = pf.nearestFree(m.id, m.from, target, taken)
+			dest, path, ok = pf.nearestFree(m.id, m.domain, m.from, target, taken)
 		}
 		if !ok {
 			continue
@@ -92,7 +96,8 @@ func (s *moveCommandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 
 // pendingMove is one Selected entity awaiting a destination.
 type pendingMove struct {
-	id   uid.UID64
-	from board.CellID
-	leg  Leg
+	id     uid.UID64
+	from   board.CellID
+	leg    Leg
+	domain board.Domain
 }

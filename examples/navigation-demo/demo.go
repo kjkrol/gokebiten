@@ -10,6 +10,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/game"
+	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/board"
 	"github.com/kjkrol/gram/plugins/collision"
 	"github.com/kjkrol/gram/plugins/navigation"
@@ -67,8 +68,10 @@ type mainStage struct {
 	collision *collision.Plugin
 	selection *selection.Plugin
 	red, blue kind.Of[unit]
-	stack     game.Scenes
-	state     *State
+	// under is the cell each unit stood on last tick — where H opens a trapdoor.
+	under map[uid.UID64]board.CellID
+	stack game.Scenes
+	state *State
 }
 
 var _ game.Stage = (*mainStage)(nil)
@@ -92,6 +95,10 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	grid := board.DefaultGrids{}.Square(GridWidth, GridHeight, CellSize)
 	s.board = board.NewPlugin(grid, &board.SingleOccupancy{}, s.world).WithCollision(s.collision)
 	s.registerCellKinds()
+	s.under = map[uid.UID64]board.CellID{}
+	if err := s.board.RegisterBehavior(plugin.Each[board.Mover](s.standing)); err != nil {
+		return err
+	}
 	if err := ctx.Use(s.board); err != nil {
 		return err
 	}
@@ -123,10 +130,31 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 // registerCellKinds defines every terrain kind the board can hold.
 func (s *mainStage) registerCellKinds() {
 	s.board.CellKindDict().Create(
-		board.CellKind{Name: "grass", Cost: 2, Passable: true},
-		board.CellKind{Name: "wall", Cost: 1, Passable: false},
-		board.CellKind{Name: "road", Cost: 1, Passable: true},
+		board.CellKind{Name: "grass", Cost: 2, Allows: board.Land},
+		board.CellKind{Name: "wall", Cost: 1, Solid: true},
+		board.CellKind{Name: "road", Cost: 1, Allows: board.Land},
+		board.CellKind{Name: "hole", Cost: 1}, // admits nobody and is not solid: whoever stands on it falls
 	)
+}
+
+// standing remembers where each unit stands and despawns the ones that fell into a hole.
+func (s *mainStage) standing(t plugin.Tick, m *board.Mover, st board.Standing) {
+	if st.Fell(m.Domain) {
+		log.Printf("unit %d fell into the %s at cell %d", st.ID, st.Kind.Name, st.Cell)
+		delete(s.under, st.ID)
+		s.world.Despawn(t.CmdBuf, st.ID)
+		return
+	}
+	s.under[st.ID] = st.Cell
+}
+
+// openTrapdoors turns the cell under every unit into a hole.
+func (s *mainStage) openTrapdoors() {
+	hole, _ := s.board.CellKindDict().Get("hole")
+	for _, c := range s.under {
+		s.board.Res.Logic.Board.Set(c, hole)
+	}
+	log.Printf("opened a hole under %d units", len(s.under))
 }
 
 func (s *mainStage) Restore(p game.Persistence) (bool, error) {
@@ -162,6 +190,7 @@ func (s *mainStage) defineKinds() {
 		kind.Const(selection.Selected{}),
 		kind.Const(collision.Collider{}),
 		kind.Const(collision.Physics{}),
+		kind.Const(board.Mover{Domain: board.Land}),
 	}
 	kinds := s.world.Kinds()
 	s.red = kind.Define[unit](kinds, "red", unitSpec)
@@ -173,11 +202,13 @@ func (s *mainStage) Spawn() error {
 	brd := s.board.Res.Logic.Board
 	cell := func(x, y uint32) board.CellID { c, _ := brd.CellIndex(x, y); return c }
 
-	// A wall down column 12 from row 2, and a road round it: along row 1 and down both flanks.
+	// A wall down column 12 from row 2, a road round it along row 1 and down both flanks, and a
+	// hole on each unit's straight line, so the planner has to go round.
 	var cells []board.CellEntry
 	for y := uint32(2); y < GridHeight; y++ {
 		cells = append(cells, board.CellEntry{Kind: "wall", Cell: cell(wallCol, y)})
 	}
+	cells = append(cells, board.CellEntry{Kind: "hole", Cell: cell(6, 4)}, board.CellEntry{Kind: "hole", Cell: cell(17, 12)})
 	for x := roadLeft; x <= roadRight; x++ {
 		cells = append(cells, board.CellEntry{Kind: "road", Cell: cell(x, roadTop)})
 	}
@@ -223,10 +254,12 @@ func (m *mainScene) Layers() []render.Renderer {
 	grass, _ := kinds.Get("grass")
 	wall, _ := kinds.Get("wall")
 	road, _ := kinds.Get("road")
+	hole, _ := kinds.Get("hole")
 	boardAtlas := render.NewAtlas()
 	boardAtlas.RegisterAt(grass.SpriteID, CellSize, render.Solid(color.RGBA{R: 60, G: 95, B: 60, A: 255}))
 	boardAtlas.RegisterAt(wall.SpriteID, CellSize, render.Solid(color.RGBA{R: 40, G: 40, B: 40, A: 255}))
 	boardAtlas.RegisterAt(road.SpriteID, CellSize, render.Solid(color.RGBA{R: 150, G: 130, B: 80, A: 255}))
+	boardAtlas.RegisterAt(hole.SpriteID, CellSize, render.Solid(color.RGBA{R: 10, G: 10, B: 30, A: 255}))
 	boardAtlas.Close()
 	s.board.WithRenderer(boardAtlas)
 
@@ -258,6 +291,8 @@ func (m *mainScene) HandleEvents(events *control.InputEvents, runtime game.Runti
 		case ebiten.KeyR:
 			buildShortcut(s.board.Res.Logic.Board, s.board.CellKindDict())
 			log.Print("built a road through the wall — in-flight units re-path onto it as soon as they deviate")
+		case ebiten.KeyH:
+			s.openTrapdoors()
 		case ebiten.KeyF5:
 			s.state.Saves++
 			if err := runtime.Persistence().Save(saveBasePath, "", s.state); err != nil {
