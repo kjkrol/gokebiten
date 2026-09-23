@@ -1,9 +1,10 @@
-// Package selection turns mouse input into a Selected tag on world entities: left-click to
-// select, drag for a marquee, shift to add. WithRenderer outlines what is selected.
+// Package selection turns mouse input into a Selected tag on Selectable world entities:
+// left-click to select, drag for a marquee, shift to add. WithRenderer outlines what is selected.
 //
-// # Selected and SelectionSystem
+// # Selectable, Selected and SelectionSystem
 //
-// [Selected] marks an entity the player has selected. The [DefaultEventHandler] turns left-click
+// [Selectable] marks an entity the player may select — a unit, not a stretch of terrain; give it
+// in the kind. [Selected] marks one the player has selected. The [DefaultEventHandler] turns left-click
 // and left-drag into [Resources] — the drag in progress and a [PendingSelect] once the gesture
 // completes — and the [SelectionSystem] resolves it against the world's space through the camera
 // into Selected tags, additive with shift.

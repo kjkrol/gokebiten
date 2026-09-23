@@ -18,6 +18,7 @@ import (
 type pendingSeed struct {
 	x, y, size float64
 	id         *uid.UID64
+	plain      bool
 }
 
 // harness seeds entities, drives the system through a tick and reads Selected back;
@@ -30,6 +31,7 @@ type harness struct {
 	handler   *DefaultEventHandler
 	ecs       *goke.ECS
 	pos       goke.Comp[world.Base]
+	tag       goke.Comp[Selectable]
 	selectedQ *goke.Query
 	handle    goke.Runnable
 	pending   []pendingSeed
@@ -55,10 +57,17 @@ func newHarness(t *testing.T) *harness {
 	return &harness{t: t, space: space, state: state, sys: sys, handler: handler, ecs: goke.New()}
 }
 
-// seed queues a size x size entity at (x,y); the returned id is filled in by start.
+// seed queues a Selectable size x size entity at (x,y); the returned id is filled in by start.
 func (h *harness) seed(x, y, size float64) *uid.UID64 {
 	id := new(uid.UID64)
 	h.pending = append(h.pending, pendingSeed{x: x, y: y, size: size, id: id})
+	return id
+}
+
+// seedPlain queues an entity nobody may select — terrain, say.
+func (h *harness) seedPlain(x, y, size float64) *uid.UID64 {
+	id := h.seed(x, y, size)
+	h.pending[len(h.pending)-1].plain = true
 	return id
 }
 
@@ -70,18 +79,26 @@ func (h *harness) start() {
 		if len(h.pending) == 0 {
 			return
 		}
-		f := si.NewFactory(&h.pos)
-		f.Create(len(h.pending))
-		i := 0
-		for f.Next() {
-			positions := h.pos.Slice(&f.Cursor)
-			for j, id := range f.Cursor.IDs {
-				spec := h.pending[i]
-				*spec.id = id
-				aabb := plane.NewAABB(geom.NewVec(spec.x, spec.y), spec.size, spec.size)
-				positions[j].Pos = world.Position{AABB: aabb}
-				h.items = append(h.items, aabbworld.Item{ID: id, Box: aabb})
-				i++
+		factories := map[bool]*goke.Factory{false: si.NewFactory(&h.pos, &h.tag), true: si.NewFactory(&h.pos)}
+		for plain, f := range factories {
+			var seeds []pendingSeed
+			for _, spec := range h.pending {
+				if spec.plain == plain {
+					seeds = append(seeds, spec)
+				}
+			}
+			f.Create(len(seeds))
+			i := 0
+			for f.Next() {
+				positions := h.pos.Slice(&f.Cursor)
+				for j, id := range f.Cursor.IDs {
+					spec := seeds[i]
+					*spec.id = id
+					aabb := plane.NewAABB(geom.NewVec(spec.x, spec.y), spec.size, spec.size)
+					positions[j].Pos = world.Position{AABB: aabb}
+					h.items = append(h.items, aabbworld.Item{ID: id, Box: aabb})
+					i++
+				}
 			}
 		}
 		h.space.Rebuild(h.items)
@@ -315,5 +332,20 @@ func TestSelectionSystem_WorldBox_SelectsOnBothSidesOfTheSeam(t *testing.T) {
 	space.Query(box, aabbworld.AnyCapability, func(id uid.UID64) { hit[id] = true })
 	if !hit[before] || !hit[after] || hit[elsewhere] || len(hit) != 2 {
 		t.Errorf("drag across the seam hit %v, want the entities either side of it and nothing else", hit)
+	}
+}
+
+func TestSelection_PassesByWhatIsNotSelectable(t *testing.T) {
+	h := newHarness(t)
+	unit := h.seed(100, 100, 10)
+	terrain := h.seedPlain(130, 100, 10)
+	h.start()
+
+	h.drag(90, 90, 150, 120, false)
+	if !h.isSelected(*unit) {
+		t.Error("expected the Selectable entity in the drag box to be Selected")
+	}
+	if h.isSelected(*terrain) {
+		t.Error("expected the entity without Selectable to be passed by")
 	}
 }

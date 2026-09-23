@@ -12,7 +12,8 @@ import (
 
 var _ goke.System = (*SelectionSystem)(nil)
 
-// SelectionSystem turns what an event handler wrote into Resources into Selected tags.
+// SelectionSystem turns what an event handler wrote into Resources into Selected tags on
+// Selectable entities.
 type SelectionSystem struct {
 	space  *aabbworld.Space
 	camera camera.Camera
@@ -31,7 +32,7 @@ func NewSelectionSystem(state *Resources, space *aabbworld.Space, cam camera.Cam
 }
 
 func (s *SelectionSystem) Init(si *goke.SysInit) {
-	s.query = si.NewQueryBuilder().Optional(&s.present).Build()
+	s.query = si.NewQueryBuilder().Include(goke.Include[Selectable]()).Optional(&s.present).Build()
 	s.addEditor = s.query.NewEditorBuilder(&s.selectedAdd).Build()
 	s.removeEditor = s.query.NewEditorBuilder().Remove(goke.Remove[Selected]()).Build()
 }

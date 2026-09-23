@@ -35,12 +35,13 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Base]
 	var order goke.Comp[MoveOrder]
+	var selectable goke.Comp[selection.Selectable]
 	var readQuery *goke.Query
 	var selectedID, otherID uid.UID64
 
 	ecs := goke.New()
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		f := si.NewFactory(&cell, &pos, &order)
+		f := si.NewFactory(&cell, &pos, &order, &selectable)
 		f.Create(2)
 		f.Next()
 		ids := f.Cursor.IDs
@@ -130,7 +131,8 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 
 	ecs := goke.New()
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		f := si.NewFactory(&cell, &pos)
+		var selectable goke.Comp[selection.Selectable]
+		f := si.NewFactory(&cell, &pos, &selectable)
 		f.Create(1)
 		f.Next()
 		idleID = f.Cursor.IDs[0]
