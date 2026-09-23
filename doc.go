@@ -78,6 +78,7 @@
 //	          plugins/collision   — the Detector over the world's Space; Collider, Physics, Meeting, Struck (→ world, …)
 //	          plugins/selection   — mouse input into a Selected tag                                 (→ world, …)
 //	          plugins/vision      — a Sight cone into Seen, Sighting, SightOutline                   (→ world, …)
+//	          plugins/effects     — temporary changes to entities: Grant and Alter, cast anywhere    (→ world, …)
 //	Layer 6   plugins/board       — a grid with terrain over the world, walls as bodies              (→ world, collision, …)
 //	          plugins/collision/behavior, plugins/vision/behavior — ready-made reactions              (→ their plugin, world, plugin)
 //	Layer 7   plugins/navigation  — MoveOrder paths across a board                                   (→ board, selection, world, …)
@@ -89,7 +90,7 @@
 //	camera ──► render ──► plugin ──► plugins/world/kind ──► plugins/world ──► game ──► internal/engine ──► gram
 //	control ───┘                                              │  ▲
 //	                                                          ▼  │
-//	                     plugins/{collision, selection, vision} ──► plugins/board ──► plugins/navigation, plugins/*/behavior
+//	                     plugins/{collision, selection, vision, effects} ──► plugins/board ──► plugins/navigation, plugins/*/behavior
 //
 // Outside the module: goke/v3 is the ECS every Stage runs on, aabbworld the space, collisions and
 // line of sight under the world, ebiten/v2 the loop and the drawing, astar the pathfinding, and

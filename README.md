@@ -161,7 +161,7 @@ func (a *arena) Init(ctx game.Initializer) error {
 
 	a.collision = collision.NewPlugin(a.world)
 	if err := a.collision.RegisterBehavior(
-		plugin.Between[plugin.Anything, plugin.Anything](behavior.CountContacts(&a.stats)),
+		plugin.Between(plugin.Any, plugin.Any, behavior.CountContacts(&a.stats)),
 	); err != nil {
 		return err
 	}
@@ -268,6 +268,7 @@ colliding boxes at a fixed 120 TPS, with save and load on F5.
 | [`navigation-vision-demo`](examples/navigation-vision-demo) | Navigated units with sight cones that stop at walls and forests | `make demo-navigation-vision` |
 | [`navigation-vision-hex-demo`](examples/navigation-vision-hex-demo) | The same sight cones on a hex board | `make demo-navigation-vision-hex` |
 | [`island-demo`](examples/island-demo) | An island of fields, forests, slow hills and slower mountains in a sea that drowns whoever is pushed in, larger than the window, under a zooming, panning camera | `make demo-island` |
+| [`effect-demo`](examples/effect-demo) | An ice witch under orders turns the ground round her into snow and the lake into ice, fast on her own snow; it thaws behind her, a walker follows her trail while it lasts and slips on it, a boat with weak brakes sails onto the ice it saw coming and is frozen still and pale until it melts — all of it effects | `make demo-effect` |
 | [`vision-demo`](examples/vision-demo) | Entities keeping out of each other's way by sight, and a hunter living off the ones that fail | `make demo-vision` |
 
 Every demo opens a window, so `go test` cannot exercise it; each ships its own tests of the
@@ -296,10 +297,12 @@ Stage and every Scene alike.
 A plugin's `Install` only queues ECS wiring; the engine flushes it all in one `ecs.Setup` after
 the Stage's `Init`, which is what lets `Restore` decide fresh-spawn or restore before the ECS
 commits to either. Game logic that reacts to what a plugin finds is a *behavior*:
-`plugin.Between[A, B](fn)` for every pair the plugin meets where one entity carries tag `A` and the
-other `B` (`plugin.Anything` as the wildcard), `plugin.Each[T](fn)` for every entity carrying `T`.
-Ready-made ones live in `plugins/collision/behavior` and `plugins/vision/behavior`; which tags
-they run between is the registration's to say.
+`plugin.Between(a, b, fn)` for every pair the plugin meets where one entity carries tag `a` and the
+other `b` (`plugin.Any` as the wildcard), `plugin.Each[T](fn)` for every entity carrying `T`. A tag
+is a bit of a family — one `plugin.Tags[F]` component per family, named through `Kinds.DefineTag`,
+given to a kind with `kind.Tagged` — so markers cost no component types of their own. Ready-made
+behaviors live in `plugins/collision/behavior` and `plugins/vision/behavior`; which tags they run
+between is the registration's to say.
 
 ## Kinds, spawning and saves
 
@@ -330,6 +333,7 @@ has a `doc.go` describing what it brings.
 | [`plugins/vision`](plugins/vision/doc.go) | `Sight` cones into `Seen`; `Sighting` behaviors; `SightOutline` drawn |
 | [`plugins/vision/behavior`](plugins/vision/behavior/doc.go) | `Flee`, `Chase`, and the `Predator`/`Prey`/`Skittish`/`Threat` tags |
 | [`plugins/board`](plugins/board/doc.go) | A square or hex grid with terrain kinds and occupancy over the world |
+| [`plugins/effects`](plugins/effects/doc.go) | Temporary changes to entities — tags granted, components altered and restored — cast from anywhere |
 | [`plugins/navigation`](plugins/navigation/doc.go) | `MoveOrder` paths across a board, re-routing when terrain changes; right-click commands; route drawing |
 | [`plugins/selection`](plugins/selection/doc.go) | Click, marquee and shift-add into `Selected`; highlight renderer |
 | [`internal/engine`](internal/engine/doc.go) | The `Engine`: the Ebitengine loop, one active Stage, persistence, input capture |
@@ -339,7 +343,7 @@ has a `doc.go` describing what it brings.
 camera ──► render ──► plugin ──► plugins/world/kind ──► plugins/world ──► game ──► internal/engine ──► gram
 control ───┘                                              │  ▲
                                                           ▼  │
-                     plugins/{collision, selection, vision} ──► plugins/board ──► plugins/navigation, plugins/*/behavior
+                     plugins/{collision, selection, vision, effects} ──► plugins/board ──► plugins/navigation, plugins/*/behavior
 ```
 
 Outside the module: [goke](https://github.com/kjkrol/goke) is the ECS every Stage runs on,

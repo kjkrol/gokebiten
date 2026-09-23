@@ -33,6 +33,7 @@ make demo-navigation                                               # go mod tidy
 make demo-navigation-hex                                           # the same on a hex board
 make demo-navigation-vision                                        # board + navigation + vision: walls and forests occlude
 make demo-navigation-vision-hex                                    # the same on a hex board
+make demo-effect                                                   # an ice witch: frost and frozen as effects
 make demo-island                                                   # a map larger than the window under a moving camera
 make demo-scenes                                                  # go mod tidy && run examples/scenes-demo
 make demo-vision                                                  # go mod tidy && run examples/vision-demo
@@ -59,13 +60,21 @@ on Go 1.27.0.
 `plugin.Plugin` — `Name`, `Install(ctx plugin.Installer) error`, `RunPlan`,
 `WithRenderer`, `Renderer`, `EventHandler`, `Serializable`,
 `RegisterBehavior` — is the one extension point. A behavior is registered on
-the plugin it concerns and run inside that plugin's own pass. `plugin.Between[A,
-B]` (a pair of tags) and `plugin.Each[T]` (one entity) build them; the tags join
+the plugin it concerns and run inside that plugin's own pass. `plugin.Between(a, b, fn)`
+(a pair of tags) and `plugin.Each[T]` (one entity) build them; the tag families join
 the host's queries as optional components, so a behavior costs no query. The
 func's payload type — `collision.Meeting`, `collision.Struck`,
 `vision.Sighting` — is what says whose it is: a host refuses one made for another (`ErrUnhostedBehavior`), so
 registering in the wrong place is an error, never a silent no-op. A plugin
-hosts them with `plugin.PairHost[P]`/`plugin.EachHost[P]`. A `Stage` builds its plugins as its own struct fields
+hosts them with `plugin.PairHost[P]`/`plugin.EachHost[P]`. Tags are bits of a family, not component types: `plugin.Tags[F]` is one component
+holding up to 64 tags of family `F` (an empty type a plugin or a game names the family by:
+`selection.Family`, `behavior.Family` in vision, `board.Family`), `kinds.DefineTag[F](name)`
+hands out the bits by name through `world.Kinds` (saved by name, remapped on load like `TypeID`),
+`kind.Tagged(tags...)` gives them to a kind, a query over the family's `Tags` narrows to entities
+carrying any of them, and flipping a bit is a value write seen the same tick. `Between(a, b, fn)`
+takes tags as values (`plugin.Any` for either side); a payload's `plugin.Marks` answers
+`marks.Carries(tag)` for the families the host's behaviors name. This keeps goke's
+128-component budget for data. A `Stage` builds its plugins as its own struct fields
 inside `Init` and installs each via `ctx.Use(p)`, which registers
 `p.Serializable()` (if any) and calls `p.Install`. There is no dependency
 retry mechanism: a plugin needing another plugin's *behavior* takes it as
@@ -180,10 +189,15 @@ shows how much of it is boilerplate vs. real behavior.
 - **`board`** — optional grid + terrain over `world`; its grids wrap per axis,
   following the world's `Edges` (`SetWrap(x, y)`). A `CellKind` says which `Domain`s it admits
   (`Land`, `Water`, `Air`, a game's own bits), whether it is `Solid` (a wall) and `Opaque` (a
-  forest); a unit's `Mover` says which domain it moves in (none: `Land`). Every tick, after
+  forest), and what it costs — `Costing(domain, cost)` prices it differently per domain, and
+  `CostFor(domain)` is what a unit pays in the planner and in `TerrainSpeedModifier`; a unit's
+  `Mover` says which domains it moves in (none: `Land`). Every tick, after
   collision's `RunPlan`, `board.RunPlan` reports a `Standing` (cell under the centre and its kind) to
   `plugin.Each` behaviors registered on the board, naturally `Each[board.Mover]`;
-  `Standing.Fell(domain)` is a land unit in water or in a hole, and the reaction is the game's. Built `WithCollision(c)`, it also makes
+  `Standing.Fell(domain)` is a land unit in water or in a hole, and the reaction is the game's.
+  A `board.Effect` (`Tick(brd, d) alive`) is what the board does to itself over time by writing
+  terrain — `Plugin.Cast`/`Dispel`, ticked first each tick; `board/effect` ships `Timed` (terrain
+  that reverts), `Cycle` (phases turning kinds, seasons) and `Once`. Built `WithCollision(c)`, it also makes
   solid terrain physical: one immovable `Body` entity per merged run of solid cells (boxes from
   `Grid.CellBoxes`, so a hex is covered by strips; at most `MaxBodyCells` a side), spawned through
   `world.Bodies` under a kind from `Kinds.Reserve`, rebuilt when `TerrainMap.Version` moves and
@@ -212,30 +226,39 @@ shows how much of it is boilerplate vs. real behavior.
   `Physics` is only ever detected (a town, a trigger). Separation is always an even
   split.
   Reactions are behaviors hosted inside the `Detector`'s own pass:
-  `plugin.Between[A, B]` of a `Meeting` per confirmed contact between two tags
-  (`plugin.Anything` as the wildcard), `plugin.Each[T]` of a `Struck` per entity per
+  `plugin.Between(a, b, fn)` of a `Meeting` per confirmed contact between two tags
+  (`plugin.Any` as the wildcard), `plugin.Each[T]` of a `Struck` per entity per
   tick, with what it struck the tick before. A strategy exports a plain function of
   the flat `collision/behavior` package (`CountContacts`, `LogContacts`, `ShowHits`) —
   the tags it runs between are named where it is registered,
-  `RegisterBehavior(plugin.Between[A, B](fn), ...)`. `Collider` is the plugin's one
+  `RegisterBehavior(plugin.Between(a, b, fn), ...)`. `Collider` is the plugin's one
   aggregate: what the entity struck (`Collider.Contacts()`). Depends on `world`.
 - **`navigation`** — pathfinding/movement toward a `MoveOrder` across a
   `board`. A navigated unit carries a `world.Steering` profile: navigation only asks it for a
   heading (at a lookahead point, so turns start before the bend) and for its own top speed, braking
   from the profile before the goal; a waypoint is passed by projection, the goal by radius. A
   `MoveOrder` queues up to `MaxWaypoints` further goals (Shift + right click appends). Depends on
-  `board` and `world`.
-- **`selection`** — mouse click/drag → `Selected` tag on `world` entities that carry
-  `Selectable` (a kind's choice; terrain bodies never do). Depends on `world`.
+  `board`, `world` and `selection` (its `Selected` tag picks whom a right click orders).
+- **`effects`** — temporary changes to entities, cast from anywhere: `p.Define(name,
+  Spec{Lasts, Stacking, Grant(tags...), Alter(func(*T))})`, `p.Cast`/`CastFor`/`Dispel`/`Has` by
+  entity id, `Active` slots saved with the entity, originals of altered components kept by the
+  plugin and saved with the game, `OnIdle` listeners when an entity's last effect ends. A cast
+  before the plugin's pass lands the same tick. `board.Plugin.CellEntity(c)` gives a cell an
+  entity with `Ground`, whose Kind the board copies into the terrain each tick — so an
+  `Alter[board.Ground]` is a temporary change of terrain — and `board.NewPlugin(...).WithEffects(fx)`
+  makes the board drop such an entity once its last effect ends. Depends on `world`.
+- **`selection`** — mouse click/drag → the `Selected` tag on `world` entities that carry
+  `Selectable`, both bits of `selection.Family` from `Plugin.Tags()` (a kind's choice via
+  `kind.Tagged`; terrain bodies never do); a bit flip, seen the same tick. Depends on `world`.
 - **`vision`** — narrowed perception: a `Sight` cone scanned against `world`'s
   space each tick fills its own `Sight.Seen` (who this entity can see, nearest first), and
   `SightOutline` on an entity gets its view's shape computed and drawn. It
-  hosts `plugin.Between[A, B]` of a `Sighting` inside the scan's own pass: once
-  a tick per observer carrying `A`, with everything in view carrying `B` — a
+  hosts `plugin.Between(a, b, fn)` of a `Sighting` inside the scan's own pass: once
+  a tick per observer carrying `a`, with everything in view carrying `b` — a
   directed pair, grouped by observer, empty included. A behavior tells its seen
-  entities apart with `plugin.Asking[T]` + `Seen.Carries[T]()`, and steers only
+  entities apart with `seen.Carries(tag)`, and steers only
   through `Steering.Request`. Ready-made ones live in the flat `vision/behavior`
-  package as plain functions (`Flee.Steer`, `Chase`); a file using both plugins'
+  package (`behavior.DefineTags`, `Flee.Steer`, `Chase`); a file using both plugins'
   behaviors imports them as `cbehavior`/`vbehavior` — who flees or hunts
   whom is the registration's to say. Depends on `world`.
 

@@ -41,7 +41,8 @@ Beside `TurnRate` and `Reflex`, `Steering` carries how the unit accelerates:
 | Field | Meaning |
 |:---|:---|
 | `MaxSpeed` | the unit's top base speed, world units a second; zero means no profile. A speed past the step `StepReach` allows (`Position.MaxSpeed(tps)`) is clipped by the move, tick by tick — a kind does not know the tick rate, so nothing refuses it earlier |
-| `Accel` | how fast it speeds up and slows down, units a second²; a separate brake only when a game asks for one |
+| `Accel` | how fast it speeds up, units a second² |
+| `Brake` | how fast it slows down; zero brakes at `Accel`. A brake is what an effect weakens: on ice a unit slips |
 | `V0` | the speed it has the instant it sets off from standing: a walker walks at once, a tank starts from nothing |
 | `Speed`, `WantSpeed` | state: the current base speed, and the one asked for |
 
@@ -53,9 +54,11 @@ of today: `VelocitySystem` multiplies `Vel.Value` in place, so whoever owns the 
 rewrite it every tick or the modifiers compound — navigation happens to, other units happen not to.
 
 Everything below follows from the profile. The turning radius is `Speed·dt / TurnRate`: wide arcs
-at full speed, tight ones when setting off. Braking follows `v = sqrt(2·Accel·d)`: navigation asks
+at full speed, tight ones when setting off. Braking follows `v = sqrt(2·Brake·d)`: navigation asks
 for that speed at distance `d` from the goal, never below the speed braking leaves at the arrival
-radius, and the unit comes to rest on the goal. The profile is
+radius, and the unit comes to rest on the goal — a weaker brake means braking earlier, not
+overshooting; the route itself carries no "brake here": every decision is read off the profile
+as it is that tick, so an effect on the profile acts at once. The profile is
 the kind's (`kind.Const(world.Steering{MaxSpeed: 120, Accel: 200, V0: 40, TurnRate: 0.1})`), so
 unit types differ in how they move without any code.
 
@@ -96,13 +99,17 @@ of time, when the lookahead point enters it; if `CanEnter` refuses, the unit ask
 on a route. `Reflex` delays a reaction, it does not stop anything: requests come every tick and
 `Steering` coalesces them.
 
-## 5. Obstacles come from two sources and must count both ways
+## 5. Obstacles come from one source: the terrain — done
 
-Impassable cells of the board are a physical obstacle (walls, below). Static collider entities — a
-building, a rock: `Collider` plus `Physics{Mass: +Inf}`, whether or not the board knows them — are
-an obstacle for the planner: the cells their box covers are taken in `Occupancy` and impassable
-for `findPath`, entered when such an entity spawns or moves and released when it goes. One map of
-obstacles; neither side sees only its own.
+Terrain is the one truth about the board, and anyone may write it: `Board.Set` is permanent,
+saved, versioned (a write that changes nothing does not count), and the bodies, the sprites and
+the planner follow. A rock is a solid kind on its cells; a building that must also be an entity
+writes its cells when it is built and restores them when it falls; an ice witch is an `Each`
+over `Standing` that turns the cells under her `Box` (`Grid.CellsUnder`, exact on a square and on
+a hex) into snow and the water into ice (undoing it in time is the coming effects plugin's job). `Allows` and
+`Mover` alone decide who may plan where, and `CellKind.Costing` makes a kind cheaper for some
+domains (`CostFor` is what the planner and the speed modifier charge), so the witch is fast on her
+own snow and elves feel no forest; the solver keeps units out of whatever is solid.
 
 ## 6. Pushed onto forbidden ground
 
@@ -137,8 +144,14 @@ decision (`board.CellKind`). Walls are done; holes and sight through terrain are
 - **A forest — an interim step.** `CellKind.Opaque` makes a passable cell a body without a
   `Collider`: it occludes and nothing else. Every entry in the space occludes completely today, so
   a unit inside a forest sees nothing until §12 lands.
-- **After a push.** The existing re-plan on being knocked off a `Leg` covers it, and covers being
-  pushed onto a passable cell off the route as well.
+- **After a push, and after the ground changes.** The existing re-plan on being knocked off a
+  `Leg` covers it, and covers being pushed onto a passable cell off the route as well. When the
+  terrain's version moves, every route is checked against `Admits` and dropped at the first step
+  that no longer takes the unit; a `Leg` whose far cells stop admitting it while the unit is
+  still on its near cell is let go and the unit asked to stop — whether it stops in time is its
+  brake's business, which is where a slipping unit still ends up in the water. A unit standing
+  where its domain may not — frozen in — keeps its order and waits; the order is given up as
+  unreachable only from ground the unit may stand on.
 
 ## 7. Waypoints
 
