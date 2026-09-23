@@ -11,7 +11,8 @@
 // holds and the sizes they spawn with; the camera.Config sizes the camera. An entity wholly past
 // an open edge is handed, once, to [Plugin.OnExit] — despawned when no handler is set. The Plugin
 // exposes the shared [aabbworld.Space] ([Plugin.Space]), the shared camera ([Plugin.Camera], with
-// [Plugin.WithCameraControls] for wheel zoom, middle-drag pan and edge scroll), and
+// [Plugin.WithCameraControls] for wheel zoom, a middle-drag pan 1:1 with the cursor and an edge scroll
+// of a set number of pixels a tick, at any zoom), and
 // [Plugin.Tracked] for a sibling plugin that moves boxes itself to report what the space said.
 //
 // # Base, Position and Velocity

@@ -27,6 +27,24 @@ func TestBasicCamera_Translate_WrapsOnToroidalWorld(t *testing.T) {
 	}
 }
 
+func TestBasicCamera_Pan_IsInScreenPixels(t *testing.T) {
+	c := NewFromSpace(1000, 1000, 0, testViewport(100, 100, 200, 200))
+	c.Pan(10, 0)
+	if x := c.Bounds().TopLeft.X; x != 110 {
+		t.Errorf("Pan(10, 0) at zoom 1 moved to %v, want 110", x)
+	}
+	c.ZoomIn(4, 200, 200)
+	before := c.Bounds().TopLeft.X
+	c.Pan(10, 0)
+	if got := c.Bounds().TopLeft.X - before; got != 2.5 {
+		t.Errorf("Pan(10, 0) at zoom 4 moved %v world units, want 2.5", got)
+	}
+	c.Pan(-100000, 0)
+	if x := c.Bounds().TopLeft.X; x != 0 {
+		t.Errorf("a Pan past the left edge left the window at %v, want it held at 0 like Translate", x)
+	}
+}
+
 func TestBasicCamera_Translate_ClampsOnEuclideanWorld(t *testing.T) {
 	surface := geom.NewVec(20, 20)
 	c := newBasicCamera(surface, testViewport(2, 2, 4, 4), 0)

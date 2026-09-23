@@ -8,7 +8,7 @@ import (
 const (
 	defaultCameraEdgeMarginPixels   = 30
 	defaultCameraEdgeDeadZonePixels = 10
-	defaultCameraScrollSpeed        = 8
+	defaultCameraScrollSpeed        = 8 // screen pixels a tick
 	defaultCameraZoomFactor         = 1.1
 )
 
@@ -42,7 +42,7 @@ func (h *defaultCameraHandler) HandleEvents(events *control.InputEvents) {
 	}
 
 	if events.MiddleDown {
-		h.cam.Translate(-events.CursorDelta.X, -events.CursorDelta.Y)
+		h.cam.Pan(float32(-events.CursorDelta.X), float32(-events.CursorDelta.Y))
 		return
 	}
 
@@ -65,6 +65,6 @@ func (h *defaultCameraHandler) HandleEvents(events *control.InputEvents) {
 		dy = h.scrollSpeed
 	}
 	if dx != 0 || dy != 0 {
-		h.cam.Translate(float64(dx), float64(dy))
+		h.cam.Pan(float32(dx), float32(dy))
 	}
 }

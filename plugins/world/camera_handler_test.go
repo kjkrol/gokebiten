@@ -24,17 +24,35 @@ func TestDefaultCameraHandler_Scroll_Zooms(t *testing.T) {
 	}
 }
 
-func TestDefaultCameraHandler_MiddleDrag_Pans(t *testing.T) {
-	cam := camera.NewFromSpace(1000, 1000, 0)
-	cam.ZoomIn(2, 500, 500)
-	h := newDefaultCameraHandler(cam, defaultCameraScrollSpeed)
-	before := cam.Bounds()
+func TestDefaultCameraHandler_MiddleDrag_PansOneToOneWithTheCursor(t *testing.T) {
+	for _, zoom := range []float32{1, 2} {
+		cam := camera.NewFromSpace(1000, 1000, 0, geom.NewAABBAt(geom.NewVec(400, 400), 200, 200))
+		cam.ZoomIn(zoom, 500, 500)
+		h := newDefaultCameraHandler(cam, defaultCameraScrollSpeed)
+		before := cam.Bounds()
 
-	h.HandleEvents(&control.InputEvents{MiddleDown: true, CursorDelta: geom.NewVec(10, 0)})
+		h.HandleEvents(&control.InputEvents{MiddleDown: true, CursorDelta: geom.NewVec(10, 0)})
 
-	after := cam.Bounds()
-	if after.TopLeft.X != before.TopLeft.X-10 {
-		t.Errorf("Bounds().TopLeft.X after middle-drag = %v, want %v", after.TopLeft.X, before.TopLeft.X-10)
+		after := cam.Bounds()
+		if want := before.TopLeft.X - 10/float64(zoom); after.TopLeft.X != want {
+			t.Errorf("zoom %v: Bounds().TopLeft.X after a 10-pixel drag = %v, want %v (10 pixels of world)", zoom, after.TopLeft.X, want)
+		}
+	}
+}
+
+func TestDefaultCameraHandler_EdgeScrollIsTheSameOnScreenAtAnyZoom(t *testing.T) {
+	for _, zoom := range []float32{1, 2, 4} {
+		cam := camera.NewFromSpace(1000, 1000, 0, geom.NewAABBAt(geom.NewVec(400, 400), 200, 200))
+		cam.ZoomIn(zoom, 500, 500)
+		h := newDefaultCameraHandler(cam, defaultCameraScrollSpeed)
+		before := cam.Bounds()
+
+		h.HandleEvents(&control.InputEvents{MousePos: geom.NewVec(190, 100)}) // near the right edge of the 200-pixel window
+
+		moved := (cam.Bounds().TopLeft.X - before.TopLeft.X) * float64(zoom)
+		if moved != float64(defaultCameraScrollSpeed) {
+			t.Errorf("zoom %v: an edge scroll moved %v pixels of world, want scrollSpeed %v", zoom, moved, defaultCameraScrollSpeed)
+		}
 	}
 }
 

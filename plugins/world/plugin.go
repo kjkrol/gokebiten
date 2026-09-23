@@ -83,7 +83,8 @@ func (p *Plugin) DropView(v *View) {
 	}
 }
 
-// WithCameraControls enables the default wheel-zoom/middle-drag-pan/edge-scroll EventHandler.
+// WithCameraControls enables the default wheel-zoom/middle-drag-pan/edge-scroll EventHandler;
+// scrollSpeed is screen pixels a tick, the same at any zoom.
 func (p *Plugin) WithCameraControls(scrollSpeed ...int32) *Plugin {
 	p.cameraControls = true
 	p.scrollSpeed = defaultCameraScrollSpeed

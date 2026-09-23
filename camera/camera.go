@@ -37,8 +37,10 @@ type Camera interface {
 	Bounds() AABB
 	// MoveTo repositions the visible window's top-left corner, keeping size.
 	MoveTo(x, y float64)
-	// Translate shifts the visible window by a signed delta.
+	// Translate shifts the visible window by a signed delta in world units.
 	Translate(dx, dy float64)
+	// Pan shifts the visible window by a screen-space delta: the same pixels at any zoom.
+	Pan(dx, dy float32)
 	// Zoom returns the current zoom factor (1 = default).
 	Zoom() float32
 	// ZoomIn multiplies the zoom by factor, keeping world point (anchorX, anchorY) fixed on screen.
@@ -278,6 +280,11 @@ func (c *basicCamera) MoveTo(x, y float64) {
 // Translate shifts the visible window by a signed delta, clamped or wrapped against the world.
 func (c *basicCamera) Translate(dx, dy float64) {
 	c.place(c.effective.TopLeft.X+dx, c.effective.TopLeft.Y+dy, c.effective.Size.X, c.effective.Size.Y)
+}
+
+// Pan is Translate by a screen-space delta, so a drag follows the cursor at any zoom.
+func (c *basicCamera) Pan(dx, dy float32) {
+	c.Translate(float64(dx)/float64(c.zoom), float64(dy)/float64(c.zoom))
 }
 
 // place puts a w x h window at (x, y): wrapped on a wrapping axis, held inside the world otherwise.
