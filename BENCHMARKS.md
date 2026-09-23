@@ -34,24 +34,27 @@ entity's `Base` through a goke query, chunk by chunk. The boxes stand on a 30-un
 
 ### Drawing — `Benchmark_World_Draw`
 
-One frame of the entity renderer gathered with no screen (nothing is drawn): the Space is asked
-for what lies in the camera's bounds, the hits are marked in a bitset by entity index, and only
-those entities have their appearance resolved and their quads projected through the camera. With
-the whole world in view the renderer skips the query and walks every entity, as it always did.
-5,000 boxes, 20×20 each, spread evenly over a 4000×4000 torus; the camera views all of it, a
-quarter, or a twentieth. "Before" is the renderer walking every entity and testing each against
-the camera.
+One frame of the entity renderer gathered with no screen (nothing is drawn). The renderer draws
+what the camera's `world.View` contains: the world refreshes that View once a tick after movement,
+asking the Space for the entities in the camera's bounds and marking them in an `EntitySet` by
+entity index; a View whose bounds cover the whole world is not queried and sees everything. The
+frame then walks the entities and does the work — appearance, projection — only for those in
+view; the rest cost one bit test each. 5,000 boxes, 20×20 each, spread evenly over a 4000×4000
+torus; the camera views all of it, a quarter, or a twentieth. "Before" is the renderer walking
+every entity and testing each against the camera; both measured alternately on the same day.
 
 | Camera view | Boxes in view | Before | After | Speedup |
 |:---|---:|---:|---:|---:|
-| whole world (4000×4000) | 5,000 | 561 µs | 566 µs | 1.0× |
-| a quarter (2000×2000) | 1,250 | 275 µs | 164 µs | 1.7× |
-| a twentieth (900×900) | 250 | 194 µs | 35 µs | 5.5× |
+| whole world (4000×4000) | 5,000 | 630 µs | 651 µs | 0.97× |
+| a quarter (2000×2000) | 1,250 | 309 µs | 179 µs | 1.7× |
+| a twentieth (900×900) | 250 | 221 µs | 42 µs | 5.3× |
 
-The remaining cost is per drawn box, ~110 ns each, almost all of it in the camera: projecting a
-box on a torus (`ToScreenQuads`, `Visible`) goes through `math.Mod` several times. That is the
-next thing to optimise if drawing ever shows up; culling has taken the invisible boxes off the
-bill entirely (the query and 5,000 bit tests cost ~20 µs).
+The View's refresh is part of the world tick, not the frame; with the camera on the whole world
+(as in `Benchmark_World_Tick`) it costs nothing measurable (223 µs before and after at 5,000
+boxes), and with a quarter in view it is one Space query, ~20 µs. The remaining cost of a frame is
+per drawn box, ~110 ns each, almost all of it in the camera: projecting a box on a torus
+(`ToScreenQuads`, `Visible`) goes through `math.Mod` several times. That is the next thing to
+optimise if drawing ever shows up.
 
 ## Collision tick — `Benchmark_Collision_Tick`
 
@@ -98,10 +101,11 @@ scale linearly with the observers.
 * **Collisions cost by population.** At the demo's default scale (8,388 boxes of 5×5) a tick is
   under 3 ms, well inside the 8.3 ms of a 120 TPS step; the crowd that halves the demo's TPS is the
   40% coverage one, where contacts dominate.
-* **Culling is a bitset, not a list.** The renderer marks the Space's hits by entity index and
-  masks the chunk walk, so a frame costs the visible boxes plus one bit test per entity; with the
-  whole world in view it skips the query and is exactly as fast as before. The same shape serves
-  a per-client view on a server: one query per client, one sequential walk for all.
+* **A view is a set, not a list.** The world refreshes each `View` once a tick — the Space's hits
+  in the view's bounds, marked by entity index — and the renderer masks its walk with it, so a
+  frame costs the visible boxes plus one bit test per entity; a view of the whole world skips the
+  query. The same shape serves a view per player or per remote client: one query each, one
+  sequential walk for all (see doc/views.md).
 * **Drawing pays for the camera's wrap arithmetic.** ~110 ns per drawn box, mostly `math.Mod` in
   projecting a box onto a torus — a camera optimisation waiting for a reason.
 * **Zero allocations once warm.** Every benchmark reports 0 allocs/op after the first ticks have

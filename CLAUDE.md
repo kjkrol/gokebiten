@@ -162,7 +162,11 @@ shows how much of it is boilerplate vs. real behavior.
   `world.Plugin.Camera()`. The space keeps no state of its own between ticks:
   `MoveSystem` moves every box under the edge rules (`Space.Move`), then hands
   the space every `Base` as an `aabbworld.Item` (`Space.Rebuild`) — `Query`,
-  `Scan` and collisions read that grid until the next tick. `Populate` and
+  `Scan` and collisions read that grid until the next tick. After movement the `ViewSystem` refreshes every
+  `world.View` (a rectangle plus the `EntitySet` of entities the space finds in it; `Plugin.NewView`
+  over any bounds source, `Plugin.View()` is the camera's) — the entity renderer draws only what
+  the camera's View contains. `doc/views.md` maps where this leads: player views (split screen)
+  and a networking plugin over them. `Populate` and
   `PostLoad` rebuild it too, so it is whole before the first tick; a despawned
   entity is gone from it on the next. Anything reading the space in its own pass
   sees the boxes as they were after the last rebuild.

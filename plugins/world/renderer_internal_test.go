@@ -4,12 +4,12 @@ import (
 	"testing"
 
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/camera"
 	"github.com/kjkrol/gram/render"
+	"github.com/kjkrol/uid"
 )
 
 // flatAtlas is an AtlasSource with no sheet: enough for gathering quads without drawing.
@@ -27,15 +27,14 @@ func (m *countingModifier) Apply(_ *goke.Cursor, _ int, _ *Base, acc []Appearanc
 	return acc
 }
 
-// drawScene puts one 10x10 entity at each of at into a world of the given edges and draws it
-// once through cam, returning how many entities had their layers resolved.
-func drawScene(t *testing.T, edges aabbworld.Edges, cam camera.Camera, at ...geom.Vec) int {
+// drawThrough spawns one 10x10 entity per position, lets pick say which of them the View holds
+// (nil: the zero View, which sees everything), draws once and returns how many entities had
+// their layers resolved.
+func drawThrough(t *testing.T, pick func(ids []uid.UID64, v *View), at ...geom.Vec) int {
 	t.Helper()
-	space, err := aabbworld.NewSpace(aabbworld.Config{Width: 1000, Height: 1000, Edges: edges, BucketSize: 64})
-	if err != nil {
-		t.Fatal(err)
-	}
-	r := newRenderer(cam, flatAtlas{}, space, 1000, 1000)
+	view := &View{}
+	cam := camera.NewFromSpace(1000, 1000, 0)
+	r := newRenderer(cam, flatAtlas{}, view, 1000, 1000)
 	counter := &countingModifier{}
 	r.WithModifier(counter)
 
@@ -45,18 +44,19 @@ func drawScene(t *testing.T, edges aabbworld.Edges, cam camera.Camera, at ...geo
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		f := si.NewFactory(&base, &appearance)
 		f.Create(len(at))
-		var items []aabbworld.Item
+		var ids []uid.UID64
 		i := 0
 		for f.Next() {
 			bases := base.Slice(&f.Cursor)
 			for j, id := range f.Cursor.IDs {
-				box := space.WrapAABB(geom.NewAABBAt(at[i], 10, 10))
-				bases[j].Pos = Position{AABB: box}
-				items = append(items, aabbworld.Item{ID: id, Box: box})
+				bases[j].Pos = Position{AABB: plane.NewAABB(at[i], 10, 10)}
+				ids = append(ids, id)
 				i++
 			}
 		}
-		space.Rebuild(items)
+		if pick != nil {
+			pick(ids, view)
+		}
 		r.Init(si)
 	}})
 
@@ -64,29 +64,17 @@ func drawScene(t *testing.T, edges aabbworld.Edges, cam camera.Camera, at ...geo
 	return counter.n
 }
 
-func TestRenderer_Draw_ResolvesOnlyTheEntitiesInView(t *testing.T) {
+func TestRenderer_Draw_ResolvesOnlyWhatTheViewContains(t *testing.T) {
 	quarters := []geom.Vec{geom.NewVec(100, 100), geom.NewVec(700, 100), geom.NewVec(100, 700), geom.NewVec(700, 700)}
 
-	topLeft := camera.NewFromSpace(1000, 1000, 0, geom.NewAABBAt(geom.NewVec(0, 0), 500, 500))
-	if n := drawScene(t, 0, topLeft, quarters...); n != 1 {
-		t.Errorf("a camera on one quarter resolved %d entities, want the 1 in it", n)
+	firstOnly := func(ids []uid.UID64, v *View) {
+		v.Culled = true
+		v.In.Add(ids[0])
 	}
-
-	whole := camera.NewFromSpace(1000, 1000, 0)
-	if n := drawScene(t, 0, whole, quarters...); n != 4 {
-		t.Errorf("a camera on the whole world resolved %d entities, want all 4", n)
+	if n := drawThrough(t, firstOnly, quarters...); n != 1 {
+		t.Errorf("a View holding one entity had %d resolved, want 1", n)
 	}
-}
-
-func TestRenderer_Draw_SeesAnEntityAcrossTheSeam(t *testing.T) {
-	// The box straddles the left edge of a torus: its main piece sits at the right edge.
-	onSeam := plane.NewAABB(geom.NewVec(-5, 100), 10, 10)
-	rightEdge := camera.NewFromSpace(1000, 1000, aabbworld.Torus, geom.NewAABBAt(geom.NewVec(800, 0), 200, 200))
-	if n := drawScene(t, aabbworld.Torus, rightEdge, onSeam.TopLeft); n != 1 {
-		t.Errorf("a camera at the right edge resolved %d entities, want the one wrapped onto it", n)
-	}
-	leftEdge := camera.NewFromSpace(1000, 1000, aabbworld.Torus, geom.NewAABBAt(geom.NewVec(0, 0), 200, 200))
-	if n := drawScene(t, aabbworld.Torus, leftEdge, onSeam.TopLeft); n != 1 {
-		t.Errorf("a camera at the left edge resolved %d entities, want the one whose piece wrapped in", n)
+	if n := drawThrough(t, nil, quarters...); n != 4 {
+		t.Errorf("the zero View had %d entities resolved, want all 4", n)
 	}
 }

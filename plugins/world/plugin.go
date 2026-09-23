@@ -2,6 +2,7 @@ package world
 
 import (
 	"fmt"
+	"github.com/kjkrol/aabbworld/geom"
 	"reflect"
 	"time"
 
@@ -35,6 +36,7 @@ type Plugin struct {
 	renderer *Renderer
 	kinds    *Kinds
 	seeded   []kind.Entry
+	view     *View // the camera's
 
 	cameraControls bool
 	scrollSpeed    int32
@@ -54,7 +56,31 @@ func NewPlugin(cfg Config) *Plugin {
 	cam := camera.NewFromSpaceWithConfig(cfg.Space.Width, cfg.Space.Height, cfg.Space.Edges, cfg.Camera)
 	kinds := newKinds()
 	m.kinds = kinds
-	return &Plugin{Res: Resources{Config: cfg, Telemetry: &m.telemetry, Camera: cam}, module: m, kinds: kinds}
+	p := &Plugin{Res: Resources{Config: cfg, Telemetry: &m.telemetry, Camera: cam}, module: m, kinds: kinds}
+	p.view = p.NewView(cam.Bounds)
+	return p
+}
+
+// View is what the camera sees: refreshed each tick after movement, drawn by the entity renderer.
+func (p *Plugin) View() *View { return p.view }
+
+// NewView keeps a View current over whatever bounds says, from the next tick on — a second
+// camera's, a remote player's, anything that watches a part of the world.
+func (p *Plugin) NewView(bounds func() geom.AABB) *View {
+	v := newView(bounds)
+	p.module.views = append(p.module.views, v)
+	return v
+}
+
+// DropView stops refreshing v; it keeps whatever it last saw.
+func (p *Plugin) DropView(v *View) {
+	views := p.module.views
+	for i, w := range views {
+		if w == v {
+			p.module.views = append(views[:i], views[i+1:]...)
+			return
+		}
+	}
 }
 
 // WithCameraControls enables the default wheel-zoom/middle-drag-pan/edge-scroll EventHandler.
@@ -93,7 +119,7 @@ func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
 
 // WithRenderer builds this plugin's own entity renderer, drawing cam-relative sprites from atlas.
 func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
-	p.renderer = newRenderer(p.Res.Camera, atlas, p.module.space, p.Res.Config.Space.Width, p.Res.Config.Space.Height)
+	p.renderer = newRenderer(p.Res.Camera, atlas, p.view, p.Res.Config.Space.Width, p.Res.Config.Space.Height)
 }
 
 // Renderer returns this plugin's own render.Renderer, or nil unless WithRenderer was called.

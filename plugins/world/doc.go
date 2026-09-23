@@ -52,10 +52,19 @@
 // [Appearance] is the sprite an entity is drawn from; [Plugin.WithRenderer] builds the entity
 // [Renderer] over an atlas, and each [AppearanceModifier] it is given ([Renderer.WithModifier],
 // WithOverlay, WithReplace, WithModify, [Facing]) resolves an entity's final draw layers in order.
-// An [AppearanceStrategy] folds one override component into those layers. The Renderer asks the
-// Space for what lies in the camera's bounds and does that work only for those entities; with the
-// whole world in view it walks every entity. An entity spawned outside Populate is not in the
-// Space until the next Rebuild, so it is drawn from the next tick on.
+// An [AppearanceStrategy] folds one override component into those layers. The Renderer draws the
+// entities in the camera's [View] and nothing else.
+//
+// # View and EntitySet
+//
+// A [View] is what one pair of eyes sees: a rectangle of the world and the entities the Space finds
+// in it, as an [EntitySet] — a set of the world's entities by index. The world keeps any number of
+// Views ([Plugin.NewView] over a source of bounds, [Plugin.DropView]) and the [ViewSystem]
+// refreshes each of them once a tick, right after movement has rebuilt the Space; a View whose
+// bounds cover the whole world is not queried and simply sees everything, as does the zero View a
+// Stage has before its first tick. [Plugin.View] is the camera's, made by the plugin itself; the
+// entity renderer reads it. A View over another camera or a remote player's bounds is the same
+// thing — see doc/views.md for where that leads.
 //
 // # Telemetry
 //

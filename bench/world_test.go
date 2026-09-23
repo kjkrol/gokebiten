@@ -57,7 +57,8 @@ func benchWorldViewed(b *testing.B, ctx *headless, n int, spacing int, view uint
 
 // Benchmark_World_Draw gathers one frame of the entity renderer — no screen, nothing drawn — over
 // 5000 boxes spread evenly across the world, with the camera viewing all of it, a quarter, or a
-// twentieth (so a quarter, or a twentieth, of the boxes).
+// twentieth (so a quarter, or a twentieth, of the boxes). The world has ticked once, so its View
+// of the camera is filled; the frame only reads it.
 func Benchmark_World_Draw(b *testing.B) {
 	for _, v := range []struct {
 		name string
@@ -66,7 +67,7 @@ func Benchmark_World_Draw(b *testing.B) {
 		b.Run(v.name, func(b *testing.B) {
 			ctx := newHeadless()
 			var r render.Renderer
-			benchWorldViewed(b, ctx, 5000, 56, v.view, func(w *world.Plugin, movers kind.Of[mover]) {
+			ecs := benchWorldViewed(b, ctx, 5000, 56, v.view, func(w *world.Plugin, movers kind.Of[mover]) {
 				atlas := render.NewAtlas()
 				atlas.RegisterAt(movers.SpriteID(), 20, render.Solid(color.RGBA{R: 90, G: 200, B: 110, A: 255}))
 				atlas.Close()
@@ -76,6 +77,7 @@ func Benchmark_World_Draw(b *testing.B) {
 					return []goke.System{goke.SystemFn{OnInit: r.Init}}
 				})
 			})
+			ecs.Tick(step)
 			b.ReportAllocs()
 			for b.Loop() {
 				r.Draw(nil)

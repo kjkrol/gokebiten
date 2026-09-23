@@ -42,6 +42,10 @@ type module struct {
 	steeringRunnable goke.Runnable
 	velocityRunnable goke.Runnable
 	moveRunnable     goke.Runnable
+
+	// views are refreshed after movement each tick — see Plugin.NewView.
+	views        []*View
+	viewRunnable goke.Runnable
 }
 
 var _ goke.Module = (*module)(nil)
@@ -70,9 +74,10 @@ func (w *module) RegSystems(ecs *goke.ECS) {
 	moveSystem.leave = w.leave
 	w.velocityRunnable = ecs.RegSys(velocitySystem)
 	w.moveRunnable = ecs.RegSys(moveSystem)
+	w.viewRunnable = ecs.RegSys(NewViewSystem(w.space, &w.views, w.config.Space.Width, w.config.Space.Height))
 }
 
-// RunPlan runs world's tick: decisions, then speed modifiers, then movement.
+// RunPlan runs world's tick: decisions, then speed modifiers, then movement, then the views.
 func (w *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	clear(w.despawned)
 	for _, b := range w.behaviorRunnables {
@@ -82,6 +87,7 @@ func (w *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	ctx.Run(w.steeringRunnable, d)
 	ctx.Run(w.velocityRunnable, d)
 	ctx.Run(w.moveRunnable, d)
+	ctx.Run(w.viewRunnable, d)
 	ctx.Sync()
 }
 

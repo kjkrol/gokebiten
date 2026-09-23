@@ -2,19 +2,16 @@ package world
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/camera"
 	"github.com/kjkrol/gram/render"
-	"github.com/kjkrol/uid"
 )
 
 var _ render.Renderer = (*Renderer)(nil)
 
-// Renderer draws the Position+Appearance entities the Space finds in the camera's bounds, running
-// each AppearanceModifier in order to resolve their final draw layers; with the whole world in view
-// it walks every entity instead. An entity not yet in the Space (spawned outside Populate) is drawn
-// from the next Rebuild on.
+// Renderer draws the Position+Appearance entities in the world's View — what the camera sees
+// this tick — running each AppearanceModifier in order to resolve their final draw layers. A Stage
+// that has not ticked yet sees everything.
 type Renderer struct {
 	renderQuery *goke.Query
 	base        goke.Comp[Base]
@@ -22,24 +19,11 @@ type Renderer struct {
 	modifiers   []AppearanceModifier
 	layers      []Appearance
 	batch       spriteBatch
-
-	space     *aabbworld.Space
-	camera    camera.Camera
-	worldArea float64
-	// hit is a bit per entity index, set for what the Space found in view this frame.
-	hit  []uint64
-	mark func(uid.UID64)
+	view        *View
 }
 
-func newRenderer(cam camera.Camera, atlas render.AtlasSource, space *aabbworld.Space, worldW, worldH uint32) *Renderer {
-	r := &Renderer{
-		batch:     newSpriteBatch(cam, atlas, worldW, worldH),
-		space:     space,
-		camera:    cam,
-		worldArea: float64(worldW) * float64(worldH),
-	}
-	r.mark = r.markHit
-	return r
+func newRenderer(cam camera.Camera, atlas render.AtlasSource, view *View, worldW, worldH uint32) *Renderer {
+	return &Renderer{batch: newSpriteBatch(cam, atlas, worldW, worldH), view: view}
 }
 
 func (s *Renderer) Init(si *goke.SysInit) {
@@ -53,7 +37,6 @@ func (s *Renderer) Init(si *goke.SysInit) {
 // Draw draws this frame; a nil screen gathers the quads and draws nothing, for measuring.
 func (s *Renderer) Draw(screen *ebiten.Image) {
 	s.batch.reset()
-	culled := s.cull()
 
 	s.renderQuery.All()
 	for s.renderQuery.Next() {
@@ -62,7 +45,7 @@ func (s *Renderer) Draw(screen *ebiten.Image) {
 		appearances := s.appearance.Slice(cursor)
 
 		for i, id := range cursor.IDs {
-			if culled && !s.inView(id.Index()) {
+			if !s.view.Contains(id) {
 				continue
 			}
 			s.layers = append(s.layers[:0], appearances[i])
@@ -76,32 +59,6 @@ func (s *Renderer) Draw(screen *ebiten.Image) {
 	}
 
 	s.batch.flush(screen)
-}
-
-// cull marks every entity the Space finds in the camera's bounds; false when the bounds cover
-// the whole world, in which case nothing is marked and everything is drawn.
-func (s *Renderer) cull() bool {
-	b := s.camera.Bounds()
-	if (b.BottomRight.X-b.TopLeft.X)*(b.BottomRight.Y-b.TopLeft.Y) >= s.worldArea {
-		return false
-	}
-	clear(s.hit)
-	s.space.Query(b, aabbworld.AnyCapability, s.mark)
-	return true
-}
-
-func (s *Renderer) markHit(id uid.UID64) {
-	i := id.Index()
-	w := int(i >> 6)
-	for w >= len(s.hit) {
-		s.hit = append(s.hit, 0)
-	}
-	s.hit[w] |= 1 << (i & 63)
-}
-
-func (s *Renderer) inView(i uint32) bool {
-	w := int(i >> 6)
-	return w < len(s.hit) && s.hit[w]&(1<<(i&63)) != 0
 }
 
 // WithReplace adds a modifier replacing dst[0] with with, for every entity carrying T.
