@@ -61,7 +61,7 @@ func NewDemo() *Demo { return &Demo{stage: &mainStage{}} }
 
 func (d *Demo) Props() game.Props {
 	return game.Props{
-		Title:       "GOKe + GOKg + Ebiten Integration",
+		Title:       "gram collision demo",
 		ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight,
 		TargetTPS: TPS,
 	}
