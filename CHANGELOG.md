@@ -1,5 +1,45 @@
 # Changelog
 
+## Unreleased
+
+Saves written by v0.2.0 do not load: `Base` and the marker components changed shape.
+
+**Movement**
+- `world.Steering` holds a motion profile — `MaxSpeed`, `Accel`, `Brake`, `V0`, `TurnRate` — and
+  `SteeringSystem` writes the base speed every tick; navigation steers through it: a lookahead
+  point, waypoints passed by projection, braking to rest on the goal, a queue of goals
+  (Shift + right click), routes previewed to every queued goal.
+- Routes and legs lose their footing when the terrain changes under them; a unit stuck where its
+  domain may not keeps its order.
+- The camera pans in screen pixels at any zoom.
+
+**Board**
+- Terrain kinds say whom they admit (`Allows`, a bitset of `Domain`s), whether they are `Solid`
+  and `Opaque`, and what they cost per domain (`Costing`, `CostFor`); a unit's `Mover` says how it
+  moves. `Passable` is gone.
+- `WithCollision`: solid terrain becomes immovable bodies built from `Grid.CellBoxes` — one box
+  for a square, capped strips for a hex — merged up to `MaxBodyCells` a side; opaque terrain
+  occludes sight only.
+- `Standing`, reported every tick to `plugin.Each` behaviors: the cell under an entity, its kind,
+  its box; `Fell(domain)` says the entity is where it may not be.
+- `Grid.CellsUnder`, `CellBounds`, `CellOutline`; hex cells drawn as hexagons; `TerrainMap.Version`.
+- Cell entities (`CellEntity`, `Ground`, `WithEffects`) let an effect change terrain for a while.
+
+**Plugins**
+- Tags are bits of families: `plugin.Tags[F]` is one component per family, `Kinds.DefineTag`
+  names the bits (saved by name), `kind.Tagged` gives them to a kind, `Between(a, b, fn)` takes
+  them as values; `Selectable` and `Selected`, the vision behaviors' tags and terrain bodies are
+  bits. `navigation.NewPlugin` takes the selection plugin.
+- `plugins/effects`: temporary changes to entities — `Grant` and `Alter` in a `Spec`, `Lasts`
+  or until `Dispel`, `Cast`/`CastFor`/`Dispel`/`Has` by entity id, `Active` saved with the entity.
+- `plugins/world`: `Kinds.Reserve` and `Bodies` for kind-less entities; `Kinds.DefineTag`.
+- `navigation`: route arrows every 15°, so hex steps draw true.
+- `render`: `Hexagon`; `QuadBatch` draws in chunks under the 16-bit index limit.
+
+**Demos**
+- `navigation-hex-demo`, `navigation-vision-demo`, `navigation-vision-hex-demo`, `island-demo`,
+  `effect-demo`.
+
 ## v0.2.0 — 2026-09-22
 
 Renamed to **gram**: the module is `github.com/kjkrol/gram`, the root package `gram` (`gram.Run`).

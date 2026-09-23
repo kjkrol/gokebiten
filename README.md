@@ -319,6 +319,10 @@ survive a save without being registered anywhere else.
 The packages form a strict acyclic graph; each imports only the layers below it. Every package
 has a `doc.go` describing what it brings.
 
+Design notes sit in [`doc/`](doc): [`roadmap.md`](doc/roadmap.md) is the map of what is done and
+what comes next, [`movement.md`](doc/movement.md) the reasoning behind movement, terrain and
+effects, [`views.md`](doc/views.md) where players and networking are headed.
+
 | Package | Responsibility |
 |:---|:---|
 | [`camera`](camera/doc.go) | The view onto a world: screen conversion, culling, move and zoom; wrap-aware |

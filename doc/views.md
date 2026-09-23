@@ -64,7 +64,10 @@ Plugins and the game never ask which of the three spoke.
 Each plugin defines the command types of its own domain — `navigation.MoveTo`,
 `selection.Select`, `world.Pan` and `world.Zoom` — and the game adds its own, exactly as the
 payloads of behaviors work today (`Meeting` is collision's, `Sighting` is vision's). Whoever
-defines a type also registers its receiver.
+defines a type also registers its receiver. Navigation's first word exists already:
+`MoveCommand{Cell, Append}`, filled by its default event handler; the player layer is where it
+becomes a labelled binding. "What is under the cursor" — a hover — is the translator's too: a
+`Space.Query` at a point, no collision involved.
 
 ### Default bindings are the plugins' too
 

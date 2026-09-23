@@ -6,18 +6,14 @@
 > made of, and what happens when the world pushes it somewhere it may not go. Nothing here is
 > code yet.
 
-## Today, and why it looks the way it looks
+## Where this started
 
-`navigation`'s system writes straight into `Base.Vel.Dir` and `Vel.Value`, aiming at the
-**centre** of the next cell. Arrival is being within `arrivalEpsilon` (2 world units) of that
-centre; then the speed drops to zero, the box is nudged onto the centre, the `Leg` is released,
-and the next waypoint is aimed at. `world.Steering` — `Want`, `Pending`, `TurnRate`, `Reflex` — and
-the `SteeringSystem` that turns a heading by at most `TurnRate` a tick take no part in it. That is
-the whole reason a unit arrives, stops, turns and sets off again: nothing ever asked it to turn.
-
-Two things already work and stay: a unit knocked off its `Leg` (its box's centre outside the leg's
-cells) releases the leg, drops its `Path`, and re-plans next tick; a unit whose next cell is taken
-waits (`targetWaitTimeout`) and then settles for the `nearestFree` cell.
+When this document was written, navigation wrote straight into `Base.Vel`, aimed at cell centres
+and stopped at every one; `world.Steering` took no part. Everything from §1 to §8 below has since
+been built as described, and §13 records what came on top of it; §9, §10 and §12 are what is
+left. What was there at the start and stayed: a unit knocked off its `Leg` releases it, drops its
+`Path` and re-plans; a unit whose next cell is taken waits (`targetWaitTimeout`) and then settles
+for the `nearestFree` cell.
 
 ## 1. One actuator: Steering
 
@@ -111,10 +107,10 @@ a hex) into snow and the water into ice (undoing it in time is the coming effect
 domains (`CostFor` is what the planner and the speed modifier charge), so the witch is fast on her
 own snow and elves feel no forest; the solver keeps units out of whatever is solid.
 
-## 6. Pushed onto forbidden ground
+## 6. Pushed onto forbidden ground — done
 
 What happens when a collision pushes a unit towards a cell it may not enter is the cell kind's
-decision (`board.CellKind`). Walls are done; holes and sight through terrain are open.
+decision (`board.CellKind`). Walls, holes and water are done; sight through terrain is §12.
 
 - **A wall — done.** Impassable cells are **terrain bodies**: entities with a `Base`, a
   `collision.Collider`, a `collision.Physics{Mass: +Inf}` and the `board.Body` tag, no
@@ -197,21 +193,25 @@ planner, finding itself off the route, re-plans (that exists). The alternative �
 that sums weighted requests, in the manner of classic steering behaviors — is more machinery,
 worth it only once the simple rule fails somewhere real.
 
-## 11. What changes in code, when it comes to that
+## 11. What changed
 
-Not a plan, a list. `navigationSystem` becomes a source of `Request` calls and no longer writes
-`Vel`; navigated units must carry `Steering` (their kind gives it); `arrivalEpsilon` applies to
-the goal only. `Steering` grows the motion profile and `SteeringSystem` writes `Vel.Value` every
-tick. `MoveOrder` keeps a queue of goals; the bindings "Move here" and "Add waypoint" replace the
-command event handler. `RouteStyle` with `CellArrows` (default) and `SmoothRoute` (opt-in, cached
-per path change). The board gets terrain bodies (done: `Grid.CellBoxes`, `Body`, `WithCollision`) and, still to
-come, `Fell` for holes; static entities take their cells in `Occupancy`.
+`navigationSystem` is a source of `Request` calls and no longer writes `Vel`; navigated units
+carry `Steering` (their kind gives it); `arrivalEpsilon` applies to the goal only. `Steering`
+holds the motion profile (`V0`, `Accel`, `Brake`, `TurnRate`) and `SteeringSystem` writes
+`Vel.Value` every tick. `MoveOrder` keeps a queue of goals; Shift + right click appends. The board
+makes solid terrain into bodies from the boxes of any grid (`Grid.CellBoxes`, `WithCollision`),
+says who may stand where through domains (`Allows`, `Mover`), and reports where each unit
+stands (`Standing`, `Fell`). Routes are checked against the terrain whenever it changes. Still
+open: `RouteStyle` (§8), turn-based movement (§9), arbitration (§10), sight through terrain and
+flying (§12).
 
-Tests, when it comes to that: a smooth turn (the heading's angle changes monotonically and the
-speed never drops to zero at a bend); acceleration from `V0` to `MaxSpeed` by `Accel`; braking that
-ends on the goal's centre; a terrain modifier that does not compound across ticks; passing a
-waypoint by projection; entering a cell independently of waypoints; a push into a wall leaves no
-unit inside it (done, on a square and on a hex grid); a unit centred over a hole yields a `Fell`.
+The tests that pin it: a smooth turn (the heading's angle changes monotonically and the speed
+never drops to zero at a bend); acceleration from `V0` to `MaxSpeed` by `Accel`; braking that
+ends on the goal's centre, with a weak brake too; a terrain modifier that does not compound
+across ticks; passing a waypoint by projection; entering a cell independently of waypoints; a
+push into a wall leaves no unit inside it, on a square and on a hex grid; a land unit driven onto
+a hole has fallen and a boat on water has not; an ice bridge melting ahead re-routes without a
+step into the water; a unit stuck where it may not be keeps its order.
 
 ## 12. Sight through terrain, sight range and flying units — open
 
@@ -229,14 +229,31 @@ none, a wall all. That needs three things, in this order.
 - **Flying units.** `board.Mover{Domain: Air}` already keeps the planner on cells admitting Air
   (a game admits Air over walls and water alike); what is left is collision's `Touch` vetoing its
   pairs with `Solid` terrain bodies the way it vetoes a lost `Collider`, vision not attenuating
-  its sight, and terrain cost not slowing it. Cells taken by static entities (§5) still count for
-  it. Order of work: 4c cells taken by static entities, 4d transparency and flying.
+  its sight, and terrain cost not slowing it. Order of work: transparency first (it needs
+  aabbworld's raycast to attenuate, a change tagged there), flying after.
+
+## 13. Effects, tags and the profile — done
+
+Anything temporary about a unit is an **effect** (`plugins/effects`): a tag granted for a while,
+a component altered and restored — `Grant` and `Alter` in a `Spec`, `Lasts` or until `Dispel`,
+cast from anywhere by entity id, saved with the entity. What an effect means for movement is the
+reader's: a frozen unit carries a tag a speed modifier reads as "stand still"; a slipping unit has
+its `Brake` altered, so navigation brakes earlier before a goal and may not stop before ground
+that turned against it. Tags are bits of families (`plugin.Tags[F]`), one component per family,
+so granting one is a value write and the component budget stays for data.
+
+The board joins in through **cell entities**: `board.Plugin.CellEntity(c)` gives a cell an entity
+with a `Ground` the board copies into the terrain each tick, so an `Alter` of `Ground` is a
+temporary change of terrain — an ice witch's frost — and, built `WithEffects`, the board drops
+the entity once its last effect ends. Weather and seasons over the whole board are the same idea
+on an entity standing for the board; not built yet.
 
 ## Who owns what
 
 | Concept | Owner | Promises |
 |:---|:---|:---|
-| turning, accelerating, the motion profile | `world.Steering`, `SteeringSystem` | "asked for a heading and a speed, the unit gets there as its profile allows, and `Vel` is rewritten every tick" |
-| the route, the lookahead point, waypoints, when to brake | `navigation` | "the unit is asked, every tick, for the heading and speed that keep it on its route" |
-| terrain, walls as bodies, who fell into a hole, cells taken by static entities | `board` | "what may not be entered is a body in the world, and the planner knows it; a hole says who fell in" |
+| turning, accelerating, braking, the motion profile | `world.Steering`, `SteeringSystem` | "asked for a heading and a speed, the unit gets there as its profile allows, and `Vel` is rewritten every tick" |
+| the route, the lookahead point, waypoints, when to brake, whether the route still holds | `navigation` | "the unit is asked, every tick, for the heading and speed that keep it on its route, and a route the ground no longer takes is dropped" |
+| terrain, who may stand where, walls as bodies, who fell in, cell entities | `board` | "what may not be entered is a body in the world or ground that admits nobody, and the planner knows it; `Standing` says where everyone stands" |
 | pushing apart, contacts, `Static` and `Sensor` | `collision` | "no unit ends a tick inside a wall" |
+| what is temporary about an entity | `effects` | "a granted tag or an altered component holds while the effect runs, and the original comes back" |
