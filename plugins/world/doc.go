@@ -31,6 +31,12 @@
 // Spawn puts entities on the roster with [Plugin.Seed]; the engine calls [Plugin.Populate] only
 // when nothing was restored. [GridPlacement] arranges a population on a regular grid.
 //
+// # Bodies
+//
+// [Bodies] spawns entities of a kind reserved with [Kinds.Reserve]: a Base and the caller's own
+// columns, no Appearance and no size bounds, counted against MaxCount. It is how a plugin
+// materializes geometry of its own — board's terrain bodies — from inside a system, at any tick.
+//
 // # Attach, Detach and Declare
 //
 // [Plugin.Attach] and [Plugin.Detach] are the mid-game counterparts of a kind's Const, for game

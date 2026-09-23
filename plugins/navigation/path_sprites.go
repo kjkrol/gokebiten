@@ -6,66 +6,22 @@ import (
 	"github.com/kjkrol/gram/render"
 )
 
+// PathSprites is what a route is drawn from: a spoke per Direction and a dot for its end.
 type PathSprites struct {
-	N, S, E, W, NE, NW, SE, SW render.SpriteID
-	Dot                        render.SpriteID
+	Spokes [Directions]render.SpriteID
+	Dot    render.SpriteID
 }
 
-func (s PathSprites) spoke(d Direction) render.SpriteID {
-	switch d {
-	case DirN:
-		return s.N
-	case DirS:
-		return s.S
-	case DirE:
-		return s.E
-	case DirW:
-		return s.W
-	case DirNE:
-		return s.NE
-	case DirNW:
-		return s.NW
-	case DirSE:
-		return s.SE
-	default:
-		return s.SW
-	}
-}
+func (s PathSprites) spoke(d Direction) render.SpriteID { return s.Spokes[d%Directions] }
 
-func directionAngle(d Direction) float64 {
-	switch d {
-	case DirE:
-		return 0
-	case DirNE:
-		return 45
-	case DirN:
-		return 90
-	case DirNW:
-		return 135
-	case DirW:
-		return 180
-	case DirSW:
-		return 225
-	case DirS:
-		return 270
-	default:
-		return 315
-	}
-}
-
+// RegisterDefaultPathSprites builds an atlas of arrows in c, one per Direction, and a dot.
 func RegisterDefaultPathSprites(spriteSize int, strokeWidth float32, c color.RGBA) (*render.Atlas, PathSprites) {
 	atlas := render.NewAtlas()
-
-	spoke := func(d Direction) render.SpriteID {
-		return atlas.Register(spriteSize, render.Arrow(directionAngle(d), strokeWidth, c))
+	var sprites PathSprites
+	for d := range Direction(Directions) {
+		sprites.Spokes[d] = atlas.Register(spriteSize, render.Arrow(d.Angle(), strokeWidth, c))
 	}
-
-	sprites := PathSprites{
-		N: spoke(DirN), S: spoke(DirS), E: spoke(DirE), W: spoke(DirW),
-		NE: spoke(DirNE), NW: spoke(DirNW), SE: spoke(DirSE), SW: spoke(DirSW),
-		Dot: atlas.Register(spriteSize, render.Dot(strokeWidth*2, c)),
-	}
-
+	sprites.Dot = atlas.Register(spriteSize, render.Dot(strokeWidth*2, c))
 	atlas.Close()
 	return atlas, sprites
 }

@@ -25,6 +25,6 @@
 //
 // [Plugin.WithRenderer] draws the remaining route of every selected entity, and the routes on to
 // each queued goal, with the [PathRenderer]
-// from a [PathSprites] set — one arrow per [Direction] and a dot; [RegisterDefaultPathSprites]
+// from a [PathSprites] set — one arrow per [Direction] (every [DirectionStep] degrees, so square and hex steps alike) and a dot; [RegisterDefaultPathSprites]
 // bakes a default set.
 package navigation

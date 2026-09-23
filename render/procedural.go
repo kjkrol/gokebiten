@@ -2,6 +2,7 @@ package render
 
 import (
 	"image/color"
+	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
@@ -49,6 +50,23 @@ func Cross(c color.RGBA) SpriteDrawer {
 				inH := y >= size/4 && y < size*3/4
 				inV := x >= size/4 && x < size*3/4
 				if inH || inV {
+					dst.Set(x, y, c)
+				}
+			}
+		}
+	}
+}
+
+// Hexagon returns a SpriteDrawer filling a pointy-top hexagon with c, transparent at the corners;
+// drawn over a cell of width √3·r and height 2·r it is regular.
+func Hexagon(c color.RGBA) SpriteDrawer {
+	return func(dst *ebiten.Image, size int) {
+		half := float64(size) / 2
+		for y := 0; y < size; y++ {
+			for x := 0; x < size; x++ {
+				du := math.Abs(float64(x)+0.5-half) / half
+				dv := math.Abs(float64(y)+0.5-half) / half
+				if du <= 1 && dv <= 1-du/2 {
 					dst.Set(x, y, c)
 				}
 			}

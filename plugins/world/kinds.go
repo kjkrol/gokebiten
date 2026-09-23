@@ -68,6 +68,20 @@ func (k *Kinds) Register(name string, row reflect.Type, spec kind.Spec) (kind.ID
 	return r.typeID, r.spriteID
 }
 
+// Reserve takes a kind.ID for entities spawned outside Populate — see Plugin.NewBodies.
+func (k *Kinds) Reserve(name string) kind.ID {
+	if len(k.order) == kind.MaxKinds {
+		panic(fmt.Sprintf("world: cannot reserve kind %q: a world holds at most %d kinds", name, kind.MaxKinds))
+	}
+	if _, taken := k.entries[name]; taken {
+		panic(fmt.Sprintf("world: kind %q is defined twice", name))
+	}
+	id := kind.ID(len(k.order))
+	k.order = append(k.order, name)
+	k.entries[name] = registered{name: name, typeID: id}
+	return id
+}
+
 // NewSprite reserves an atlas slot that belongs to no kind — an overlay's, say.
 func (k *Kinds) NewSprite() render.SpriteID {
 	id := k.next

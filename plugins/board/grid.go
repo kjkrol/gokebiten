@@ -22,6 +22,14 @@ type Grid interface {
 	Distance(a, b CellID) float64
 	// CellSpan is the world-space side length of one cell — the renderer's cell-quad size.
 	CellSpan() float32
+	// CellBounds is the width and height of the rectangle round one cell — the drawn quad.
+	CellBounds() (w, h float64)
+	// CellOutline appends to dst the corners of c, in order round the cell.
+	CellOutline(c CellID, dst []geom.Vec) []geom.Vec
+	// CellBoxes appends to dst boxes that together cover c, exactly or from outside.
+	CellBoxes(c CellID, dst []geom.AABB) []geom.AABB
+	// EachCell calls fn for every cell of the grid.
+	EachCell(fn func(c CellID))
 }
 
 type wrapSetter interface {

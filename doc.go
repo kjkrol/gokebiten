@@ -75,21 +75,21 @@
 //	                                movement, kinds, Seed and Populate, Attach and Detach, Camera   (→ camera, control, plugin, kind, render)
 //	Layer 5   game                — what a game implements and receives: Game, Stage, Scene, Scenes,
 //	                                Composition, Initializer, Runtime, Persistence, Props, TPS       (→ camera, control, plugin, world, render)
-//	          plugins/board       — a grid with terrain over the world                              (→ world, …)
 //	          plugins/collision   — the Detector over the world's Space; Collider, Physics, Meeting, Struck (→ world, …)
 //	          plugins/selection   — mouse input into a Selected tag                                 (→ world, …)
 //	          plugins/vision      — a Sight cone into Seen, Sighting, SightOutline                   (→ world, …)
-//	Layer 6   plugins/navigation  — MoveOrder paths across a board                                   (→ board, selection, world, …)
+//	Layer 6   plugins/board       — a grid with terrain over the world, walls as bodies              (→ world, collision, …)
 //	          plugins/collision/behavior, plugins/vision/behavior — ready-made reactions              (→ their plugin, world, plugin)
-//	Layer 7   internal/engine     — the Engine: the Ebitengine loop, one active Stage, persistence   (→ game, plugin, world, camera, control, render)
-//	Layer 8   gram                — Run; the package you import                                     (→ game, internal/engine)
+//	Layer 7   plugins/navigation  — MoveOrder paths across a board                                   (→ board, selection, world, …)
+//	Layer 8   internal/engine     — the Engine: the Ebitengine loop, one active Stage, persistence   (→ game, plugin, world, camera, control, render)
+//	Layer 9   gram                — Run; the package you import                                     (→ game, internal/engine)
 //
 // Expressed as a directed graph (arrow = "is imported by"), showing the spine:
 //
 //	camera ──► render ──► plugin ──► plugins/world/kind ──► plugins/world ──► game ──► internal/engine ──► gram
 //	control ───┘                                              │  ▲
 //	                                                          ▼  │
-//	                     plugins/{board, collision, selection, vision} ──► plugins/navigation, plugins/*/behavior
+//	                     plugins/{collision, selection, vision} ──► plugins/board ──► plugins/navigation, plugins/*/behavior
 //
 // Outside the module: goke/v3 is the ECS every Stage runs on, aabbworld the space, collisions and
 // line of sight under the world, ebiten/v2 the loop and the drawing, astar the pathfinding, and

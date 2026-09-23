@@ -31,3 +31,25 @@ func TestQuadBatch_AppendQuad_ConsistentAcrossWrapSeam(t *testing.T) {
 		t.Errorf("total quad width straddling the wrap seam = %v, want 12 (must not stretch or drop part of it)", firstWidth+secondWidth)
 	}
 }
+
+func TestQuadBatch_IndicesRestartPerChunk(t *testing.T) {
+	cam := camera.NewFromSpace(100000, 100, 0)
+	batch := NewQuadBatch(fakeAtlasSource{}, cam)
+	quads := chunkVertices/4 + 5
+	for i := range quads {
+		x := float32(i)
+		batch.AppendQuad(x, 0, x+1, 1, 0)
+	}
+	if len(batch.vertices) != quads*4 || len(batch.indices) != quads*6 {
+		t.Fatalf("%d vertices and %d indices for %d quads", len(batch.vertices), len(batch.indices), quads)
+	}
+	first := batch.indices[chunkVertices/4*6]
+	if first != 0 {
+		t.Errorf("the first index past the chunk is %d, want 0 (relative to its own DrawTriangles call)", first)
+	}
+	for i, idx := range batch.indices {
+		if int(idx) >= chunkVertices {
+			t.Fatalf("index %d = %d reaches past a chunk", i, idx)
+		}
+	}
+}

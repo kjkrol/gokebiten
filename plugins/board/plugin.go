@@ -7,6 +7,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/collision"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/render"
 )
@@ -25,7 +26,7 @@ func (r *Resources) Persisted() []any { return []any{r.Logic.Board.TerrainMap} }
 
 var _ plugin.Serializable = (*Resources)(nil)
 
-// Plugin wires a Board into a Game; it depends only on world.
+// Plugin wires a Board into a Game; it depends on world, and on collision only WithCollision.
 type Plugin struct {
 	Res Resources
 
@@ -36,6 +37,8 @@ type Plugin struct {
 	seeded       *Layout
 
 	worldPlugin *world.Plugin
+	collision   *collision.Plugin
+	module      *module
 }
 
 var _ plugin.Plugin = (*Plugin)(nil)
@@ -65,11 +68,25 @@ func NewPlugin(grid Grid, occupancy Occupancy, worldPlugin *world.Plugin) *Plugi
 
 func (p *Plugin) Name() string { return "gram.board" }
 
-// Install is a no-op — board has no ECS wiring of its own; see plugins/navigation.
-func (p *Plugin) Install(ctx plugin.Installer) error { return nil }
+// Install wires the terrain bodies when WithCollision asked for them; otherwise board has no ECS
+// wiring of its own.
+func (p *Plugin) Install(ctx plugin.Installer) error {
+	if p.collision == nil {
+		return nil
+	}
+	typeID := p.worldPlugin.Kinds().Reserve("board.terrain")
+	p.module = &module{bodies: newTerrainBodies(p.Res.Logic.Board, p.worldPlugin, typeID)}
+	ctx.UseModule(p.module)
+	return nil
+}
 
-// RunPlan is a no-op — board has no per-tick work of its own; see plugins/navigation.
-func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {}
+// RunPlan rebuilds the terrain bodies after a terrain change; call it after collision's RunPlan.
+// Without WithCollision it does nothing.
+func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
+	if p.module != nil {
+		p.module.RunPlan(ctx, d)
+	}
+}
 
 // WithRenderer builds the board renderer, drawing each cell's CellKind.SpriteID from atlas.
 func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
@@ -102,6 +119,17 @@ func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
 // =================================================================
 // board-specific
 // =================================================================
+
+// WithCollision makes terrain physical: every run of impassable cells becomes an immovable [Body]
+// in the world, pushed against by c and occluding sight, and every run of Opaque cells a Body
+// that only occludes. Call before Use.
+func (p *Plugin) WithCollision(c *collision.Plugin) *Plugin {
+	if c == nil {
+		panic("board: WithCollision needs the collision plugin")
+	}
+	p.collision = c
+	return p
+}
 
 // Occupancy returns the occupancy tracker this plugin was built with.
 func (p *Plugin) Occupancy() Occupancy { return p.occupancy }

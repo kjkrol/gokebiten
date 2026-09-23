@@ -14,6 +14,8 @@ type CellKind struct {
 	// more to plan through, below 1 is a boost — a game's choice, still capped by the move's step.
 	Cost     float64
 	Passable bool
+	// Opaque blocks sight without blocking movement — a forest; see Plugin.WithCollision.
+	Opaque   bool
 	SpriteID render.SpriteID
 }
 
@@ -61,6 +63,8 @@ func (d *cellKindDict) All() []CellKind {
 type TerrainMap struct {
 	Cells   map[CellID]CellKind
 	Default CellKind
+
+	version uint64
 }
 
 var _ Terrain = (*TerrainMap)(nil)
@@ -77,17 +81,25 @@ func (t *TerrainMap) Kind(c CellID) CellKind {
 }
 
 // Set assigns c's terrain kind, taking effect immediately.
-func (t *TerrainMap) Set(c CellID, kind CellKind) { t.Cells[c] = kind }
+func (t *TerrainMap) Set(c CellID, kind CellKind) {
+	t.Cells[c] = kind
+	t.version++
+}
 
 // SetMany assigns kind to every cell in cells in one call, instead of looping Set per cell.
 func (t *TerrainMap) SetMany(cells []CellID, kind CellKind) {
 	for _, c := range cells {
 		t.Cells[c] = kind
 	}
+	t.version++
 }
 
 // SetAll resets every cell's terrain kind to kind, discarding any prior Set/SetMany overrides.
 func (t *TerrainMap) SetAll(kind CellKind) {
 	clear(t.Cells)
 	t.Default = kind
+	t.version++
 }
+
+// Version counts the changes made through Set, SetMany and SetAll; a load starts it over.
+func (t *TerrainMap) Version() uint64 { return t.version }

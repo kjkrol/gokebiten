@@ -79,6 +79,48 @@ func (g *hexGrid) CellAt(pos geom.Vec) (CellID, bool) {
 
 func (g *hexGrid) CellSpan() float32 { return float32(g.Size) }
 
+// CellBounds is the hex's bounding box: √3·Size wide, 2·Size tall.
+func (g *hexGrid) CellBounds() (w, h float64) { return math.Sqrt(3) * g.Size, 2 * g.Size }
+
+// CellOutline is the six corners of a pointy-top hex, clockwise from the top.
+func (g *hexGrid) CellOutline(c CellID, dst []geom.Vec) []geom.Vec {
+	center := g.CellCenter(c)
+	for i := range 6 {
+		a := -math.Pi/2 + float64(i)*math.Pi/3
+		dst = append(dst, geom.NewVec(center.X+g.Size*math.Cos(a), center.Y+g.Size*math.Sin(a)))
+	}
+	return dst
+}
+
+// HexCapStrips is how many boxes cover each pointed end of a hex; more is a closer fit.
+const HexCapStrips = 3
+
+// CellBoxes covers the hex from outside: its middle band, then strips over each cap as wide as
+// the hex is at the strip's wider edge.
+func (g *hexGrid) CellBoxes(c CellID, dst []geom.AABB) []geom.AABB {
+	center := g.CellCenter(c)
+	s := g.Size
+	halfW := math.Sqrt(3) / 2 * s
+	dst = append(dst, geom.NewAABB(geom.NewVec(center.X-halfW, center.Y-s/2), geom.NewVec(center.X+halfW, center.Y+s/2)))
+	h := s / 2 / HexCapStrips
+	for j := range HexCapStrips {
+		w := halfW * float64(j+1) / HexCapStrips
+		top := center.Y - s + float64(j)*h
+		dst = append(dst, geom.NewAABB(geom.NewVec(center.X-w, top), geom.NewVec(center.X+w, top+h)))
+		bottom := center.Y + s - float64(j+1)*h
+		dst = append(dst, geom.NewAABB(geom.NewVec(center.X-w, bottom), geom.NewVec(center.X+w, bottom+h)))
+	}
+	return dst
+}
+
+func (g *hexGrid) EachCell(fn func(c CellID)) {
+	for r := int32(0); r < int32(g.Height); r++ {
+		for q := int32(0); q < int32(g.Width); q++ {
+			fn(packAxial(q, r))
+		}
+	}
+}
+
 func (g *hexGrid) SetWrap(x, y bool) { g.WrapX, g.WrapY = x, y }
 
 func (g *hexGrid) CellIndex(q, r uint32) (CellID, bool) {

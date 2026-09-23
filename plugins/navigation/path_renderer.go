@@ -167,9 +167,12 @@ func (r *PathRenderer) queued(id uid.UID64, mt *MoveOrder) [][]board.CellID {
 	return pv.routes
 }
 
+// appendCellSprite lays sprite as a square reaching the cell's nearest edges, so a spoke ends where
+// the neighbour's begins.
 func (r *PathRenderer) appendCellSprite(c board.CellID, sprite render.SpriteID) {
 	center := r.grid.CellCenter(c)
-	half := float64(r.grid.CellSpan()) / 2
+	w, h := r.grid.CellBounds()
+	half := min(w, h) / 2
 	r.batch.AppendQuad(float32(center.X-half), float32(center.Y-half), float32(center.X+half), float32(center.Y+half), sprite)
 }
 

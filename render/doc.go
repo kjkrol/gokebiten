@@ -14,7 +14,7 @@
 // elsewhere) records a [SpriteDrawer] at a texture size of its own, and Close is when the sheet
 // is laid out and baked — so a slot issued late is as welcome as an early one, as long as it
 // comes before Close. The drawn size is the entity's box; the texture size is resolution.
-// [Solid], [Border], [Diamond], [Cross], [Dot] and [Arrow] are ready-made drawers. [AtlasSource]
+// [Solid], [Border], [Diamond], [Cross], [Hexagon], [Dot] and [Arrow] are ready-made drawers. [AtlasSource]
 // is what a batch draws from: the sheet and each [SpriteID]'s UV rectangle.
 //
 // # QuadBatch

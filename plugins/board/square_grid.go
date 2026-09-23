@@ -75,6 +75,31 @@ func (g *squareGrid) CellAt(pos geom.Vec) (CellID, bool) {
 
 func (g *squareGrid) CellSpan() float32 { return float32(g.CellSize) }
 
+func (g *squareGrid) CellBounds() (w, h float64) { return float64(g.CellSize), float64(g.CellSize) }
+
+func (g *squareGrid) CellOutline(c CellID, dst []geom.Vec) []geom.Vec {
+	x, y := g.cellXY(c)
+	size := float64(g.CellSize)
+	x0, y0 := float64(x)*size, float64(y)*size
+	return append(dst, geom.NewVec(x0, y0), geom.NewVec(x0+size, y0), geom.NewVec(x0+size, y0+size), geom.NewVec(x0, y0+size))
+}
+
+// CellBoxes is the cell's own square.
+func (g *squareGrid) CellBoxes(c CellID, dst []geom.AABB) []geom.AABB {
+	x, y := g.cellXY(c)
+	size := float64(g.CellSize)
+	topLeft := geom.NewVec(float64(x)*size, float64(y)*size)
+	return append(dst, geom.NewAABB(topLeft, geom.NewVec(topLeft.X+size, topLeft.Y+size)))
+}
+
+func (g *squareGrid) EachCell(fn func(c CellID)) {
+	for y := uint32(0); y < g.Height; y++ {
+		for x := uint32(0); x < g.Width; x++ {
+			fn(g.idAt(x, y))
+		}
+	}
+}
+
 func (g *squareGrid) SetWrap(x, y bool) { g.WrapX, g.WrapY = x, y }
 
 func (g *squareGrid) CellIndex(col, row uint32) (CellID, bool) {

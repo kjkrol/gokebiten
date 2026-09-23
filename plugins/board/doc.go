@@ -1,6 +1,7 @@
 // Package board lays a square or hex grid over the game world, with per-cell terrain
 // (passability, movement cost, sprite) and occupancy tracking. Entities on the board
-// move at the terrain's cost; plugins/navigation builds pathfinding on top.
+// move at the terrain's cost, impassable terrain can be made solid, and plugins/navigation builds
+// pathfinding on top.
 //
 // # Board, Grid and Layout
 //
@@ -15,9 +16,21 @@
 // # Cell, CellKind and Terrain
 //
 // A [CellID] names one cell; [Cell] is an entity's current one. A [CellKind] is a named terrain:
-// its movement cost, whether it is passable, and the sprite drawn for it; kinds are created
+// its movement cost, whether it is passable, whether it is opaque (a forest: passable, but sight
+// stops at it), and the sprite drawn for it; kinds are created
 // through the Plugin's [CellKindDict]. Cost 1 is full speed and the baseline path weight; above 1
 // slows and costs more to plan through; below 1 is a boost a game may choose to offer. [Terrain] is what a cell answers about itself.
+//
+// # Terrain bodies
+//
+// Built [Plugin.WithCollision], the board makes its impassable terrain solid: every run of
+// impassable cells becomes an immovable entity in the world — a [Body] with a collider and an
+// infinite mass, no sprite, no kind — so no unit ends a tick inside a wall and walls occlude sight;
+// a run of opaque cells becomes a Body without a collider, occluding only.
+// A body is made of the boxes the grid gives for each cell ([Grid.CellBoxes]: one for a square,
+// [HexCapStrips] strips over each cap of a hex, covering it from outside), merged along both axes
+// up to [MaxBodyCells] a side. The bodies follow [TerrainMap.Version]; call [Plugin.RunPlan] after
+// collision's.
 //
 // # Occupancy
 //
