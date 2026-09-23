@@ -1,0 +1,391 @@
+// Command effect-demo is an ice witch: an entity under orders that turns the ground round her
+// feet into snow and the water into ice — the terrain is hers to write, as far as her power
+// reaches, and it thaws some seconds after she has gone. She is fast on her own snow; a walker
+// can cross the lake on her trail while it lasts — slipping, so it brakes badly and may not stop
+// before ice that melts ahead of it — and a boat, whose brakes are weak, sails onto the ice it saw
+// coming and is frozen in — pale, still, immovable — until the ice melts. Everything temporary
+// here is an effect.
+package main
+
+import (
+	"image/color"
+	"log"
+	"math"
+	"time"
+
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gram/control"
+	"github.com/kjkrol/gram/game"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/board"
+	"github.com/kjkrol/gram/plugins/collision"
+	"github.com/kjkrol/gram/plugins/effects"
+	"github.com/kjkrol/gram/plugins/navigation"
+	"github.com/kjkrol/gram/plugins/selection"
+	"github.com/kjkrol/gram/plugins/world"
+	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/render"
+	"github.com/kjkrol/uid"
+)
+
+const (
+	TPS          = 60
+	GridWidth    = 24
+	GridHeight   = 16
+	CellSize     = 32
+	ScreenWidth  = GridWidth * CellSize
+	ScreenHeight = GridHeight * CellSize
+	EntitySize   = 22
+	UnitSpeed    = CellSize * 2
+	MaxEntCount  = 400 // units, terrain bodies and a cell entity per frozen cell, until it thaws
+
+	lakeLeft, lakeRight uint32 = 8, 15
+	lakeTop, lakeBottom uint32 = 4, 11
+
+	// Frost is the witch's own way of moving: snow and ice price it low.
+	Frost = board.Domain(1 << 3)
+	// thawAfter is how long the witch's frost holds where she stood — five seconds at most; her
+	// Power widens the area, not the time.
+	thawAfter = 5 * time.Second
+)
+
+// chill is the demo's tag family; frozen is who is stuck in the ice.
+type chill struct{}
+
+// =========================== Game ===========================
+
+// Demo is the effect demo — exactly one Stage (mainStage below).
+type Demo struct{ stage *mainStage }
+
+var _ game.Game = (*Demo)(nil)
+
+func NewDemo() *Demo { return &Demo{stage: &mainStage{}} }
+
+func (d *Demo) Props() game.Props {
+	return game.Props{
+		Title:       "gram — an ice witch writes the terrain",
+		ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight,
+		TargetTPS: TPS,
+	}
+}
+
+func (d *Demo) Stages() (map[string]game.Stage, string) {
+	return map[string]game.Stage{d.stage.Name(): d.stage}, d.stage.Name()
+}
+
+// =========================== Stage ===========================
+
+// witch tags who leaves winter behind; Power is how many rings of cells round her freeze.
+type witch struct{ Power int }
+
+// unit is the row every kind spawns from: where it starts and, if ordered, where it heads.
+type unit struct {
+	start, target board.CellID
+	ordered       bool
+}
+
+type mainStage struct {
+	world     *world.Plugin
+	board     *board.Plugin
+	nav       *navigation.Plugin
+	collision *collision.Plugin
+	selection *selection.Plugin
+	brd       *board.Board
+	effects   *effects.Plugin
+	snow, ice board.CellKind
+
+	frost, frozen, slip effects.ID
+	frozenTag           plugin.Tag[chill]
+	paleSprite          render.SpriteID
+
+	witch, walker, boat kind.Of[unit]
+	stack               game.Scenes
+}
+
+var _ game.Stage = (*mainStage)(nil)
+
+func (s *mainStage) Name() string { return "effect-demo" }
+
+func (s *mainStage) Stack() game.Scenes { return s.stack }
+
+func (s *mainStage) Init(ctx game.Initializer) error {
+	s.world = ctx.UseWorld(world.Config{
+		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight},
+		Entities: world.EntitiesCfg{MaxCount: MaxEntCount, MinSize: EntitySize, MaxSize: EntitySize},
+	})
+	s.world.WithCameraControls()
+
+	s.collision = collision.NewPlugin(s.world)
+	if err := ctx.Use(s.collision); err != nil {
+		return err
+	}
+
+	grid := board.DefaultGrids{}.Square(GridWidth, GridHeight, CellSize)
+	s.effects = effects.NewPlugin(s.world)
+	// A frozen boat holds its cell, so the planner goes round; the board drops cell entities itself.
+	s.board = board.NewPlugin(grid, &board.SingleOccupancy{}, s.world).WithCollision(s.collision).WithEffects(s.effects)
+	s.brd = s.board.Res.Logic.Board
+	s.board.CellKindDict().Create(
+		board.CellKind{Name: "grass", Cost: 2, Allows: board.Land},
+		board.CellKind{Name: "road", Cost: 1, Allows: board.Land},
+		board.CellKind{Name: "water", Cost: 1, Allows: board.Water},
+		board.CellKind{Name: "snow", Cost: 3, Allows: board.Land | Frost}.Costing(Frost, 0.5),
+		board.CellKind{Name: "ice", Cost: 2, Allows: board.Land | Frost}.Costing(Frost, 0.5),
+	)
+	s.snow, _ = s.board.CellKindDict().Get("snow")
+	s.ice, _ = s.board.CellKindDict().Get("ice")
+
+	// The whole of the game's logic: two reactions to where things stand, registered before Use.
+	if err := s.board.RegisterBehavior(
+		plugin.Each[witch](s.freeze),
+		plugin.Each[board.Mover](s.onGround),
+	); err != nil {
+		return err
+	}
+	if err := ctx.Use(s.board); err != nil {
+		return err
+	}
+
+	// Two effects: frost on a cell's ground, for a while; frozen on whoever is caught in the ice,
+	// until the ice is gone. What frozen means for movement is a speed modifier of the game's.
+	s.frozenTag = s.world.Kinds().DefineTag[chill]("frozen")
+	s.paleSprite = s.world.Kinds().NewSprite()
+	s.frost = s.effects.Define("frost", effects.Spec{
+		effects.Lasts(thawAfter),
+		effects.Alter(func(g *board.Ground) { g.Kind = s.frozenKind(g.Kind) }),
+	})
+	s.frozen = s.effects.Define("frozen", effects.Spec{
+		effects.Grant(s.frozenTag),
+		effects.Alter(func(a *world.Appearance) { a.SpriteID = s.paleSprite }),
+		effects.Alter(func(p *collision.Physics) { p.Mass = math.Inf(1) }), // stuck fast: nobody shoves it
+	})
+	s.slip = s.effects.Define("slip", effects.Spec{
+		effects.Alter(func(st *world.Steering) { st.Brake = st.Accel / 8 }), // ice: brakes barely bite
+	})
+	s.world.RegisterSpeedModifier(&stillWhenFrozen{tag: s.frozenTag})
+	if err := ctx.Use(s.effects); err != nil {
+		return err
+	}
+
+	s.selection = selection.NewPlugin(s.world)
+	if err := ctx.Use(s.selection); err != nil {
+		return err
+	}
+
+	s.nav = navigation.NewPlugin(s.board, s.world, s.selection)
+	if err := ctx.Use(s.nav); err != nil {
+		return err
+	}
+	s.defineKinds()
+
+	main := &mainScene{stage: s}
+	stack, err := game.NewStack(main)
+	if err != nil {
+		return err
+	}
+	s.stack = stack
+	comp := stack.Composition()
+	comp.Show(main.Name())
+	return ctx.Track(comp)
+}
+
+func (s *mainStage) Restore(game.Persistence) (bool, error) { return false, nil }
+
+// frozenKind is what the witch's frost makes of a kind of ground.
+func (s *mainStage) frozenKind(k board.CellKind) board.CellKind {
+	switch k.Name {
+	case "grass", "road":
+		return s.snow
+	case "water":
+		return s.ice
+	}
+	return k
+}
+
+// freeze casts frost on every cell round the witch, as many rings of neighbours out as her
+// Power; a cell already frozen has its time refreshed.
+func (s *mainStage) freeze(t plugin.Tick, w *witch, st board.Standing) {
+	ring := map[board.CellID]struct{}{}
+	s.brd.CellsUnder(st.Box, func(c board.CellID) { ring[c] = struct{}{} })
+	for range w.Power {
+		next := map[board.CellID]struct{}{}
+		for c := range ring {
+			for _, n := range s.brd.Neighbors(c) {
+				next[n] = struct{}{}
+			}
+		}
+		for c := range next {
+			ring[c] = struct{}{}
+		}
+	}
+	for c := range ring {
+		if s.frozenKind(s.brd.Kind(c)) == s.brd.Kind(c) && !s.brd.Kind(c).Admits(Frost) {
+			continue // nothing here freezes
+		}
+		s.effects.Cast(t.CmdBuf, s.board.CellEntity(c), s.frost)
+	}
+}
+
+// onGround decides for whoever stands on the board by what is under it: caught in ice — a boat
+// whose water froze — it is frozen until the ice is gone; on ice it may walk, it slips; where its
+// domain may not be and there is no ice — a walker whose ice melted — it has fallen in and is gone.
+func (s *mainStage) onGround(t plugin.Tick, m *board.Mover, st board.Standing) {
+	fell := st.Fell(m.Domain)
+	onIce := st.Kind == s.ice
+	frozen, slipping := s.effects.Has(st.ID, s.frozen), s.effects.Has(st.ID, s.slip)
+	switch {
+	case fell && onIce && !frozen:
+		log.Printf("entity %d froze into the ice at cell %d", st.ID, st.Cell)
+		s.effects.Cast(t.CmdBuf, st.ID, s.frozen)
+	case fell && !onIce:
+		log.Printf("entity %d fell into the %s at cell %d", st.ID, st.Kind.Name, st.Cell)
+		s.world.Despawn(t.CmdBuf, st.ID)
+	case !fell && frozen:
+		log.Printf("entity %d is free of the ice", st.ID)
+		s.effects.Dispel(st.ID, s.frozen)
+	}
+	switch {
+	case !fell && onIce && !slipping:
+		s.effects.Cast(t.CmdBuf, st.ID, s.slip)
+	case !onIce && slipping:
+		s.effects.Dispel(st.ID, s.slip)
+	}
+}
+
+// stillWhenFrozen is a speed modifier: whoever carries the frozen tag does not move.
+type stillWhenFrozen struct {
+	tag   plugin.Tag[chill]
+	marks goke.OptComp[plugin.Tags[chill]]
+}
+
+func (m *stillWhenFrozen) Bind(qb *goke.QueryBuilder) { qb.Optional(&m.marks) }
+
+func (m *stillWhenFrozen) Apply(cur *goke.Cursor, i int, _ *world.Base, acc float64) float64 {
+	if marks := m.marks.Slice(cur); marks != nil && marks[i].Has(m.tag) {
+		return 0
+	}
+	return acc
+}
+
+// defineKinds says what this game's entities are: the witch walks on land and water, the walker
+// on land, the boat on water.
+func (s *mainStage) defineKinds() {
+	occupancy := s.board.Occupancy()
+	spec := func(domain board.Domain, brake float64, extra ...kind.Comp) kind.Spec {
+		base := kind.Spec{
+			kind.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(s.brd, u.start, EntitySize)} }),
+			kind.Const(world.Velocity{}),
+			kind.Const(world.Steering{MaxSpeed: UnitSpeed, Accel: UnitSpeed * 2, Brake: brake, V0: UnitSpeed / 2, TurnRate: 0.15}),
+			kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }).
+				WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
+			kind.Const(board.Mover{Domain: domain}),
+			kind.Tagged(s.selection.Tags().Selectable),
+			kind.Const(collision.Collider{}),
+			kind.Const(collision.Physics{}),
+		}
+		return append(base, extra...)
+	}
+	order := kind.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} })
+	kinds := s.world.Kinds()
+	s.witch = kind.Define[unit](kinds, "witch", spec(board.Land|board.Water|Frost, UnitSpeed*4, order, kind.Const(witch{Power: 1})))
+	s.walker = kind.Define[unit](kinds, "walker", spec(board.Land, UnitSpeed*4))
+	// A boat brakes badly: it sees the ice coming and still sails onto it.
+	s.boat = kind.Define[unit](kinds, "boat", spec(board.Water, UnitSpeed/4, order))
+}
+
+// Spawn lays the lake and the road and puts the three of them in place.
+func (s *mainStage) Spawn() error {
+	cell := func(x, y uint32) board.CellID { c, _ := s.brd.CellIndex(x, y); return c }
+	var cells []board.CellEntry
+	for y := lakeTop; y <= lakeBottom; y++ {
+		for x := lakeLeft; x <= lakeRight; x++ {
+			cells = append(cells, board.CellEntry{Kind: "water", Cell: cell(x, y)})
+		}
+	}
+	for x := uint32(1); x < GridWidth-1; x++ {
+		cells = append(cells, board.CellEntry{Kind: "road", Cell: cell(x, 1)}, board.CellEntry{Kind: "road", Cell: cell(x, GridHeight-2)})
+	}
+	s.board.Seed(board.Layout{Default: "grass", Cells: cells})
+
+	s.world.Seed(
+		s.witch.Entry(unit{start: cell(2, 8), target: cell(GridWidth-3, 8)}),
+		s.walker.Entry(unit{start: cell(2, 10)}),
+		s.boat.Entry(unit{start: cell(lakeRight, 8), target: cell(lakeLeft, 8)}), // head-on into the witch's trail
+	)
+	return nil
+}
+
+func (s *mainStage) Update(ctx goke.RunCtx, d time.Duration) {
+	s.world.RunPlan(ctx, d)
+	s.collision.RunPlan(ctx, d)
+	s.effects.RunPlan(ctx, d)
+	s.board.RunPlan(ctx, d)
+	s.nav.RunPlan(ctx, d)
+	s.selection.RunPlan(ctx, d)
+	ctx.Sync()
+}
+
+// =========================== Scene ===========================
+
+type mainScene struct{ stage *mainStage }
+
+var _ game.Scene = (*mainScene)(nil)
+
+func (m *mainScene) Name() string { return "main" }
+
+func (m *mainScene) Layers() []render.Renderer {
+	s := m.stage
+
+	worldAtlas := render.NewAtlas()
+	worldAtlas.RegisterAt(s.witch.SpriteID(), EntitySize, render.Diamond(color.RGBA{R: 200, G: 230, B: 255, A: 255}))
+	worldAtlas.RegisterAt(s.walker.SpriteID(), EntitySize, render.Solid(color.RGBA{R: 220, G: 90, B: 90, A: 255}))
+	worldAtlas.RegisterAt(s.boat.SpriteID(), EntitySize, render.Solid(color.RGBA{R: 140, G: 90, B: 40, A: 255}))
+	worldAtlas.RegisterAt(s.paleSprite, EntitySize, render.Solid(color.RGBA{R: 190, G: 220, B: 245, A: 255}))
+	worldAtlas.Close()
+	s.world.WithRenderer(worldAtlas)
+
+	kinds := s.board.CellKindDict()
+	boardAtlas := render.NewAtlas()
+	for name, c := range map[string]color.RGBA{
+		"grass": {R: 60, G: 95, B: 60, A: 255},
+		"road":  {R: 150, G: 130, B: 80, A: 255},
+		"water": {R: 40, G: 90, B: 170, A: 255},
+		"snow":  {R: 235, G: 240, B: 245, A: 255},
+		"ice":   {R: 170, G: 215, B: 240, A: 255},
+	} {
+		k, _ := kinds.Get(name)
+		boardAtlas.RegisterAt(k.SpriteID, CellSize, render.Solid(c))
+	}
+	boardAtlas.Close()
+	s.board.WithRenderer(boardAtlas)
+
+	pathAtlas, pathSprites := navigation.RegisterDefaultPathSprites(CellSize, 2, color.RGBA{R: 255, G: 140, B: 0, A: 255})
+	s.nav.SetPathSprites(pathSprites)
+	s.nav.WithRenderer(pathAtlas)
+	s.selection.WithRenderer(nil)
+
+	return []render.Renderer{s.board.Renderer(), s.nav.Renderer(), s.world.Renderer(), s.selection.Renderer()}
+}
+
+func (m *mainScene) HandleEvents(events *control.InputEvents, runtime game.Runtime, _ game.Composition) {
+	s := m.stage
+	s.selection.EventHandler().HandleEvents(events)
+	s.nav.EventHandler().HandleEvents(events)
+	s.world.EventHandler().HandleEvents(events)
+	for _, k := range events.KeyEvents {
+		if k.Action != control.ActionPress {
+			continue
+		}
+		switch k.Key {
+		case ebiten.KeyEscape:
+			runtime.Quit()
+		case ebiten.KeySpace:
+			runtime.TogglePause()
+		case ebiten.KeyB:
+			s.board.Res.Render.ToggleShowGridLines()
+		}
+	}
+}
+
+func (m *mainScene) Focusable() bool { return true }

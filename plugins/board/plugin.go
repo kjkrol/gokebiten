@@ -8,8 +8,10 @@ import (
 	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/collision"
+	"github.com/kjkrol/gram/plugins/effects"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/render"
+	"github.com/kjkrol/uid"
 )
 
 // Resources is board's single published Resources — Logic is what
@@ -38,8 +40,10 @@ type Plugin struct {
 
 	worldPlugin *world.Plugin
 	collision   *collision.Plugin
+	effects     *effects.Plugin
 	module      *module
 	standing    plugin.EachHost[Standing]
+	body        plugin.Tag[Family]
 }
 
 var _ plugin.Plugin = (*Plugin)(nil)
@@ -71,10 +75,17 @@ func (p *Plugin) Name() string { return "gram.board" }
 
 // Install wires the standing report and, WithCollision, the terrain bodies.
 func (p *Plugin) Install(ctx plugin.Installer) error {
-	p.module = &module{standing: newStandingSystem(p.Res.Logic.Board, &p.standing)}
+	p.module = &module{
+		cells:    newCellEntities(p.Res.Logic.Board, p.worldPlugin, p.worldPlugin.Kinds().Reserve("board.cell")),
+		standing: newStandingSystem(p.Res.Logic.Board, &p.standing),
+	}
 	if p.collision != nil {
 		typeID := p.worldPlugin.Kinds().Reserve("board.terrain")
-		p.module.bodies = newTerrainBodies(p.Res.Logic.Board, p.worldPlugin, typeID)
+		p.body = p.worldPlugin.Kinds().DefineTag[Family]("board.body")
+		p.module.bodies = newTerrainBodies(p.Res.Logic.Board, p.worldPlugin, typeID, p.body)
+	}
+	if p.effects != nil {
+		p.effects.OnIdle(func(t plugin.Tick, id uid.UID64) { p.DropCellEntity(t.CmdBuf, id) })
 	}
 	ctx.UseModule(p.module)
 	return nil
@@ -129,6 +140,27 @@ func (p *Plugin) WithCollision(c *collision.Plugin) *Plugin {
 	p.collision = c
 	return p
 }
+
+// WithEffects lets the board look after its cell entities: once one's last effect ends, the
+// board lets it go. Call before Use.
+func (p *Plugin) WithEffects(fx *effects.Plugin) *Plugin {
+	if fx == nil {
+		panic("board: WithEffects needs the effects plugin")
+	}
+	p.effects = fx
+	return p
+}
+
+// CellEntity is the entity standing for cell c — found, or spawned over the cell with a [Cell]
+// and a [Ground] — so an effect cast on it is an effect on the cell's terrain.
+func (p *Plugin) CellEntity(c CellID) uid.UID64 { return p.module.cells.entity(c) }
+
+// DropCellEntity despawns a cell entity, and does nothing for any other entity; the terrain keeps
+// what its Ground last said. Built WithEffects, the board calls it itself.
+func (p *Plugin) DropCellEntity(cb *goke.CmdBuf, id uid.UID64) { p.module.cells.drop(cb, id) }
+
+// Body is the tag every terrain body carries, in board's tag Family; zero without WithCollision.
+func (p *Plugin) Body() plugin.Tag[Family] { return p.body }
 
 // Occupancy returns the occupancy tracker this plugin was built with.
 func (p *Plugin) Occupancy() Occupancy { return p.occupancy }

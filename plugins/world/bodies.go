@@ -16,7 +16,8 @@ type Bodies struct {
 	factory *goke.Factory
 }
 
-// NewBodies builds a Bodies whose entities carry Base plus the caller's comps under typeID.
+// NewBodies builds a Bodies whose entities carry Base plus the caller's comps under typeID; the
+// comps are this factory's own columns and must not be shared with a query or another factory.
 func (p *Plugin) NewBodies(si *goke.SysInit, typeID kind.ID, comps ...goke.Addable) *Bodies {
 	b := &Bodies{w: p.module, typeID: typeID}
 	b.factory = si.NewFactory(append([]goke.Addable{&b.base}, comps...)...)
