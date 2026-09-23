@@ -211,6 +211,11 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 				*p = newPath
 			}
 
+			if leg.Active && p.Index < p.Length && p.Steps[p.Index] == leg.From {
+				// the route goes back the way the leg came: turn the leg round, same cells held
+				leg.From, leg.To = leg.To, leg.From
+			}
+
 			waypoint := target
 			switch {
 			case leg.Active:
@@ -232,15 +237,15 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 			have := board.Center(bases[i].Pos)
 			want := s.unwrap(have, s.grid.CellCenter(waypoint))
 
+			reach := lookaheadReach(st, dt)
 			if waypoint == target && orders[i].Queued > 0 {
 				// a goal with more behind it is passed like a waypoint, then the next one is aimed at
 				from := cells[i].ID
 				if leg.Active {
 					from = leg.From
 				}
-				if !passed(have, want, s.unwrap(have, s.grid.CellCenter(from))) {
-					s.aim(st, have, s.ahead(have, want, p, waypoint, target), dt)
-					st.RequestSpeed(st.MaxSpeed)
+				if !passed(have, want, s.unwrap(have, s.grid.CellCenter(from)), reach) {
+					s.drive(st, bases[i].Vel.Dir, have, s.ahead(have, want, p, waypoint, target), reach, st.MaxSpeed)
 					continue
 				}
 				if leg.Active {
@@ -252,8 +257,7 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 				orders[i].advance()
 				next := s.unwrap(have, s.grid.CellCenter(orders[i].Target))
 				s.route = append(s.route[:0], next)
-				s.aim(st, have, s.route, dt)
-				st.RequestSpeed(st.MaxSpeed)
+				s.drive(st, bases[i].Vel.Dir, have, s.route, reach, st.MaxSpeed)
 				continue
 			}
 
@@ -262,9 +266,8 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 				if leg.Active {
 					from = leg.From
 				}
-				if !passed(have, want, s.unwrap(have, s.grid.CellCenter(from))) {
-					s.aim(st, have, s.ahead(have, want, p, waypoint, target), dt)
-					st.RequestSpeed(st.MaxSpeed)
+				if !passed(have, want, s.unwrap(have, s.grid.CellCenter(from)), reach) {
+					s.drive(st, bases[i].Vel.Dir, have, s.ahead(have, want, p, waypoint, target), reach, st.MaxSpeed)
 					continue
 				}
 				if leg.Active {
@@ -277,16 +280,16 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 					p.Index++
 				}
 				// keep going: the next waypoint is aimed at now, reserved next tick
-				s.aim(st, have, s.ahead(have, want, p, waypoint, target)[1:], dt)
-				st.RequestSpeed(st.MaxSpeed)
+				s.drive(st, bases[i].Vel.Dir, have, s.ahead(have, want, p, waypoint, target)[1:], reach, st.MaxSpeed)
 				continue
 			}
 
 			dx, dy := want.X-have.X, want.Y-have.Y
 			dist := math.Hypot(dx, dy)
 			if dist > arrivalEpsilon {
-				st.Request(geom.NewVec(dx, dy))
-				st.RequestSpeed(approach(st, dist))
+				dir := geom.NewVec(dx, dy)
+				st.Request(dir)
+				st.RequestSpeed(approach(st, dist) * turnFactor(bases[i].Vel.Dir, dir))
 				continue
 			}
 
@@ -368,16 +371,37 @@ func (s *navigationSystem) ahead(have, want geom.Vec, p *Path, waypoint, target 
 // maxAhead caps how many centres ahead the lookahead point is sought along.
 const maxAhead = 8
 
-// aim asks st for the heading to the lookahead point on route.
-func (s *navigationSystem) aim(st *world.Steering, have geom.Vec, route []geom.Vec, dt float64) {
-	reach := 0.0
-	if st.TurnRate > 0 {
-		reach = st.Speed * dt / st.TurnRate
-	}
+// drive asks st for the heading to the lookahead point on route and for speed, the less the
+// sharper the turn.
+func (s *navigationSystem) drive(st *world.Steering, heading, have geom.Vec, route []geom.Vec, reach, speed float64) {
 	at := lookahead(have, route, reach)
-	if at != have {
-		st.Request(geom.NewVec(at.X-have.X, at.Y-have.Y))
+	if at == have {
+		st.RequestSpeed(speed)
+		return
 	}
+	dir := geom.NewVec(at.X-have.X, at.Y-have.Y)
+	st.Request(dir)
+	st.RequestSpeed(speed * turnFactor(heading, dir))
+}
+
+// lookaheadReach is the turning radius at the current speed: how far ahead to look.
+func lookaheadReach(st *world.Steering, dt float64) float64 {
+	if st.TurnRate <= 0 {
+		return 0
+	}
+	return st.Speed * dt / st.TurnRate
+}
+
+// turnCrawl is the share of speed kept through the sharpest turn.
+const turnCrawl = 0.2
+
+// turnFactor scales speed by how far dir is from heading: straight on keeps it, a U-turn crawls.
+func turnFactor(heading, dir geom.Vec) float64 {
+	h, d := math.Hypot(heading.X, heading.Y), math.Hypot(dir.X, dir.Y)
+	if h == 0 || d == 0 {
+		return 1
+	}
+	return min(max((heading.X*dir.X+heading.Y*dir.Y)/(h*d), turnCrawl), 1)
 }
 
 // lookahead is the point reach along the polyline have → route[0] → route[1] …, or its end.
@@ -404,11 +428,15 @@ func lookahead(have geom.Vec, route []geom.Vec, reach float64) geom.Vec {
 	return at
 }
 
-// passed reports have beyond the plane through w perpendicular to the segment from → w.
-func passed(have, w, from geom.Vec) bool {
+// passed reports w left behind: have beyond the plane through w perpendicular to from → w, or
+// within reach of w, where the lookahead already looks past it.
+func passed(have, w, from geom.Vec, reach float64) bool {
+	if math.Hypot(have.X-w.X, have.Y-w.Y) <= max(reach, arrivalEpsilon) {
+		return true
+	}
 	ax, ay := w.X-from.X, w.Y-from.Y
 	if ax == 0 && ay == 0 {
-		return math.Hypot(have.X-w.X, have.Y-w.Y) <= arrivalEpsilon
+		return false
 	}
 	return (have.X-w.X)*ax+(have.Y-w.Y)*ay >= 0
 }

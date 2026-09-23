@@ -326,3 +326,112 @@ func TestNavigation_QueuedGoalIsPassedByProjection(t *testing.T) {
 		t.Error("the leg onto the passed goal is still active")
 	}
 }
+
+// heading turns the unit to face dir at the given speed, as if already under way.
+func (pw *profiledWorld) heading(dir geom.Vec, speed float64) {
+	pw.q.All()
+	for pw.q.Next() {
+		cur := pw.q.Cursor()
+		pw.pos.Slice(cur)[0].Vel = world.Velocity{Dir: dir, Value: speed}
+	}
+}
+
+func TestNavigation_ASharpTurnSlowsTheUnit(t *testing.T) {
+	pw := newProfiledWorld(t, 8, 1, board.CellID(0), MoveOrder{}, world.Steering{}, true)
+	// under way westwards at full speed, with the goal to the east: a U-turn before anything else
+	profile := world.Steering{MaxSpeed: 64, Accel: 400, V0: 64, TurnRate: 0.1, Speed: 64}
+	pw = newProfiledWorld(t, 8, 1, pw.cellAt(2, 0), MoveOrder{Target: pw.cellAt(7, 0)}, profile, true)
+	pw.heading(geom.NewVec(-1, 0), 64)
+
+	slowest, slowestAt := 64.0, 0
+	recovered := false
+	for tick := range 60 * 20 {
+		vel, _, ordered := pw.tick()
+		if !ordered {
+			break
+		}
+		if tick < 60 && vel.Value < slowest {
+			slowest, slowestAt = vel.Value, tick
+		}
+		if tick > slowestAt && vel.Value == 64 {
+			recovered = true
+		}
+	}
+	if slowest > 64*turnCrawl*1.5 {
+		t.Errorf("slowest speed through the U-turn was %v, want it down near the crawl (%v)", slowest, 64*turnCrawl)
+	}
+	if !recovered {
+		t.Error("the unit never got back to full speed once it faced its goal")
+	}
+}
+
+func TestTurnFactor(t *testing.T) {
+	east, west, north := geom.NewVec(1, 0), geom.NewVec(-1, 0), geom.NewVec(0, 1)
+	for name, tc := range map[string]struct {
+		heading, dir geom.Vec
+		want         float64
+	}{
+		"straight on keeps full speed": {east, east, 1},
+		"a right angle crawls":         {east, north, turnCrawl},
+		"a U-turn crawls":              {east, west, turnCrawl},
+		"no heading yet keeps full":    {geom.Vec{}, east, 1},
+	} {
+		if got := turnFactor(tc.heading, tc.dir); got != tc.want {
+			t.Errorf("%s: turnFactor = %v, want %v", name, got, tc.want)
+		}
+	}
+}
+
+func TestPassed_WithinTheLookaheadCountsAsPassed(t *testing.T) {
+	from, w := geom.NewVec(0, 0), geom.NewVec(10, 0)
+	if passed(geom.NewVec(7, 0), w, from, 0) {
+		t.Error("3 short of the plane with no reach counts as passed")
+	}
+	if !passed(geom.NewVec(7, 0), w, from, 4) {
+		t.Error("3 short of the plane but within a reach of 4 does not count as passed")
+	}
+	if !passed(geom.NewVec(12, 3), w, from, 0) {
+		t.Error("beyond the plane does not count as passed")
+	}
+}
+
+func TestNavigation_ALegIsTurnedRoundWhenTheRouteGoesBack(t *testing.T) {
+	grid := board.DefaultGrids{}.Square(5, 1, 10)
+	terrain := board.NewTerrainMap()
+	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	occupancy := &board.SingleOccupancy{}
+	nav := newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy)
+	at := func(x uint32) board.CellID { c, _ := grid.CellIndex(x, 0); return c }
+
+	var cell goke.Comp[board.Cell]
+	var pos goke.Comp[world.Base]
+	var order goke.Comp[MoveOrder]
+	var profile goke.Comp[world.Steering]
+	var q *goke.Query
+	ecs := goke.New()
+	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		f := si.NewFactory(&cell, &pos, &order, &profile)
+		f.Create(1)
+		f.Next()
+		id := f.Cursor.IDs[0]
+		cell.Slice(&f.Cursor)[0] = board.Cell{ID: at(2)}
+		pos.Slice(&f.Cursor)[0].Pos = world.Position{AABB: geomBox(27, 5, 4)} // just into cell 2, on a leg from 1
+		mt := MoveOrder{Target: at(0), Leg: Leg{From: at(1), To: at(2), Active: true}}
+		mt.Path.Steps[0], mt.Path.Steps[1], mt.Path.Length = at(1), at(0), 2 // the route back home
+		order.Slice(&f.Cursor)[0] = mt
+		profile.Slice(&f.Cursor)[0] = world.Steering{MaxSpeed: 20}
+		for _, c := range mt.Leg.cells() {
+			occupancy.Enter(c, id)
+		}
+		q = si.NewQueryBuilder(&cell, &order).Build()
+	}})
+	h := ecs.RegSys(nav)
+	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) { ctx.Run(h, d); ctx.Sync() })
+
+	ecs.Tick(time.Second / 60)
+
+	_, mt := readCellAndMoveOrder(t, q, &cell, &order)
+	if !mt.Leg.Active || mt.Leg.From != at(2) || mt.Leg.To != at(1) {
+		t.Errorf("Leg = %+v, want it turned round to 2 -> 1 so the unit goes straight back", mt.Leg)
+	}
+}

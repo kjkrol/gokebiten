@@ -69,16 +69,23 @@ as today). As the point passes a bend in the path, the requested heading starts 
 the unit reaches the cell, and the `SteeringSystem` carries it round the arc. With `TurnRate = 0`
 the point is the next waypoint and the unit moves as it does today.
 
-Speed stays constant along the route. Optionally it scales with `max(cos θ, floor)` of the angle
-between `Vel.Dir` and `Want`, so a sharp bend slows the unit rather than stopping it. Slowing to a
+Speed scales with `max(cos θ, 0.2)` of the angle between the heading and the requested
+direction: straight on keeps full speed, a sharp bend slows the unit, a U-turn crawls — so the
+turning radius shrinks with the turn and a unit turns round almost on the spot. Slowing to a
 halt happens only at the end: `WantSpeed = 0` from the braking distance, then the nudge onto the
 goal's centre as today.
 
 ## 3. Passing a waypoint is not being near its centre
 
 A waypoint is passed when the unit's projection onto the waypoint's segment goes beyond the
-segment's length — it has crossed the plane perpendicular to the segment at the waypoint. It
-never has to touch the centre. `arrivalEpsilon` remains for the final goal only.
+segment's length — it has crossed the plane perpendicular to the segment at the waypoint — or
+when the unit is within the lookahead reach of it, since from there the lookahead already looks
+past it. Without the second rule a route that folds back at the waypoint keeps the unit circling
+in front of the plane forever. It never has to touch the centre. `arrivalEpsilon` remains for the
+final goal only.
+
+A new route that goes back the way the current leg came turns the leg round on the spot — the
+same cells are held — so a unit ordered back does not first finish the step it was on.
 
 ## 4. Entering a cell is its own event
 
