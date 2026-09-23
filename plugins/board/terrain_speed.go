@@ -5,8 +5,7 @@ import (
 	"github.com/kjkrol/gram/plugins/world"
 )
 
-// TerrainSpeedModifier scales Velocity by 1/cost for whichever cell an
-// entity currently occupies — implements world.SpeedModifier.
+// TerrainSpeedModifier scales the speed by 1/Cost of the cell under the entity's centre.
 type TerrainSpeedModifier struct {
 	grid    Grid
 	terrain Terrain

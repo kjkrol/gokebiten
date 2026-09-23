@@ -10,7 +10,8 @@ type Terrain interface {
 // CellKind is a named terrain kind: its movement properties and the sprite drawn for it.
 type CellKind struct {
 	Name string
-	// Cost is relative to 1 (baseline); Passable gates entry entirely.
+	// Cost 1 is full speed and the baseline path weight; above 1 the cell slows an entity and costs
+	// more to plan through, below 1 is a boost — a game's choice, still capped by the move's step.
 	Cost     float64
 	Passable bool
 	SpriteID render.SpriteID

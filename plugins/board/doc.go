@@ -16,7 +16,8 @@
 //
 // A [CellID] names one cell; [Cell] is an entity's current one. A [CellKind] is a named terrain:
 // its movement cost, whether it is passable, and the sprite drawn for it; kinds are created
-// through the Plugin's [CellKindDict]. [Terrain] is what a cell answers about itself.
+// through the Plugin's [CellKindDict]. Cost 1 is full speed and the baseline path weight; above 1
+// slows and costs more to plan through; below 1 is a boost a game may choose to offer. [Terrain] is what a cell answers about itself.
 //
 // # Occupancy
 //
