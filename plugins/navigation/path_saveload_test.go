@@ -11,7 +11,8 @@ import (
 func TestMoveTo_RoundTrip(t *testing.T) {
 	path := t.TempDir() + "/save.bin"
 
-	want := navigation.MoveOrder{Target: board.CellID(7), Path: navigation.Path{Length: 3, Index: 1}}
+	want := navigation.MoveOrder{Target: board.CellID(7), Path: navigation.Path{Length: 3, Index: 1}, Queued: 2}
+	want.Waypoints[0], want.Waypoints[1] = board.CellID(9), board.CellID(11)
 	want.Path.Steps[0] = board.CellID(10)
 	want.Path.Steps[1] = board.CellID(11)
 	want.Path.Steps[2] = board.CellID(12)

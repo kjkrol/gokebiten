@@ -286,7 +286,7 @@ func TestCommandSystem_Update_RetargetMidLegKeepsLeg(t *testing.T) {
 		ctx.Sync()
 	})
 
-	cmdState.PendingTarget = &newTarget
+	cmdState.Pending = &MoveCommand{Cell: newTarget}
 	ecs.Tick(time.Second)
 
 	_, mt := readCellAndMoveOrder(t, q, &cell, &order)

@@ -115,12 +115,15 @@ decision (`board.CellKind`), and both answers already have their machinery:
 
 ## 7. Waypoints
 
-A `MoveOrder` keeps a queue of goals, not one `Target`. The path is planned to the nearest, and
-the lookahead point runs through a waypoint into the next segment, so the unit does not stop at
-the intermediate ones; it brakes only before the last. Navigation's default bindings, in the
-sense of [views.md](views.md): right click → `MoveTo{Cell}`, "Move here" (replaces the queue);
-Shift + right click → `AddWaypoint{Cell}`, "Add waypoint" (appends). Today's
-`DefaultCommandEventHandler` is the first of these.
+A `MoveOrder` keeps a queue of up to `MaxWaypoints` goals behind its `Target`. A goal with more
+behind it is passed by projection like a waypoint, the next becomes the `Target` and is aimed at in
+the same tick, so the unit does not stop at the intermediate ones; it brakes only before the
+last. Navigation's default bindings, in the sense of [views.md](views.md): right click →
+`MoveTo{Cell}`, "Move here" (replaces the order and its queue); Shift + right click →
+`AddWaypoint{Cell}`, "Add waypoint" (appends; an idle unit gets a fresh order). Today
+`DefaultCommandEventHandler` does both through `MoveCommand{Cell, Append}`; the labelled binding
+comes with the players layer. The route renderer draws the way to every queued goal, planning
+each leg once and keeping it until the goals change.
 
 ## 8. Drawing the route is a choice of style
 

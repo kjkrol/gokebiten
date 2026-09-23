@@ -22,7 +22,8 @@ type Plugin struct {
 	board  *board.Board
 	module *module
 
-	res *Resources
+	res    *Resources
+	finder *pathFinder
 
 	pathSprites  PathSprites
 	pathRenderer *PathRenderer
@@ -49,6 +50,10 @@ func (p *Plugin) Install(ctx plugin.Installer) error {
 
 	occupancy := p.boardPlugin.Occupancy()
 	finder := newPathFinder(brd, brd, occupancy)
+	p.finder = finder
+	if p.pathRenderer != nil {
+		p.pathRenderer.finder = finder
+	}
 	navSys := newNavigationSystem(finder, brd, brd, occupancy)
 	navSys.BindSpace(p.worldPlugin.Space())
 
@@ -69,6 +74,7 @@ func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
 func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
 	p.pathRenderer = NewPathRenderer(p.camera, p.board, atlas, p.pathSprites)
 	p.pathRenderer.BindSpace(p.worldPlugin.Space())
+	p.pathRenderer.finder = p.finder
 }
 
 // Renderer returns this plugin's own render.Renderer, or nil unless WithRenderer was called.

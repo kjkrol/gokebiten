@@ -209,8 +209,9 @@ shows how much of it is boilerplate vs. real behavior.
 - **`navigation`** — pathfinding/movement toward a `MoveOrder` across a
   `board`. A navigated unit carries a `world.Steering` profile: navigation only asks it for a
   heading (at a lookahead point, so turns start before the bend) and for its own top speed, braking
-  from the profile before the goal; a waypoint is passed by projection, the goal by radius. Depends
-  on `board` and `world`.
+  from the profile before the goal; a waypoint is passed by projection, the goal by radius. A
+  `MoveOrder` queues up to `MaxWaypoints` further goals (Shift + right click appends). Depends on
+  `board` and `world`.
 - **`selection`** — mouse click/drag → `Selected` tag on `world` entities.
   Depends on `world`.
 - **`vision`** — narrowed perception: a `Sight` cone scanned against `world`'s

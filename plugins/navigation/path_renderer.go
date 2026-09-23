@@ -10,6 +10,7 @@ import (
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/render"
+	"github.com/kjkrol/uid"
 )
 
 func pathCells(cell board.Cell, mt MoveOrder) []board.CellID {
@@ -39,6 +40,10 @@ type PathRenderer struct {
 	sprites PathSprites
 	batch   *render.QuadBatch
 	space   *aabbworld.Space
+
+	// finder plans the routes between queued goals for the preview; nil draws the goals alone.
+	finder   *pathFinder
+	previews map[uid.UID64]*preview
 
 	query *goke.Query
 	base  goke.Comp[world.Base]
@@ -72,6 +77,9 @@ func (r *PathRenderer) Draw(screen *ebiten.Image) {
 			for i := range cursor.IDs {
 				center := board.Center(bases[i].Pos)
 				r.drawPath(center, bases[i].Vel.Dir, pathCells(cells[i], orders[i]))
+				for _, route := range r.queued(cursor.IDs[i], &orders[i]) {
+					r.drawRoute(route)
+				}
 			}
 		}
 	}
@@ -99,6 +107,64 @@ func (r *PathRenderer) drawPath(entityCenter, travel geom.Vec, cells []board.Cel
 		dirOut := directionBetween(center, r.grid.CellCenter(cells[i+1]), r.space.Width, r.space.Height, r.space.Edges)
 		r.appendCellSprite(c, r.sprites.spoke(dirOut))
 	}
+}
+
+// drawRoute draws a route between two goals: spokes along it and a dot on its end.
+func (r *PathRenderer) drawRoute(cells []board.CellID) {
+	for i, c := range cells {
+		center := r.grid.CellCenter(c)
+		if i > 0 {
+			r.appendCellSprite(c, r.sprites.spoke(directionBetween(center, r.grid.CellCenter(cells[i-1]), r.space.Width, r.space.Height, r.space.Edges)))
+		}
+		if i == len(cells)-1 {
+			r.appendCellSprite(c, r.sprites.Dot)
+			continue
+		}
+		r.appendCellSprite(c, r.sprites.spoke(directionBetween(center, r.grid.CellCenter(cells[i+1]), r.space.Width, r.space.Height, r.space.Edges)))
+	}
+}
+
+// preview is the routes between one order's queued goals, kept until the goals change.
+type preview struct {
+	goals  [MaxWaypoints + 1]board.CellID
+	queued uint8
+	routes [][]board.CellID
+}
+
+// queued is the routes from the order's Target through each queued goal, planned once per change
+// of the goals; a goal no route reaches is drawn on its own.
+func (r *PathRenderer) queued(id uid.UID64, mt *MoveOrder) [][]board.CellID {
+	if mt.Queued == 0 {
+		delete(r.previews, id)
+		return nil
+	}
+	var goals [MaxWaypoints + 1]board.CellID
+	goals[0] = mt.Target
+	copy(goals[1:], mt.Waypoints[:mt.Queued])
+	if pv := r.previews[id]; pv != nil && pv.queued == mt.Queued && pv.goals == goals {
+		return pv.routes
+	}
+	pv := &preview{goals: goals, queued: mt.Queued}
+	for k := 0; k < int(mt.Queued); k++ {
+		from, to := goals[k], goals[k+1]
+		route := []board.CellID{from}
+		if r.finder != nil {
+			if path, ok := r.finder.findPath(id, from, to); ok {
+				for _, step := range path.Steps[:path.Length] {
+					route = append(route, step)
+				}
+			}
+		}
+		if route[len(route)-1] != to {
+			route = append(route, to)
+		}
+		pv.routes = append(pv.routes, route)
+	}
+	if r.previews == nil {
+		r.previews = map[uid.UID64]*preview{}
+	}
+	r.previews[id] = pv
+	return pv.routes
 }
 
 func (r *PathRenderer) appendCellSprite(c board.CellID, sprite render.SpriteID) {

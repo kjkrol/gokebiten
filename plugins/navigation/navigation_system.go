@@ -13,13 +13,40 @@ import (
 	"github.com/kjkrol/uid"
 )
 
-// MoveOrder commands an entity to path toward Target until it arrives —
-// navigationSystem removes it once Target is reached.
+// MaxWaypoints bounds the goals queued behind a MoveOrder's Target.
+const MaxWaypoints = 8
+
+// MoveOrder commands an entity to path toward Target, then through each queued goal in turn;
+// navigationSystem removes it once the last is reached.
 type MoveOrder struct {
-	Target board.CellID
-	Path   Path
-	Leg    Leg
-	Waited time.Duration
+	Target    board.CellID
+	Waypoints [MaxWaypoints]board.CellID // goals after Target, in order
+	Queued    uint8                      // how many of Waypoints are in use
+	Path      Path
+	Leg       Leg
+	Waited    time.Duration
+}
+
+// Enqueue adds a goal after the last queued one; false when the queue is full.
+func (m *MoveOrder) Enqueue(c board.CellID) bool {
+	if int(m.Queued) >= MaxWaypoints {
+		return false
+	}
+	m.Waypoints[m.Queued] = c
+	m.Queued++
+	return true
+}
+
+// advance makes the next queued goal the Target and drops the Path; false with nothing queued.
+func (m *MoveOrder) advance() bool {
+	if m.Queued == 0 {
+		return false
+	}
+	m.Target = m.Waypoints[0]
+	copy(m.Waypoints[:], m.Waypoints[1:m.Queued])
+	m.Queued--
+	m.Path = Path{}
+	return true
 }
 
 // Leg is the single step an entity is travelling: every cell it holds in
@@ -204,6 +231,31 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 
 			have := board.Center(bases[i].Pos)
 			want := s.unwrap(have, s.grid.CellCenter(waypoint))
+
+			if waypoint == target && orders[i].Queued > 0 {
+				// a goal with more behind it is passed like a waypoint, then the next one is aimed at
+				from := cells[i].ID
+				if leg.Active {
+					from = leg.From
+				}
+				if !passed(have, want, s.unwrap(have, s.grid.CellCenter(from))) {
+					s.aim(st, have, s.ahead(have, want, p, waypoint, target), dt)
+					st.RequestSpeed(st.MaxSpeed)
+					continue
+				}
+				if leg.Active {
+					s.releaseLeg(*leg, id)
+					s.occupancy.Enter(leg.To, id)
+					moveTo(leg.To)
+					*leg = Leg{}
+				}
+				orders[i].advance()
+				next := s.unwrap(have, s.grid.CellCenter(orders[i].Target))
+				s.route = append(s.route[:0], next)
+				s.aim(st, have, s.route, dt)
+				st.RequestSpeed(st.MaxSpeed)
+				continue
+			}
 
 			if waypoint != target {
 				from := cells[i].ID

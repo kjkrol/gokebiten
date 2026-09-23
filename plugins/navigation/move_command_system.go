@@ -11,8 +11,9 @@ import (
 	"github.com/kjkrol/uid"
 )
 
-// moveCommandSystem issues move orders: a right-click gives every Selected
-// entity its own free cell at or around the target, nearest entity first.
+// moveCommandSystem issues move orders: a right-click gives every Selected entity its own free
+// cell at or around the target, nearest entity first; a Shift-click queues the target behind an
+// order already in flight instead.
 type moveCommandSystem struct {
 	pathFinder *pathFinder
 	state      *Resources
@@ -36,11 +37,12 @@ func (s *moveCommandSystem) Init(si *goke.SysInit) {
 }
 
 func (s *moveCommandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
-	if s.state.PendingTarget == nil {
+	if s.state.Pending == nil {
 		return
 	}
-	target := *s.state.PendingTarget
-	s.state.PendingTarget = nil
+	cmd := *s.state.Pending
+	target := cmd.Cell
+	s.state.Pending = nil
 
 	pf := s.pathFinder
 	if !pf.terrain.Kind(target).Passable {
@@ -54,6 +56,10 @@ func (s *moveCommandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 		cells := s.cell.Slice(cursor)
 		orders := s.order.Slice(cursor)
 		for i, id := range cursor.IDs {
+			if cmd.Append && orders != nil {
+				orders[i].Enqueue(target)
+				continue
+			}
 			m := pendingMove{id: id, from: cells[i].ID}
 			if orders != nil && orders[i].Leg.Active {
 				m.leg, m.from = orders[i].Leg, orders[i].Leg.To

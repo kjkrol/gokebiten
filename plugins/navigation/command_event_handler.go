@@ -8,7 +8,7 @@ import (
 	"github.com/kjkrol/gram/plugins/board"
 )
 
-// DefaultCommandEventHandler turns a right-click into a move-order target.
+// DefaultCommandEventHandler turns a right-click into a move-order target; with Shift it queues one.
 type DefaultCommandEventHandler struct {
 	grid   board.Grid
 	camera camera.Camera
@@ -32,6 +32,6 @@ func (h *DefaultCommandEventHandler) HandleEvents(events *control.InputEvents) {
 		if !ok {
 			continue
 		}
-		h.state.PendingTarget = &target
+		h.state.Pending = &MoveCommand{Cell: target, Append: events.Modifiers.Shift}
 	}
 }

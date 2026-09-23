@@ -24,7 +24,7 @@ type profiledWorld struct {
 	q     *goke.Query
 }
 
-func newProfiledWorld(t *testing.T, w, h uint32, start, target board.CellID, profile world.Steering, withSteering bool) *profiledWorld {
+func newProfiledWorld(t *testing.T, w, h uint32, start board.CellID, mt MoveOrder, profile world.Steering, withSteering bool) *profiledWorld {
 	t.Helper()
 	pw := &profiledWorld{grid: board.DefaultGrids{}.Square(w, h, legCellSize)}
 	terrain := board.NewTerrainMap()
@@ -50,7 +50,7 @@ func newProfiledWorld(t *testing.T, w, h uint32, start, target board.CellID, pro
 		pw.id = f.Cursor.IDs[0]
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: start}
 		pos.Slice(&f.Cursor)[0].Pos = world.Position{AABB: board.CellAABB(pw.grid, start, legEntitySize)}
-		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
+		order.Slice(&f.Cursor)[0] = mt
 		if withSteering {
 			steer.Slice(&f.Cursor)[0] = profile
 		}
@@ -89,8 +89,8 @@ func (pw *profiledWorld) cellAt(x, y uint32) board.CellID {
 
 func TestNavigation_TurnsBeforeTheBendAndNeverStops(t *testing.T) {
 	const turnRate = 0.1
-	pw := newProfiledWorld(t, 6, 6, board.CellID(0), board.CellID(0), world.Steering{}, true)
-	pw = newProfiledWorld(t, 6, 6, pw.cellAt(0, 2), pw.cellAt(5, 4), world.Steering{MaxSpeed: 64, TurnRate: turnRate}, true)
+	pw := newProfiledWorld(t, 6, 6, board.CellID(0), MoveOrder{}, world.Steering{}, true)
+	pw = newProfiledWorld(t, 6, 6, pw.cellAt(0, 2), MoveOrder{Target: pw.cellAt(5, 4)}, world.Steering{MaxSpeed: 64, TurnRate: turnRate}, true)
 
 	var prev float64
 	haveHeading := false
@@ -171,9 +171,9 @@ func TestNavigation_PassesAWaypointByProjectionNotDistance(t *testing.T) {
 }
 
 func TestNavigation_BrakesToRestOnTheGoal(t *testing.T) {
-	pw := newProfiledWorld(t, 6, 1, board.CellID(0), board.CellID(0), world.Steering{}, true)
+	pw := newProfiledWorld(t, 6, 1, board.CellID(0), MoveOrder{}, world.Steering{}, true)
 	target := pw.cellAt(5, 0)
-	pw = newProfiledWorld(t, 6, 1, pw.cellAt(0, 0), target, world.Steering{MaxSpeed: 64, Accel: 128, V0: 16}, true)
+	pw = newProfiledWorld(t, 6, 1, pw.cellAt(0, 0), MoveOrder{Target: target}, world.Steering{MaxSpeed: 64, Accel: 128, V0: 16}, true)
 
 	var speeds []float64
 	for range 60 * 20 {
@@ -204,9 +204,9 @@ func TestNavigation_BrakesToRestOnTheGoal(t *testing.T) {
 }
 
 func TestNavigation_LeavesAloneAnEntityWithoutSteering(t *testing.T) {
-	pw := newProfiledWorld(t, 5, 1, board.CellID(0), board.CellID(0), world.Steering{}, true)
+	pw := newProfiledWorld(t, 5, 1, board.CellID(0), MoveOrder{}, world.Steering{}, true)
 	start, target := pw.cellAt(0, 0), pw.cellAt(4, 0)
-	pw = newProfiledWorld(t, 5, 1, start, target, world.Steering{}, false)
+	pw = newProfiledWorld(t, 5, 1, start, MoveOrder{Target: target}, world.Steering{}, false)
 
 	before := pw.grid.CellCenter(start)
 	for range 30 {
@@ -248,4 +248,81 @@ func maxOf(xs []float64) float64 {
 		m = max(m, x)
 	}
 	return m
+}
+
+func TestNavigation_RunsThroughQueuedGoalsWithoutStopping(t *testing.T) {
+	pw := newProfiledWorld(t, 8, 1, board.CellID(0), MoveOrder{}, world.Steering{}, true)
+	mid, last := pw.cellAt(3, 0), pw.cellAt(6, 0)
+	mt := MoveOrder{Target: mid}
+	mt.Enqueue(last)
+	pw = newProfiledWorld(t, 8, 1, pw.cellAt(0, 0), mt, world.Steering{MaxSpeed: 64, Accel: 128, V0: 16}, true)
+
+	passedMid := false
+	for range 60 * 30 {
+		vel, centre, ordered := pw.tick()
+		if !ordered {
+			if !passedMid {
+				t.Fatal("the order ended before the unit had gone past the first goal")
+			}
+			if want := pw.grid.CellCenter(last); centre != want {
+				t.Errorf("came to rest at %v, want the last goal's centre %v", centre, want)
+			}
+			return
+		}
+		if vel.Value <= 0 {
+			t.Fatalf("Velocity.Value = %v while still ordered; a queued goal must not stop the unit", vel.Value)
+		}
+		if centre.X > pw.grid.CellCenter(mid).X {
+			passedMid = true
+		}
+	}
+	t.Fatal("never arrived")
+}
+
+func TestNavigation_QueuedGoalIsPassedByProjection(t *testing.T) {
+	grid := board.DefaultGrids{}.Square(6, 1, 10)
+	terrain := board.NewTerrainMap()
+	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
+	occupancy := &board.SingleOccupancy{}
+	nav := newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy)
+	at := func(x uint32) board.CellID { c, _ := grid.CellIndex(x, 0); return c }
+
+	var cell goke.Comp[board.Cell]
+	var pos goke.Comp[world.Base]
+	var order goke.Comp[MoveOrder]
+	var profile goke.Comp[world.Steering]
+	var q *goke.Query
+	ecs := goke.New()
+	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		f := si.NewFactory(&cell, &pos, &order, &profile)
+		f.Create(1)
+		f.Next()
+		id := f.Cursor.IDs[0]
+		cell.Slice(&f.Cursor)[0] = board.Cell{ID: at(1)}
+		pos.Slice(&f.Cursor)[0].Pos = world.Position{AABB: geomBox(26, 8, 4)} // past cell 2's centre plane, off its centre
+		mt := MoveOrder{Target: at(2), Leg: Leg{From: at(1), To: at(2), Active: true}}
+		mt.Path.Steps[0], mt.Path.Length = at(2), 1
+		mt.Enqueue(at(5))
+		order.Slice(&f.Cursor)[0] = mt
+		profile.Slice(&f.Cursor)[0] = world.Steering{MaxSpeed: 20}
+		for _, c := range mt.Leg.cells() {
+			occupancy.Enter(c, id)
+		}
+		q = si.NewQueryBuilder(&cell, &order).Build()
+	}})
+	h := ecs.RegSys(nav)
+	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) { ctx.Run(h, d); ctx.Sync() })
+
+	ecs.Tick(time.Second / 60)
+
+	_, mt := readCellAndMoveOrder(t, q, &cell, &order)
+	if mt.Target != at(5) || mt.Queued != 0 {
+		t.Errorf("order = target %v, queued %d; want the queued goal promoted and the queue empty", mt.Target, mt.Queued)
+	}
+	if mt.Path.Length != 0 {
+		t.Errorf("Path.Length = %d, want 0 so the route to the new goal is planned afresh", mt.Path.Length)
+	}
+	if mt.Leg.Active {
+		t.Error("the leg onto the passed goal is still active")
+	}
 }

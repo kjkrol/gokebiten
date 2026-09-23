@@ -130,7 +130,7 @@ func TestCommandSystem_Update_SpreadsGroupOverDistinctFreeCells(t *testing.T) {
 		ctx.Sync()
 	})
 
-	cmdState.PendingTarget = &target
+	cmdState.Pending = &MoveCommand{Cell: target}
 	ecs.Tick(time.Second)
 
 	seen := make(map[board.CellID]bool)

@@ -50,7 +50,14 @@ func TestPlugin_Install_WiresBoardForEventHandler(t *testing.T) {
 
 	navPlugin.EventHandler().HandleEvents(events)
 
-	if navPlugin.res.PendingTarget == nil {
-		t.Error("expected a right-click to set Resources.PendingTarget")
+	if navPlugin.res.Pending == nil || navPlugin.res.Pending.Append {
+		t.Errorf("Pending = %+v, want a plain right-click's target", navPlugin.res.Pending)
+	}
+	events = &control.InputEvents{}
+	events.Modifiers.Shift = true
+	events.AddClickEvent(25, 25, ebiten.MouseButtonRight, control.ActionPress)
+	navPlugin.EventHandler().HandleEvents(events)
+	if navPlugin.res.Pending == nil || !navPlugin.res.Pending.Append {
+		t.Errorf("Pending = %+v, want a Shift-click to append", navPlugin.res.Pending)
 	}
 }
