@@ -1,14 +1,17 @@
 package bench_test
 
 import (
+	"image/color"
 	"testing"
 
 	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gram/camera"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/render"
 )
 
 // mover is the row a moving 20x20 box spawns from.
@@ -18,10 +21,18 @@ type mover struct{ x, y float64 }
 // drifting right at 60 units a second across a 4000x4000 torus, and returns its ECS ready to tick
 // the world plugin alone.
 func benchWorld(b *testing.B, ctx *headless, n int) *goke.ECS {
+	return benchWorldViewed(b, ctx, n, 30, 0, nil)
+}
+
+// benchWorldViewed is benchWorld with the lattice spacing given, the camera's viewport set to
+// view x view (0 for the whole world) and arrange run over the world and its kind before the
+// Stage starts.
+func benchWorldViewed(b *testing.B, ctx *headless, n int, spacing int, view uint32, arrange func(*world.Plugin, kind.Of[mover])) *goke.ECS {
 	b.Helper()
 	w := ctx.UseWorld(world.Config{
 		Space:    world.SpaceCfg{Width: 4000, Height: 4000, Edges: aabbworld.Torus},
 		Entities: world.EntitiesCfg{MaxCount: n, MinSize: 1, MaxSize: 100},
+		Camera:   camera.Config{ViewportWidth: view, ViewportHeight: view},
 	})
 	movers := kind.Define[mover](w.Kinds(), "mover", kind.Spec{
 		kind.Load(func(m mover) world.Position {
@@ -35,10 +46,42 @@ func benchWorld(b *testing.B, ctx *headless, n int) *goke.ECS {
 	}
 	entries := make([]kind.Entry, 0, n)
 	for i := range n {
-		entries = append(entries, movers.Entry(mover{float64(10 + (i%side)*30), float64(10 + (i/side)*30)}))
+		entries = append(entries, movers.Entry(mover{float64(10 + (i%side)*spacing), float64(10 + (i/side)*spacing)}))
 	}
 	w.Seed(entries...)
+	if arrange != nil {
+		arrange(w, movers)
+	}
 	return ctx.start(b, w.RunPlan)
+}
+
+// Benchmark_World_Draw gathers one frame of the entity renderer — no screen, nothing drawn — over
+// 5000 boxes spread evenly across the world, with the camera viewing all of it, a quarter, or a
+// twentieth (so a quarter, or a twentieth, of the boxes).
+func Benchmark_World_Draw(b *testing.B) {
+	for _, v := range []struct {
+		name string
+		view uint32
+	}{{"view=100%", 4000}, {"view=25%", 2000}, {"view=5%", 900}} {
+		b.Run(v.name, func(b *testing.B) {
+			ctx := newHeadless()
+			var r render.Renderer
+			benchWorldViewed(b, ctx, 5000, 56, v.view, func(w *world.Plugin, movers kind.Of[mover]) {
+				atlas := render.NewAtlas()
+				atlas.RegisterAt(movers.SpriteID(), 20, render.Solid(color.RGBA{R: 90, G: 200, B: 110, A: 255}))
+				atlas.Close()
+				w.WithRenderer(atlas)
+				r = w.Renderer()
+				ctx.pending = append(ctx.pending, func() []goke.System {
+					return []goke.System{goke.SystemFn{OnInit: r.Init}}
+				})
+			})
+			b.ReportAllocs()
+			for b.Loop() {
+				r.Draw(nil)
+			}
+		})
+	}
 }
 
 // Benchmark_World_Tick is one tick of the world plugin alone: steering, velocity, movement under

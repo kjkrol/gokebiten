@@ -93,7 +93,7 @@ func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
 
 // WithRenderer builds this plugin's own entity renderer, drawing cam-relative sprites from atlas.
 func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
-	p.renderer = newRenderer(p.Res.Camera, atlas, p.Res.Config.Space.Width, p.Res.Config.Space.Height)
+	p.renderer = newRenderer(p.Res.Camera, atlas, p.module.space, p.Res.Config.Space.Width, p.Res.Config.Space.Height)
 }
 
 // Renderer returns this plugin's own render.Renderer, or nil unless WithRenderer was called.

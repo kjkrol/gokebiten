@@ -52,7 +52,10 @@
 // [Appearance] is the sprite an entity is drawn from; [Plugin.WithRenderer] builds the entity
 // [Renderer] over an atlas, and each [AppearanceModifier] it is given ([Renderer.WithModifier],
 // WithOverlay, WithReplace, WithModify, [Facing]) resolves an entity's final draw layers in order.
-// An [AppearanceStrategy] folds one override component into those layers.
+// An [AppearanceStrategy] folds one override component into those layers. The Renderer asks the
+// Space for what lies in the camera's bounds and does that work only for those entities; with the
+// whole world in view it walks every entity. An entity spawned outside Populate is not in the
+// Space until the next Rebuild, so it is drawn from the next tick on.
 //
 // # Telemetry
 //

@@ -24,12 +24,34 @@ the larger scenes is the amortised growth of buffers kept between ticks.
 `Benchmark_World_Tick` is one tick of the world plugin alone: the decision pass, steering and
 velocity folded into each entity's speed, every box moved under the edge rules, and the space
 rebuilt from every entity. `Benchmark_World_PositionScan` is the floor under it: reading every
-entity's `Base` through a goke query, chunk by chunk.
+entity's `Base` through a goke query, chunk by chunk. The boxes stand on a 30-unit lattice, so
+5,000 of them fill one 2130×2130 corner of the 4000×4000 torus.
 
 | Scene | Tick | Position scan |
 |:---|---:|---:|
 | 1,000 boxes, 20×20 each, on a 4000×4000 torus | 40 µs | 2.4 µs |
 | 5,000 boxes, 20×20 each, on the same torus | 199 µs | 12.1 µs |
+
+### Drawing — `Benchmark_World_Draw`
+
+One frame of the entity renderer gathered with no screen (nothing is drawn): the Space is asked
+for what lies in the camera's bounds, the hits are marked in a bitset by entity index, and only
+those entities have their appearance resolved and their quads projected through the camera. With
+the whole world in view the renderer skips the query and walks every entity, as it always did.
+5,000 boxes, 20×20 each, spread evenly over a 4000×4000 torus; the camera views all of it, a
+quarter, or a twentieth. "Before" is the renderer walking every entity and testing each against
+the camera.
+
+| Camera view | Boxes in view | Before | After | Speedup |
+|:---|---:|---:|---:|---:|
+| whole world (4000×4000) | 5,000 | 561 µs | 566 µs | 1.0× |
+| a quarter (2000×2000) | 1,250 | 275 µs | 164 µs | 1.7× |
+| a twentieth (900×900) | 250 | 194 µs | 35 µs | 5.5× |
+
+The remaining cost is per drawn box, ~110 ns each, almost all of it in the camera: projecting a
+box on a torus (`ToScreenQuads`, `Visible`) goes through `math.Mod` several times. That is the
+next thing to optimise if drawing ever shows up; culling has taken the invisible boxes off the
+bill entirely (the query and 5,000 bit tests cost ~20 µs).
 
 ## Collision tick — `Benchmark_Collision_Tick`
 
@@ -76,6 +98,12 @@ scale linearly with the observers.
 * **Collisions cost by population.** At the demo's default scale (8,388 boxes of 5×5) a tick is
   under 3 ms, well inside the 8.3 ms of a 120 TPS step; the crowd that halves the demo's TPS is the
   40% coverage one, where contacts dominate.
+* **Culling is a bitset, not a list.** The renderer marks the Space's hits by entity index and
+  masks the chunk walk, so a frame costs the visible boxes plus one bit test per entity; with the
+  whole world in view it skips the query and is exactly as fast as before. The same shape serves
+  a per-client view on a server: one query per client, one sequential walk for all.
+* **Drawing pays for the camera's wrap arithmetic.** ~110 ns per drawn box, mostly `math.Mod` in
+  projecting a box onto a torus — a camera optimisation waiting for a reason.
 * **Zero allocations once warm.** Every benchmark reports 0 allocs/op after the first ticks have
   grown the buffers.
 

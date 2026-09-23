@@ -54,4 +54,10 @@ func uvSpan(imgSize, spriteSize, shift float32) (float32, float32) {
 	return 1 - visible, 1
 }
 
-func (b *spriteBatch) flush(screen *ebiten.Image) { b.batch.Flush(screen) }
+// flush draws the gathered quads; a nil screen draws nothing.
+func (b *spriteBatch) flush(screen *ebiten.Image) {
+	if screen == nil {
+		return
+	}
+	b.batch.Flush(screen)
+}
