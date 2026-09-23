@@ -16,7 +16,8 @@ type Steering struct {
 	Delay    uint8    // ticks still to wait
 
 	MaxSpeed  float64 // top base speed, world units a second; zero means no profile
-	Accel     float64 // units a second² to speed up and to slow down; zero changes speed at once
+	Accel     float64 // units a second² to speed up; zero changes speed at once
+	Brake     float64 // units a second² to slow down; zero brakes at Accel
 	V0        float64 // the speed the entity has the instant it sets off from standing
 	Speed     float64 // current base speed, written to Velocity.Value each tick
 	WantSpeed float64 // the speed asked for
@@ -47,6 +48,14 @@ func (s *Steering) RequestSpeed(v float64) {
 	s.WantSpeed = min(max(v, 0), s.MaxSpeed)
 }
 
+// Braking is the rate the entity slows at: Brake, or Accel without one.
+func (s *Steering) Braking() float64 {
+	if s.Brake > 0 {
+		return s.Brake
+	}
+	return s.Accel
+}
+
 // advance moves Speed towards WantSpeed as the profile allows, over dt seconds.
 func (s *Steering) advance(dt float64) {
 	want := min(max(s.WantSpeed, 0), s.MaxSpeed)
@@ -58,6 +67,6 @@ func (s *Steering) advance(dt float64) {
 	case want > s.Speed:
 		s.Speed = min(s.Speed+s.Accel*dt, want)
 	case want < s.Speed:
-		s.Speed = max(s.Speed-s.Accel*dt, want)
+		s.Speed = max(s.Speed-s.Braking()*dt, want)
 	}
 }

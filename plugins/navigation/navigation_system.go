@@ -95,6 +95,9 @@ type navigationSystem struct {
 	enteredQuery     *goke.Query
 	cellEnteredClear goke.Comp[CellEntered]
 	clearEditor      *goke.Editor
+
+	// terrainSeen is the terrain version every route was last checked against.
+	terrainSeen uint64
 }
 
 var _ goke.System = (*navigationSystem)(nil)
@@ -129,6 +132,10 @@ func (s *navigationSystem) Init(si *goke.SysInit) {
 
 func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 	s.clearEnteredTags(cb)
+	changed := false
+	if v, ok := s.terrain.(interface{ Version() uint64 }); ok && v.Version() != s.terrainSeen {
+		s.terrainSeen, changed = v.Version(), true
+	}
 
 	s.query.All()
 	for s.query.Next() {
@@ -179,7 +186,18 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 				enteredVals = append(enteredVals, CellEntered{ID: c})
 			}
 
+			if changed && p.Index < p.Length && !s.admitsAll(p.Steps[p.Index:p.Length], domain) {
+				p.Length = 0 // the ground changed under the route: plan again
+			}
+
 			switch {
+			case leg.Active && actual == leg.From && !s.admitsAll(leg.cells()[1:], domain):
+				// the ground ahead no longer takes the unit: let the leg go and stop
+				s.releaseLeg(*leg, id)
+				s.occupancy.Enter(actual, id)
+				*leg = Leg{}
+				p.Length = 0
+				st.RequestSpeed(0)
 			case leg.Active && !slices.Contains(leg.cells(), actual):
 				s.releaseLeg(*leg, id)
 				s.occupancy.Enter(actual, id)
@@ -193,6 +211,13 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 				s.occupancy.Enter(actual, id)
 				moveTo(actual)
 				p.Length = 0
+			}
+
+			if !leg.Active && !s.terrain.Kind(cells[i].ID).Admits(domain) {
+				// stuck where it may not be — frozen in, say: the order waits for the ground to change
+				st.RequestSpeed(0)
+				p.Length = 0
+				continue
 			}
 
 			if !leg.Active && (p.Length == 0 || p.Index >= p.Length) && cells[i].ID != target {
@@ -448,10 +473,11 @@ func passed(have, w, from geom.Vec, reach float64) bool {
 // approach is the speed that brings st to rest on the goal dist away, never below the speed
 // braking would leave it at the arrival radius.
 func approach(st *world.Steering, dist float64) float64 {
-	if st.Accel <= 0 {
+	brake := st.Braking()
+	if brake <= 0 {
 		return st.MaxSpeed
 	}
-	v := max(math.Sqrt(2*st.Accel*dist), math.Sqrt(2*st.Accel*arrivalEpsilon))
+	v := max(math.Sqrt(2*brake*dist), math.Sqrt(2*brake*arrivalEpsilon))
 	return min(v, st.MaxSpeed)
 }
 
@@ -470,6 +496,16 @@ func (s *navigationSystem) reserveLeg(from, to board.CellID, id uid.UID64, domai
 		s.occupancy.Enter(c, id)
 	}
 	return leg, true
+}
+
+// admitsAll reports whether every cell still admits domain.
+func (s *navigationSystem) admitsAll(cells []board.CellID, domain board.Domain) bool {
+	for _, c := range cells {
+		if !s.terrain.Kind(c).Admits(domain) {
+			return false
+		}
+	}
+	return true
 }
 
 // releaseLeg gives up every cell leg holds.

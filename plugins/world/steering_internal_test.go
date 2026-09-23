@@ -329,3 +329,17 @@ func TestSteering_RewritesTheBaseSpeedAheadOfModifiers(t *testing.T) {
 		}
 	}
 }
+
+func TestSteering_BrakesAtItsOwnRateWhenGivenOne(t *testing.T) {
+	st := Steering{MaxSpeed: 100, Accel: 200, Brake: 400, V0: 40, Speed: 100, WantSpeed: 0}
+	speeds, _ := speedTicks(t, st, Velocity{Dir: east, Value: 100}, nil, 2)
+
+	step := 400 * (time.Second / 60).Seconds()
+	if got, want := speeds[0], 100-step; math.Abs(got-want) > 1e-9 {
+		t.Errorf("tick 1: Speed = %v, want %v (one tick of Brake, not Accel)", got, want)
+	}
+	weak := Steering{Accel: 200, Brake: 25}
+	if weak.Braking() != 25 || (&Steering{Accel: 200}).Braking() != 200 {
+		t.Errorf("Braking = %v and %v, want Brake when set and Accel otherwise", weak.Braking(), (&Steering{Accel: 200}).Braking())
+	}
+}

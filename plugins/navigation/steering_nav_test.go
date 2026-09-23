@@ -16,12 +16,13 @@ import (
 // profiledWorld is one navigated entity with a given Steering profile on an open square grid,
 // ticked at 60 TPS through navigation, steering and movement.
 type profiledWorld struct {
-	grid  board.Grid
-	ecs   *goke.ECS
-	id    uid.UID64
-	pos   goke.Comp[world.Base]
-	order goke.OptComp[MoveOrder]
-	q     *goke.Query
+	grid    board.Grid
+	terrain *board.TerrainMap
+	ecs     *goke.ECS
+	id      uid.UID64
+	pos     goke.Comp[world.Base]
+	order   goke.OptComp[MoveOrder]
+	q       *goke.Query
 }
 
 func newProfiledWorld(t *testing.T, w, h uint32, start board.CellID, mt MoveOrder, profile world.Steering, withSteering bool) *profiledWorld {
@@ -29,6 +30,7 @@ func newProfiledWorld(t *testing.T, w, h uint32, start board.CellID, mt MoveOrde
 	pw := &profiledWorld{grid: board.DefaultGrids{}.Square(w, h, legCellSize)}
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
+	pw.terrain = terrain
 	occupancy := &board.SingleOccupancy{}
 	nav := newNavigationSystem(newPathFinder(pw.grid, terrain, occupancy), pw.grid, terrain, occupancy)
 	space := testSpace(t)
