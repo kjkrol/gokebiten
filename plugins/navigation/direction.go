@@ -16,32 +16,25 @@ const (
 	Directions    = 360 / DirectionStep
 )
 
-const (
-	DirE  Direction = 0
-	DirNE Direction = 45 / DirectionStep
-	DirN  Direction = 90 / DirectionStep
-	DirNW Direction = 135 / DirectionStep
-	DirW  Direction = 180 / DirectionStep
-	DirSW Direction = 225 / DirectionStep
-	DirS  Direction = 270 / DirectionStep
-	DirSE Direction = 315 / DirectionStep
-)
-
 const directionEpsilon = 1e-6
+
+// DirectionAt is the Direction nearest deg degrees counter-clockwise from east.
+func DirectionAt(deg float64) Direction {
+	k := int(math.Round(deg/DirectionStep)) % Directions
+	if k < 0 {
+		k += Directions
+	}
+	return Direction(k)
+}
 
 // directionBetween is the nearest Direction from have to want, the short way round a wrapping axis.
 func directionBetween(have, want geom.Vec, width, height uint32, edges aabbworld.Edges) Direction {
 	dx := shortestAxisDelta(have.X, want.X, width, edges.WrapsX())
 	dy := shortestAxisDelta(have.Y, want.Y, height, edges.WrapsY())
 	if math.Abs(dx) < directionEpsilon && math.Abs(dy) < directionEpsilon {
-		return DirS
+		return DirectionAt(270) // straight down: a placeholder for a step of no length
 	}
-	deg := math.Atan2(-dy, dx) * 180 / math.Pi
-	k := int(math.Round(deg/DirectionStep)) % Directions
-	if k < 0 {
-		k += Directions
-	}
-	return Direction(k)
+	return DirectionAt(math.Atan2(-dy, dx) * 180 / math.Pi)
 }
 
 // Angle is the Direction in degrees, counter-clockwise from east.
