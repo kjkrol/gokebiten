@@ -21,14 +21,18 @@ func TestRenderer_Init_QueryMatchesOnlySelectedEntity(t *testing.T) {
 		t.Fatal("sanity check failed: expected the other entity to remain unselected")
 	}
 
-	r := NewRenderer(h.sys.camera, h.state)
+	r := NewRenderer(h.sys.camera, h.state, h.tags.Selected)
 	h.ecs.RegSys(goke.SystemFn{OnInit: func(si *goke.SysInit) { r.Init(si) }})
 
 	r.query.All()
 	found := map[uid.UID64]bool{}
 	for r.query.Next() {
-		for _, id := range r.query.Cursor().IDs {
-			found[id] = true
+		cur := r.query.Cursor()
+		marks := r.marks.Slice(cur)
+		for i, id := range cur.IDs {
+			if marks[i].Has(r.selected) {
+				found[id] = true
+			}
 		}
 	}
 	if !found[*selectedID] {

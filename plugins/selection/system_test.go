@@ -11,6 +11,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/camera"
 	"github.com/kjkrol/gram/control"
+	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/uid"
 )
@@ -31,7 +32,9 @@ type harness struct {
 	handler   *DefaultEventHandler
 	ecs       *goke.ECS
 	pos       goke.Comp[world.Base]
-	tag       goke.Comp[Selectable]
+	tag       goke.Comp[plugin.Tags[Family]]
+	marks     goke.Comp[plugin.Tags[Family]]
+	tags      Tags
 	selectedQ *goke.Query
 	handle    goke.Runnable
 	pending   []pendingSeed
@@ -51,10 +54,11 @@ func newHarness(t *testing.T) *harness {
 	cam := camera.NewFromSpace(1000, 1000, 0)
 
 	state := &Resources{}
-	sys := NewSelectionSystem(state, space, cam)
+	tags := Tags{Selectable: 0, Selected: 1}
+	sys := NewSelectionSystem(state, space, cam, tags)
 	handler := NewDefaultEventHandler(state)
 
-	return &harness{t: t, space: space, state: state, sys: sys, handler: handler, ecs: goke.New()}
+	return &harness{t: t, space: space, state: state, sys: sys, handler: handler, ecs: goke.New(), tags: tags}
 }
 
 // seed queues a Selectable size x size entity at (x,y); the returned id is filled in by start.
@@ -75,7 +79,7 @@ func (h *harness) seedPlain(x, y, size float64) *uid.UID64 {
 func (h *harness) start() {
 	h.t.Helper()
 	h.ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		h.selectedQ = si.NewQueryBuilder().Include(goke.Include[Selected]()).Build()
+		h.selectedQ = si.NewQueryBuilder(&h.marks).Build()
 		if len(h.pending) == 0 {
 			return
 		}
@@ -96,6 +100,9 @@ func (h *harness) start() {
 					*spec.id = id
 					aabb := plane.NewAABB(geom.NewVec(spec.x, spec.y), spec.size, spec.size)
 					positions[j].Pos = world.Position{AABB: aabb}
+					if !plain {
+						h.tag.Slice(&f.Cursor)[j] = plugin.Tags[Family](0).With(h.tags.Selectable)
+					}
 					h.items = append(h.items, aabbworld.Item{ID: id, Box: aabb})
 					i++
 				}
@@ -134,9 +141,10 @@ func (h *harness) isSelected(id uid.UID64) bool {
 	h.selectedQ.All()
 	for h.selectedQ.Next() {
 		cur := h.selectedQ.Cursor()
-		for _, got := range cur.IDs {
+		marks := h.marks.Slice(cur)
+		for i, got := range cur.IDs {
 			if got == id {
-				return true
+				return marks[i].Has(h.tags.Selected)
 			}
 		}
 	}

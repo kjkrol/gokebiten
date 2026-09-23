@@ -2,6 +2,7 @@ package board_test
 
 import (
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -155,7 +156,7 @@ func TestStanding_WorksWithoutCollision(t *testing.T) {
 	if err := brd.RegisterBehavior(plugin.Each[board.Mover](f.react)); err != nil {
 		t.Fatal(err)
 	}
-	if err := brd.RegisterBehavior(plugin.Between[board.Mover, board.Mover](func(plugin.Tick, board.Standing) {})); !errors.Is(err, plugin.ErrUnhostedBehavior) {
+	if err := brd.RegisterBehavior(plugin.Between(plugin.Any, plugin.Any, func(plugin.Tick, board.Standing) {})); !errors.Is(err, plugin.ErrUnhostedBehavior) {
 		t.Errorf("Between on board: %v, want ErrUnhostedBehavior", err)
 	}
 	if err := brd.RegisterBehavior(plugin.Each[board.Mover](func(plugin.Tick, *board.Mover, collision.Struck) {})); !errors.Is(err, plugin.ErrUnhostedBehavior) {
@@ -187,4 +188,101 @@ func onlyID(f *footing) uid.UID64 {
 func toPlane(b geom.AABB) plane.AABB {
 	size := b.BottomRight.Sub(b.TopLeft)
 	return plane.NewAABB(b.TopLeft, size.X, size.Y)
+}
+
+func TestStanding_BoxNamesEveryCellTheEntityTouches(t *testing.T) {
+	grid := board.DefaultGrids{}.Square(6, 16, cellSize)
+	start, _ := grid.CellIndex(1, 7)
+	var box geom.AABB
+	record := func(_ plugin.Tick, _ *board.Mover, st board.Standing) { box = st.Box }
+	bw, _ := squareWorldWith(t, plugin.Each[board.Mover](record), mover{cell: start, offset: cellSize / 2})
+	bw.tick()
+	var under []board.CellID
+	grid.CellsUnder(box, func(c board.CellID) { under = append(under, c) })
+	right, _ := grid.CellIndex(2, 7)
+	if len(under) != 2 || !slices.Contains(under, start) || !slices.Contains(under, right) {
+		t.Errorf("a box straddling two cells is under %v, want %v and %v", under, start, right)
+	}
+}
+
+func TestCellEntity_IsOnePerCellAndItsGroundWritesTheTerrain(t *testing.T) {
+	grid := board.DefaultGrids{}.Square(6, 16, cellSize)
+	target, _ := grid.CellIndex(4, 4)
+	bw, _ := squareWorld(t, mover{})
+	bw.tick()
+
+	id := bw.brd.CellEntity(target)
+	if again := bw.brd.CellEntity(target); again != id {
+		t.Fatalf("CellEntity gave %d then %d for one cell, want the same entity", id, again)
+	}
+
+	var cell goke.Comp[board.Cell]
+	var ground goke.Comp[board.Ground]
+	var q *goke.Query
+	bw.ecs.RegSys(goke.SystemFn{OnInit: func(si *goke.SysInit) { q = si.NewQueryBuilder(&cell, &ground).Build() }})
+	snow := board.CellKind{Name: "snow", Cost: 3, Allows: board.Land}
+	found := false
+	for q.All(); q.Next(); {
+		cur := q.Cursor()
+		for i, got := range cur.IDs {
+			if got == id {
+				found = true
+				if cell.Slice(cur)[i].ID != target || ground.Slice(cur)[i].Kind.Name != "grass" {
+					t.Errorf("cell entity holds %v / %q, want %v / grass", cell.Slice(cur)[i].ID, ground.Slice(cur)[i].Kind.Name, target)
+				}
+				ground.Slice(cur)[i].Kind = snow
+			}
+		}
+	}
+	if !found {
+		t.Fatal("the cell entity carries no Cell and Ground")
+	}
+	bw.tick()
+	if got := bw.brd.Res.Logic.Board.Kind(target); got != snow {
+		t.Errorf("terrain under the cell entity is %q after a tick, want snow from its Ground", got.Name)
+	}
+}
+
+func TestDropCellEntity_WritesItsGroundBeforeLettingGo(t *testing.T) {
+	grid := board.DefaultGrids{}.Square(6, 16, cellSize)
+	target, _ := grid.CellIndex(4, 4)
+	var dropping uid.UID64
+	var bw *bodiesWorld
+	drop := func(t plugin.Tick, _ *board.Mover, _ board.Standing) {
+		if dropping != 0 {
+			bw.brd.DropCellEntity(t.CmdBuf, dropping)
+			dropping = 0
+		}
+	}
+	bw, _ = squareWorldWith(t, plugin.Each[board.Mover](drop), mover{})
+	bw.tick()
+
+	id := bw.brd.CellEntity(target)
+	var ground goke.Comp[board.Ground]
+	var q *goke.Query
+	bw.ecs.RegSys(goke.SystemFn{OnInit: func(si *goke.SysInit) { q = si.NewQueryBuilder(&ground).Build() }})
+	set := func(kind board.CellKind) {
+		if !q.Seek(id) {
+			t.Fatal("the cell entity cannot be sought")
+		}
+		ground.At(q.Cursor()).Kind = kind
+	}
+	snow := board.CellKind{Name: "snow", Cost: 3, Allows: board.Land}
+	set(snow)
+	bw.tick()
+	if got := bw.brd.Res.Logic.Board.Kind(target); got != snow {
+		t.Fatalf("terrain is %q after a tick, want snow", got.Name)
+	}
+
+	grass := bw.brd.Res.Logic.Board.Default
+	set(grass) // the effect ended and restored the ground, and the entity goes the same tick
+	dropping = id
+	bw.tick()
+	bw.tick()
+	if got := bw.brd.Res.Logic.Board.Kind(target); got != grass {
+		t.Errorf("terrain is %q after the drop, want grass — the last Ground must land", got.Name)
+	}
+	if again := bw.brd.CellEntity(target); again == id {
+		t.Error("a dropped cell entity is still handed out")
+	}
 }

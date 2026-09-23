@@ -168,7 +168,7 @@ func (d *Detector) struck(i int) Struck {
 // pairSides is who the two boxes of a contact belong to, what they carry, and how it went.
 type pairSides struct {
 	A, B         contactSide
-	tagsA, tagsB uint64
+	tagsA, tagsB plugin.Marks
 
 	impact float64
 	normal geom.Vec
@@ -203,12 +203,12 @@ func (d *Detector) resolve(a, b uid.UID64, pen geom.Vec) (geom.Vec, bool) {
 }
 
 // side looks one entity up, refusing one that no longer carries a Collider.
-func (d *Detector) side(id uid.UID64) (contactSide, uint64, bool) {
+func (d *Detector) side(id uid.UID64) (contactSide, plugin.Marks, bool) {
 	if !d.seek(id) {
 		if d.all.Seek(id) {
 			d.allBase.At(d.all.Cursor()).Caps, d.stale = aabbworld.Plain, true
 		}
-		return contactSide{}, 0, false
+		return contactSide{}, plugin.Marks{}, false
 	}
 	cur := d.lookup.Cursor()
 	return contactSide{

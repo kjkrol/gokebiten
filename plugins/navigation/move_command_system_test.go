@@ -1,6 +1,7 @@
 package navigation
 
 import (
+	"github.com/kjkrol/gram/plugin"
 	"testing"
 	"time"
 
@@ -27,15 +28,15 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 	cam := camera.NewFromSpace(1000, 1000, 0)
 
 	cmdState := &Resources{}
-	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
+	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState, selTags.Selected)
 	cmdHandler := NewDefaultCommandEventHandler(grid, cam, cmdState)
 	selState := &selection.Resources{}
-	selSys := selection.NewSelectionSystem(selState, nil, cam)
+	selSys := selection.NewSelectionSystem(selState, nil, cam, selTags)
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Base]
 	var order goke.Comp[MoveOrder]
-	var selectable goke.Comp[selection.Selectable]
+	var selectable goke.Comp[plugin.Tags[selection.Family]]
 	var readQuery *goke.Query
 	var selectedID, otherID uid.UID64
 
@@ -44,6 +45,9 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 		f := si.NewFactory(&cell, &pos, &order, &selectable)
 		f.Create(2)
 		f.Next()
+		for i := range f.Cursor.IDs {
+			selectable.Slice(&f.Cursor)[i] = selectableMarks
+		}
 		ids := f.Cursor.IDs
 		selectedID, otherID = ids[0], ids[1]
 
@@ -118,10 +122,10 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 	cam := camera.NewFromSpace(1000, 1000, 0)
 
 	cmdState := &Resources{}
-	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
+	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState, selTags.Selected)
 	cmdHandler := NewDefaultCommandEventHandler(grid, cam, cmdState)
 	selState := &selection.Resources{}
-	selSys := selection.NewSelectionSystem(selState, nil, cam)
+	selSys := selection.NewSelectionSystem(selState, nil, cam, selTags)
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Base]
@@ -131,10 +135,11 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 
 	ecs := goke.New()
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		var selectable goke.Comp[selection.Selectable]
+		var selectable goke.Comp[plugin.Tags[selection.Family]]
 		f := si.NewFactory(&cell, &pos, &selectable)
 		f.Create(1)
 		f.Next()
+		selectable.Slice(&f.Cursor)[0] = selectableMarks
 		idleID = f.Cursor.IDs[0]
 
 		cells := cell.Slice(&f.Cursor)
@@ -216,10 +221,10 @@ func TestCommandSystem_Update_UnreachableTargetLeavesInFlightEntityUntouched(t *
 	cam := camera.NewFromSpace(1000, 1000, 0)
 
 	cmdState := &Resources{}
-	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
+	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState, selTags.Selected)
 	cmdHandler := NewDefaultCommandEventHandler(grid, cam, cmdState)
 	selState := &selection.Resources{}
-	selSys := selection.NewSelectionSystem(selState, nil, cam)
+	selSys := selection.NewSelectionSystem(selState, nil, cam, selTags)
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Base]
@@ -229,9 +234,11 @@ func TestCommandSystem_Update_UnreachableTargetLeavesInFlightEntityUntouched(t *
 
 	ecs := goke.New()
 	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		f := si.NewFactory(&cell, &pos, &order)
+		var selectable goke.Comp[plugin.Tags[selection.Family]]
+		f := si.NewFactory(&cell, &pos, &order, &selectable)
 		f.Create(1)
 		f.Next()
+		selectable.Slice(&f.Cursor)[0] = selectableMarks
 		movingID = f.Cursor.IDs[0]
 
 		cells := cell.Slice(&f.Cursor)

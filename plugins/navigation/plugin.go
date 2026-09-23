@@ -9,6 +9,7 @@ import (
 	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/board"
+	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/render"
 )
@@ -18,6 +19,7 @@ import (
 type Plugin struct {
 	boardPlugin *board.Plugin
 	worldPlugin *world.Plugin
+	selected    plugin.Tag[selection.Family]
 
 	board  *board.Board
 	module *module
@@ -34,8 +36,8 @@ type Plugin struct {
 var _ plugin.Plugin = (*Plugin)(nil)
 
 // NewPlugin builds a navigation plugin over a board; entities move as their Steering profile says.
-func NewPlugin(boardPlugin *board.Plugin, worldPlugin *world.Plugin) *Plugin {
-	return &Plugin{boardPlugin: boardPlugin, worldPlugin: worldPlugin, camera: worldPlugin.Camera()}
+func NewPlugin(boardPlugin *board.Plugin, worldPlugin *world.Plugin, selectionPlugin *selection.Plugin) *Plugin {
+	return &Plugin{boardPlugin: boardPlugin, worldPlugin: worldPlugin, camera: worldPlugin.Camera(), selected: selectionPlugin.Tags().Selected}
 }
 
 // =================================================================
@@ -58,7 +60,7 @@ func (p *Plugin) Install(ctx plugin.Installer) error {
 	navSys.BindSpace(p.worldPlugin.Space())
 
 	p.res = &Resources{}
-	moveCommandSystem := newMoveCommandSystem(finder, p.res)
+	moveCommandSystem := newMoveCommandSystem(finder, p.res, p.selected)
 
 	p.module = &module{navigationSystem: navSys, moveCommandSystem: moveCommandSystem}
 	ctx.UseModule(p.module)
@@ -72,7 +74,7 @@ func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
 
 // WithRenderer draws the remaining route of every selected entity; call SetPathSprites first.
 func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
-	p.pathRenderer = NewPathRenderer(p.camera, p.board, atlas, p.pathSprites)
+	p.pathRenderer = NewPathRenderer(p.camera, p.board, atlas, p.pathSprites, p.selected)
 	p.pathRenderer.BindSpace(p.worldPlugin.Space())
 	p.pathRenderer.finder = p.finder
 }

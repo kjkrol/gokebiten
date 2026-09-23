@@ -12,12 +12,12 @@
 //
 // # Sighting
 //
-// A plugin.Between behavior registered here is run once a tick per observer carrying A, with a
-// [Sighting]: the observer, its Base, Sight and Steering (nil for one that cannot be steered), and
-// everything in view carrying B as [Seen] values nearest first — a directed pair, grouped by
-// observer, run even when nothing is in view. A behavior tells its seen entities apart with
-// plugin.Asking and Seen.Carries, and steers only through Steering.Request. Ready-made ones are
-// in plugins/vision/behavior.
+// A plugin.Between behavior registered here is run once a tick per observer carrying tag a,
+// with a [Sighting]: the observer, its Base, Sight and Steering (nil for one that cannot be
+// steered), and everything in view carrying b as [Seen] values nearest first — a directed pair,
+// grouped by observer, run even when nothing is in view. A behavior tells its seen entities
+// apart with Seen.Carries, and steers only through Steering.Request. Ready-made
+// ones, and their tags, are in plugins/vision/behavior.
 //
 // # SightOutline and Renderer
 //

@@ -41,11 +41,12 @@ func fleeRunWith(t *testing.T, tune func(*behavior.Flee), runner fleeBody, facin
 		Entities: world.EntitiesCfg{MaxCount: 16, MinSize: 1, MaxSize: 100},
 	})
 	v := vision.NewPlugin(w)
-	avoid := behavior.NewFlee()
+	tags := behavior.DefineTags(w.Kinds())
+	avoid := behavior.NewFlee(tags)
 	if tune != nil {
 		tune(avoid)
 	}
-	if err := v.RegisterBehavior(plugin.Between[behavior.Skittish, plugin.Anything](avoid.Steer, plugin.Asking[behavior.Threat]())); err != nil {
+	if err := v.RegisterBehavior(plugin.Between(tags.Skittish, plugin.Any, avoid.Steer)); err != nil {
 		t.Fatalf("RegisterBehavior: %v", err)
 	}
 
@@ -62,7 +63,7 @@ func fleeRunWith(t *testing.T, tune func(*behavior.Flee), runner fleeBody, facin
 		kind.Const(world.Velocity{Dir: facing, Value: 1}),
 		kind.Const(vision.Sight{Facing: facing, HalfAngle: math.Pi / 2.5, Radius: 600}),
 		kind.Const(world.Steering{}),
-		kind.Const(behavior.Skittish{}),
+		kind.Tagged(tags.Skittish),
 	})
 	moving := func(d fleeBody) world.Velocity {
 		if d.dir == (geom.Vec{}) {
@@ -71,7 +72,7 @@ func fleeRunWith(t *testing.T, tune func(*behavior.Flee), runner fleeBody, facin
 		return world.Velocity{Dir: d.dir, Value: 1}
 	}
 	harmless := kind.Define[fleeBody](w.Kinds(), "threat", kind.Spec{kind.Load(fleeAt), kind.Load(moving)})
-	predators := kind.Define[fleeBody](w.Kinds(), "predator", kind.Spec{kind.Load(fleeAt), kind.Load(moving), kind.Const(behavior.Threat{})})
+	predators := kind.Define[fleeBody](w.Kinds(), "predator", kind.Spec{kind.Load(fleeAt), kind.Load(moving), kind.Tagged(tags.Threat)})
 
 	w.Seed(runners.Entry(runner))
 	for _, th := range threats {
@@ -86,13 +87,14 @@ func fleeRunWith(t *testing.T, tune func(*behavior.Flee), runner fleeBody, facin
 	}
 
 	var base goke.Comp[world.Base]
+	var marks goke.Comp[plugin.Tags[behavior.Family]]
 	var query *goke.Query
 	var systems []goke.System
 	for _, produce := range ctx.pending {
 		systems = append(systems, produce()...)
 	}
 	systems = append(systems, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		query = si.NewQueryBuilder(&base).Include(goke.Include[behavior.Skittish]()).Build()
+		query = si.NewQueryBuilder(&base, &marks).Build()
 	}})
 	ctx.ecs.Setup(systems...)
 
@@ -102,8 +104,11 @@ func fleeRunWith(t *testing.T, tune func(*behavior.Flee), runner fleeBody, facin
 	var out geom.Vec
 	query.All()
 	for query.Next() {
-		for _, got := range base.Slice(query.Cursor()) {
-			out = got.Vel.Dir
+		cur := query.Cursor()
+		for i, got := range base.Slice(cur) {
+			if marks.Slice(cur)[i].Has(tags.Skittish) {
+				out = got.Vel.Dir
+			}
 		}
 	}
 	return out

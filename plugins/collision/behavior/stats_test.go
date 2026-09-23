@@ -27,7 +27,7 @@ func overlapping(t *testing.T, s *behavior.ContactStats, ticks int) {
 
 	ecs := goke.New()
 	engine := collision.New(space, ecs)
-	if err := engine.RegisterBehavior(plugin.Between[plugin.Anything, plugin.Anything](behavior.CountContacts(s))); err != nil {
+	if err := engine.RegisterBehavior(plugin.Between(plugin.Any, plugin.Any, behavior.CountContacts(s))); err != nil {
 		t.Fatalf("RegisterBehavior: %v", err)
 	}
 

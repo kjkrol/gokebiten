@@ -81,6 +81,7 @@ type mainStage struct {
 	collision *collision.Plugin
 
 	avoidance *vbehavior.Flee
+	tags      vbehavior.Tags
 	avoiding  bool
 	hits      cbehavior.ContactStats
 
@@ -98,22 +99,23 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 		Entities: world.EntitiesCfg{MaxCount: PreyCount + 1, MinSize: RectSize, MaxSize: RectSize},
 	})
 
+	s.tags = vbehavior.DefineTags(s.world.Kinds())
 	s.defineKinds()
 
-	s.avoidance = vbehavior.NewFlee()
+	s.avoidance = vbehavior.NewFlee(s.tags)
 
 	s.vision = vision.NewPlugin(s.world)
 	if err := s.vision.RegisterBehavior(
-		plugin.Between[vbehavior.Skittish, plugin.Anything](s.avoidance.Steer, plugin.Asking[vbehavior.Threat]()),
-		plugin.Between[vbehavior.Predator, vbehavior.Prey](vbehavior.Chase(hunterLooksEvery)),
-		plugin.Between[plugin.Anything, plugin.Anything](faceTravel),
+		plugin.Between(s.tags.Skittish, plugin.Any, s.avoidance.Steer),
+		plugin.Between(s.tags.Predator, s.tags.Prey, vbehavior.Chase(hunterLooksEvery)),
+		plugin.Between(plugin.Any, plugin.Any, faceTravel),
 	); err != nil {
 		return err
 	}
 	s.collision = collision.NewPlugin(s.world)
 	if err := s.collision.RegisterBehavior(
-		plugin.Between[plugin.Anything, plugin.Anything](cbehavior.CountContacts(&s.hits)),
-		plugin.Between[vbehavior.Predator, vbehavior.Prey](s.caught),
+		plugin.Between(plugin.Any, plugin.Any, cbehavior.CountContacts(&s.hits)),
+		plugin.Between(s.tags.Predator, s.tags.Prey, s.caught),
 	); err != nil {
 		return err
 	}
@@ -143,14 +145,12 @@ func (s *mainStage) defineKinds() {
 	kinds := s.world.Kinds()
 	s.prey = kind.Define[body](kinds, "prey", append(sees(),
 		kind.Const(world.Steering{Reflex: 3, TurnRate: 0.12}),
-		kind.Const(vbehavior.Skittish{}),
-		kind.Const(vbehavior.Prey{}),
+		kind.Tagged(s.tags.Skittish, s.tags.Prey),
 		kind.Const(collision.Physics{Restitution: 1}),
 	))
 	s.hunter = kind.Define[body](kinds, "hunter", append(sees(),
 		kind.Const(world.Steering{Reflex: 1, TurnRate: 0.30}),
-		kind.Const(vbehavior.Predator{}),
-		kind.Const(vbehavior.Threat{}),
+		kind.Tagged(s.tags.Predator, s.tags.Threat),
 	))
 }
 

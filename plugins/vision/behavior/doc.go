@@ -5,7 +5,7 @@
 // # Flee
 //
 // [Flee] steers the observer away from whatever is closing on it, and from any [Threat] the
-// moment it comes into view; register Flee.Steer with plugin.Asking[Threat](). [Flee.SetEnabled]
+// moment it comes into view; register Flee.Steer between Skittish and plugin.Any; the tags come from [DefineTags]. [Flee.SetEnabled]
 // switches it off and on without unregistering.
 //
 // # Chase

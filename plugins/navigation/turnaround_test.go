@@ -49,7 +49,8 @@ func newTurnaroundWorld(t *testing.T, collide bool) *turnaroundWorld {
 	for y := uint32(0); y < 4; y++ {
 		brd.Res.Logic.Board.Set(tw.at(0, y), board.CellKind{Cost: 1, Solid: true})
 	}
-	tw.nav = NewPlugin(brd, w)
+	sel := selection.NewPlugin(w)
+	tw.nav = NewPlugin(brd, w, sel)
 	var c *collision.Plugin
 	if collide {
 		c = collision.NewPlugin(w)
@@ -82,7 +83,7 @@ func newTurnaroundWorld(t *testing.T, collide bool) *turnaroundWorld {
 			kind.Const(collision.Physics{}),
 		}
 		if ordered {
-			s = append(s, kind.Const(selection.Selected{}),
+			s = append(s, kind.Tagged(sel.Tags().Selectable, sel.Tags().Selected),
 				kind.Load(func(u unitRow) MoveOrder { return MoveOrder{Target: u.target} }))
 		}
 		return s

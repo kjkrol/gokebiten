@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/board"
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/uid"
@@ -17,9 +18,11 @@ import (
 type moveCommandSystem struct {
 	pathFinder *pathFinder
 	state      *Resources
+	selected   plugin.Tag[selection.Family]
 
 	query   *goke.Query
 	cell    goke.Comp[board.Cell]
+	marks   goke.Comp[plugin.Tags[selection.Family]]
 	order   goke.OptComp[MoveOrder]
 	mover   goke.OptComp[board.Mover]
 	orderID goke.CompID
@@ -28,12 +31,12 @@ type moveCommandSystem struct {
 var _ goke.System = (*moveCommandSystem)(nil)
 
 // newMoveCommandSystem builds a moveCommandSystem issuing move orders via pathFinder.
-func newMoveCommandSystem(pathFinder *pathFinder, state *Resources) *moveCommandSystem {
-	return &moveCommandSystem{state: state, pathFinder: pathFinder}
+func newMoveCommandSystem(pathFinder *pathFinder, state *Resources, selected plugin.Tag[selection.Family]) *moveCommandSystem {
+	return &moveCommandSystem{state: state, pathFinder: pathFinder, selected: selected}
 }
 
 func (s *moveCommandSystem) Init(si *goke.SysInit) {
-	s.query = si.NewQueryBuilder(&s.cell).Optional(&s.order).Optional(&s.mover).Include(goke.Include[selection.Selected]()).Build()
+	s.query = si.NewQueryBuilder(&s.cell, &s.marks).Optional(&s.order).Optional(&s.mover).Build()
 	s.orderID = si.RegComp[MoveOrder]()
 }
 
@@ -53,9 +56,13 @@ func (s *moveCommandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 	for s.query.Next() {
 		cursor := s.query.Cursor()
 		cells := s.cell.Slice(cursor)
+		marks := s.marks.Slice(cursor)
 		orders := s.order.Slice(cursor)
 		movers := s.mover.Slice(cursor)
 		for i, id := range cursor.IDs {
+			if !marks[i].Has(s.selected) {
+				continue
+			}
 			domain := board.DomainAt(movers, i)
 			if !at.Admits(domain) {
 				continue

@@ -9,13 +9,8 @@ import (
 	"github.com/kjkrol/gram/plugins/vision"
 )
 
-// Predator and Prey are ready-made tags for the two sides of a hunt.
-type Predator struct{}
-
-// Prey is what a Predator is shown; anything else it sees is scenery.
-type Prey struct{}
-
-// Chase steers at the nearest entity shown; shown none, it turns a quarter aside every lookEvery.
+// Chase steers at the nearest entity shown — register it between Predator and Prey, so it is
+// shown prey alone; shown none, it turns a quarter aside every lookEvery.
 func Chase(lookEvery time.Duration) func(plugin.Tick, vision.Sighting) {
 	started := time.Now()
 	return func(t plugin.Tick, s vision.Sighting) {

@@ -1,6 +1,7 @@
 package navigation
 
 import (
+	"github.com/kjkrol/gram/plugins/selection"
 	"testing"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -39,7 +40,7 @@ func TestPlugin_Install_WiresBoardForEventHandler(t *testing.T) {
 	boardPlugin := board.NewPlugin(grid, &board.SingleOccupancy{}, worldPlugin)
 	boardPlugin.Res.Logic.Board.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 
-	navPlugin := NewPlugin(boardPlugin, worldPlugin)
+	navPlugin := NewPlugin(boardPlugin, worldPlugin, selection.NewPlugin(worldPlugin))
 	ctx := &stubInstallCtx{ecs: goke.New()}
 	if err := navPlugin.Install(ctx); err != nil {
 		t.Fatalf("Install: %v", err)

@@ -95,10 +95,10 @@ func buildStage(t *testing.T) (*goke.ECS, *mainStage) {
 
 func TestStage_HunterEatsWhatItCatches(t *testing.T) {
 	ecs, stage := buildStage(t)
-	view := bodies(ecs)
+	view := bodies(ecs, stage.tags)
 
-	if len(ids(view.prey)) != PreyCount {
-		t.Fatalf("stage spawned %d prey, want %d", len(ids(view.prey)), PreyCount)
+	if len(view.preyIDs()) != PreyCount {
+		t.Fatalf("stage spawned %d prey, want %d", len(view.preyIDs()), PreyCount)
 	}
 	caught := placeOnPrey(t, stage, view)
 
@@ -106,7 +106,7 @@ func TestStage_HunterEatsWhatItCatches(t *testing.T) {
 		ecs.Tick(time.Second / TPS)
 	}
 
-	if left := ids(view.prey); left[caught] {
+	if left := view.preyIDs(); left[caught] {
 		t.Errorf("prey %v survived being caught", caught)
 	} else if len(left) != PreyCount-1 {
 		t.Errorf("%d prey left, want %d — exactly the caught one gone", len(left), PreyCount-1)
@@ -122,44 +122,62 @@ func placeOnPrey(t *testing.T, stage *mainStage, view bodyView) uid.UID64 {
 	var target world.Position
 	var caught uid.UID64
 	found := false
-	view.prey.All()
-	for view.prey.Next() && !found {
-		cursor := view.prey.Cursor()
-		target, caught, found = view.preyBase.Slice(cursor)[0].Pos, cursor.IDs[0], true
-	}
+	view.eachPrey(func(id uid.UID64, b *world.Base) {
+		if !found {
+			target, caught, found = b.Pos, id, true
+		}
+	})
 	if !found {
 		t.Fatal("no prey to place the hunter on")
 	}
-
-	view.hunters.All()
-	for view.hunters.Next() {
-		cursor := view.hunters.Cursor()
-		stage.world.Space().MoveTo(&view.hunterBase.Slice(cursor)[0].Pos.AABB, target.TopLeft)
-	}
+	view.eachHunter(func(_ uid.UID64, b *world.Base) { stage.world.Space().MoveTo(&b.Pos.AABB, target.TopLeft) })
 	return caught
 }
 
-// bodyView is a live view of the hunters, the prey, and where each of them is.
+// bodyView is a live view of the hunters and the prey — one family query, told apart by tag.
 type bodyView struct {
-	hunters, prey        *goke.Query
-	hunterBase, preyBase *goke.Comp[world.Base]
+	query *goke.Query
+	base  goke.Comp[world.Base]
+	marks goke.Comp[plugin.Tags[behavior.Family]]
+	tags  behavior.Tags
 }
 
-func bodies(ecs *goke.ECS) bodyView {
-	view := bodyView{
-		hunterBase: new(goke.Comp[world.Base]),
-		preyBase:   new(goke.Comp[world.Base]),
-	}
+func bodies(ecs *goke.ECS, tags behavior.Tags) bodyView {
+	view := bodyView{tags: tags}
 	ecs.RegSys(goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		view.hunters = si.NewQueryBuilder(view.hunterBase).Include(goke.Include[behavior.Predator]()).Build()
-		view.prey = si.NewQueryBuilder(view.preyBase).Include(goke.Include[behavior.Prey]()).Build()
+		view.query = si.NewQueryBuilder(&view.base, &view.marks).Build()
 	}})
 	return view
 }
 
+// each calls fn for every entity carrying tag.
+func (v *bodyView) each(tag plugin.Tag[behavior.Family], fn func(id uid.UID64, b *world.Base)) {
+	v.query.All()
+	for v.query.Next() {
+		cursor := v.query.Cursor()
+		bases := v.base.Slice(cursor)
+		marks := v.marks.Slice(cursor)
+		for i, id := range cursor.IDs {
+			if marks[i].Has(tag) {
+				fn(id, &bases[i])
+			}
+		}
+	}
+}
+
+func (v *bodyView) eachPrey(fn func(id uid.UID64, b *world.Base))   { v.each(v.tags.Prey, fn) }
+func (v *bodyView) eachHunter(fn func(id uid.UID64, b *world.Base)) { v.each(v.tags.Predator, fn) }
+
+// preyIDs is every prey alive.
+func (v *bodyView) preyIDs() map[uid.UID64]bool {
+	found := map[uid.UID64]bool{}
+	v.eachPrey(func(id uid.UID64, _ *world.Base) { found[id] = true })
+	return found
+}
+
 func TestStage_PreyTurnsAwayFromTheHunterItSees(t *testing.T) {
 	ecs, stage := buildStage(t)
-	view := bodies(ecs)
+	view := bodies(ecs, stage.tags)
 
 	watched, course := placeHunterAhead(t, stage, view, 60)
 
@@ -184,12 +202,11 @@ func placeHunterAhead(t *testing.T, stage *mainStage, view bodyView, distance fl
 	var from world.Position
 	var course geom.Vec
 	found := false
-	view.prey.All()
-	for view.prey.Next() && !found {
-		cursor := view.prey.Cursor()
-		seen := view.preyBase.Slice(cursor)[0]
-		watched, from, course, found = cursor.IDs[0], seen.Pos, seen.Vel.Dir, true
-	}
+	view.eachPrey(func(id uid.UID64, b *world.Base) {
+		if !found {
+			watched, from, course, found = id, b.Pos, b.Vel.Dir, true
+		}
+	})
 	if !found {
 		t.Fatal("no prey to put the hunter in front of")
 	}
@@ -199,34 +216,15 @@ func placeHunterAhead(t *testing.T, stage *mainStage, view bodyView, distance fl
 		float64(from.TopLeft.Y)+course.Y*distance,
 	)
 
-	view.hunters.All()
-	for view.hunters.Next() {
-		cursor := view.hunters.Cursor()
-		stage.world.Space().MoveTo(&view.hunterBase.Slice(cursor)[0].Pos.AABB, ahead)
-	}
+	view.eachHunter(func(_ uid.UID64, b *world.Base) { stage.world.Space().MoveTo(&b.Pos.AABB, ahead) })
 	return watched, course
 }
 
-func headingOf(view bodyView, id uid.UID64) (geom.Vec, bool) {
-	view.prey.All()
-	for view.prey.Next() {
-		cursor := view.prey.Cursor()
-		for i, got := range cursor.IDs {
-			if got == id {
-				return view.preyBase.Slice(cursor)[i].Vel.Dir, true
-			}
+func headingOf(view bodyView, id uid.UID64) (dir geom.Vec, alive bool) {
+	view.eachPrey(func(got uid.UID64, b *world.Base) {
+		if got == id {
+			dir, alive = b.Vel.Dir, true
 		}
-	}
-	return geom.Vec{}, false
-}
-
-func ids(q *goke.Query) map[uid.UID64]bool {
-	found := map[uid.UID64]bool{}
-	q.All()
-	for q.Next() {
-		for _, id := range q.Cursor().IDs {
-			found[id] = true
-		}
-	}
-	return found
+	})
+	return dir, alive
 }

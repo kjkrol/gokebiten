@@ -26,45 +26,14 @@ type Tick struct {
 	Dt     time.Duration // length of this tick
 }
 
-// Anything stands for "whatever it is" on one side of Between, or both.
-type Anything struct{}
-
-// Between is a behavior for every pair a host meets where one entity carries A and the other B.
-func Between[A, B, P any](react func(t Tick, pair P), asking ...Ask) Behavior {
-	pair := &Pair[P]{
-		self: probeFor[A](), other: probeFor[B](),
-		same:  reflect.TypeFor[A]() == reflect.TypeFor[B](),
+// Between is a behavior for every pair a host meets where one entity carries a and the other b;
+// Any on a side takes whatever is there.
+func Between[FA, FB, P any](a Tag[FA], b Tag[FB], react func(t Tick, pair P)) Behavior {
+	return &Pair[P]{
+		a: tagOf(a), b: tagOf(b),
+		same:  reflect.TypeFor[FA]() == reflect.TypeFor[FB]() && uint8(a) == uint8(b),
 		react: react,
 	}
-	for _, ask := range asking {
-		pair.asks = append(pair.asks, ask.probe)
-	}
-	return pair
-}
-
-// Ask is a tag a behavior wants to be able to look for on the entities it is
-// handed — see Asking.
-type Ask struct{ probe tagProbe }
-
-// Asking declares that a behavior will ask TagSet.Carries about T.
-func Asking[T any]() Ask { return Ask{probe: probeFor[T]()} }
-
-// TagSet is which of a host's tags one entity carries — what a payload hands a
-// behavior so it can tell the entities it was given apart.
-type TagSet struct {
-	mask uint64
-	tags *[]tagProbe
-}
-
-// Carries reports whether the entity carries T, a tag declared with Asking or named in Between.
-func (s TagSet) Carries[T any]() bool {
-	want := reflect.TypeFor[T]()
-	for i, known := range *s.tags {
-		if known.tag() == want {
-			return s.mask&(1<<i) != 0
-		}
-	}
-	panic(fmt.Sprintf("plugin: Carries[%v] asked of a host that was never told about it — declare it with plugin.Asking", want))
 }
 
 // Each is a behavior run on every entity a host visits that carries T.
@@ -72,40 +41,78 @@ func Each[T, P any](react func(t Tick, state *T, about P)) Behavior {
 	return &each[T, P]{react: react}
 }
 
-// tagProbe answers "does this entity carry the tag" on each of a host's
-// queries: by chunk where one is being walked, by entity where one was sought.
-type tagProbe interface {
-	tag() reflect.Type
-	bind(queries []*goke.QueryBuilder)
-	inChunk(query int, cursor *goke.Cursor) bool
-	at(query int, cursor *goke.Cursor) bool
+// MaxFamilies is how many tag families one host's behaviors may name between them.
+const MaxFamilies = 8
+
+// Marks is which tags of a host's families one entity carries — what a host reads from an
+// entity and hands back to Dispatch, and what a payload passes on for Carries.
+type Marks struct {
+	words    [MaxFamilies]uint64
+	families *[]tagProbe
 }
 
-type probe[T any] struct {
-	comps []goke.OptComp[T] // one per host query; never grown once bound
-}
-
-// probeFor is T's probe, or nil for Anything — which every entity satisfies.
-func probeFor[T any]() tagProbe {
-	if reflect.TypeFor[T]() == reflect.TypeFor[Anything]() {
-		return nil
+// Carries reports whether the entity behind m carries t; the host must name t's family in a
+// behavior, or it never read it.
+func (m Marks) Carries[F any](t Tag[F]) bool {
+	if m.families == nil {
+		return false
 	}
-	return &probe[T]{}
+	want := reflect.TypeFor[F]()
+	for i, known := range *m.families {
+		if known.family() == want {
+			return m.words[i]&(1<<t) != 0
+		}
+	}
+	panic(fmt.Sprintf("plugin: Carries asked about family %v, which no behavior of this host names", want))
 }
 
-func (p *probe[T]) tag() reflect.Type { return reflect.TypeFor[T]() }
+// tagged is one side of a Pair with its family erased: which family, which bit, and how to
+// build the family's probe, since a host cannot from the type alone.
+type tagged struct {
+	family reflect.Type // nil for Any
+	bit    uint8
+	make   func() tagProbe
+}
 
-func (p *probe[T]) bind(queries []*goke.QueryBuilder) {
-	p.comps = make([]goke.OptComp[T], len(queries))
+func tagOf[F any](t Tag[F]) tagged {
+	if reflect.TypeFor[F]() == reflect.TypeFor[Anything]() {
+		return tagged{}
+	}
+	return tagged{family: reflect.TypeFor[F](), bit: uint8(t), make: func() tagProbe { return &probe[F]{} }}
+}
+
+// tagProbe reads one family's Tags on each of a host's queries: by chunk where one is being
+// walked, by entity where one was sought.
+type tagProbe interface {
+	family() reflect.Type
+	bind(queries []*goke.QueryBuilder)
+	inChunk(query int, cursor *goke.Cursor, i int) uint64
+	at(query int, cursor *goke.Cursor) uint64
+}
+
+type probe[F any] struct {
+	comps []goke.OptComp[Tags[F]] // one per host query; never grown once bound
+}
+
+func (p *probe[F]) family() reflect.Type { return reflect.TypeFor[F]() }
+
+func (p *probe[F]) bind(queries []*goke.QueryBuilder) {
+	p.comps = make([]goke.OptComp[Tags[F]], len(queries))
 	for i, qb := range queries {
 		qb.Optional(&p.comps[i])
 	}
 }
 
-func (p *probe[T]) inChunk(query int, cursor *goke.Cursor) bool {
-	return p.comps[query].Present(cursor)
+func (p *probe[F]) inChunk(query int, cursor *goke.Cursor, i int) uint64 {
+	if !p.comps[query].Present(cursor) {
+		return 0
+	}
+	return uint64(p.comps[query].Slice(cursor)[i])
 }
 
-func (p *probe[T]) at(query int, cursor *goke.Cursor) bool {
-	return p.comps[query].At(cursor) != nil
+func (p *probe[F]) at(query int, cursor *goke.Cursor) uint64 {
+	if v := p.comps[query].At(cursor); v != nil {
+		return uint64(*v)
+	}
+	return 0
 }

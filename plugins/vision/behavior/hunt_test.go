@@ -37,7 +37,8 @@ func search(t *testing.T, lookEvery time.Duration, hunter huntBody, prey []huntB
 		Entities: world.EntitiesCfg{MaxCount: 16, MinSize: 1, MaxSize: 100},
 	})
 	v := vision.NewPlugin(w)
-	if err := v.RegisterBehavior(plugin.Between[behavior.Predator, behavior.Prey](behavior.Chase(lookEvery))); err != nil {
+	tags := behavior.DefineTags(w.Kinds())
+	if err := v.RegisterBehavior(plugin.Between(tags.Predator, tags.Prey, behavior.Chase(lookEvery))); err != nil {
 		t.Fatalf("RegisterBehavior: %v", err)
 	}
 
@@ -54,9 +55,9 @@ func search(t *testing.T, lookEvery time.Duration, hunter huntBody, prey []huntB
 		kind.Const(world.Velocity{Dir: east, Value: 1}),
 		kind.Const(vision.Sight{Facing: east, HalfAngle: math.Pi / 2.5, Radius: 600}),
 		kind.Const(world.Steering{}),
-		kind.Const(behavior.Predator{}),
+		kind.Tagged(tags.Predator),
 	})
-	preyKind := kind.Define[huntBody](w.Kinds(), "prey", kind.Spec{kind.Load(huntAt), kind.Const(world.Velocity{}), kind.Const(behavior.Prey{})})
+	preyKind := kind.Define[huntBody](w.Kinds(), "prey", kind.Spec{kind.Load(huntAt), kind.Const(world.Velocity{}), kind.Tagged(tags.Prey)})
 	bystanderKind := kind.Define[huntBody](w.Kinds(), "bystander", kind.Spec{kind.Load(huntAt), kind.Const(world.Velocity{})})
 
 	w.Seed(hunters.Entry(hunter))
@@ -71,13 +72,14 @@ func search(t *testing.T, lookEvery time.Duration, hunter huntBody, prey []huntB
 	}
 
 	var base goke.Comp[world.Base]
+	var marks goke.Comp[plugin.Tags[behavior.Family]]
 	var query *goke.Query
 	var systems []goke.System
 	for _, produce := range ctx.pending {
 		systems = append(systems, produce()...)
 	}
 	systems = append(systems, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		query = si.NewQueryBuilder(&base).Include(goke.Include[behavior.Predator]()).Build()
+		query = si.NewQueryBuilder(&base, &marks).Build()
 	}})
 	ctx.ecs.Setup(systems...)
 
@@ -87,8 +89,11 @@ func search(t *testing.T, lookEvery time.Duration, hunter huntBody, prey []huntB
 	var out geom.Vec
 	query.All()
 	for query.Next() {
-		for _, got := range base.Slice(query.Cursor()) {
-			out = got.Vel.Dir
+		cur := query.Cursor()
+		for i, got := range base.Slice(cur) {
+			if marks.Slice(cur)[i].Has(tags.Predator) {
+				out = got.Vel.Dir
+			}
 		}
 	}
 	return out

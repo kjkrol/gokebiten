@@ -31,6 +31,14 @@
 // Spawn puts entities on the roster with [Plugin.Seed]; the engine calls [Plugin.Populate] only
 // when nothing was restored. [GridPlacement] arranges a population on a regular grid.
 //
+// # Tags
+//
+// A tag is a bit of a family: [plugin.Tags] is the family's component, an empty type of the
+// plugin's or the game's names the family, and [Kinds.DefineTag] hands out the bits by name — saved by name, so a build defining them in another order still loads. A
+// kind gives its entities tags with [kind.Tagged]; a query over the family's Tags narrows to
+// the entities carrying any of them, and setting or clearing a bit is a value write, seen the
+// same tick. Behaviors name tags in plugin.Between; the marker components of old are gone.
+//
 // # Bodies
 //
 // [Bodies] spawns entities of a kind reserved with [Kinds.Reserve]: a Base and the caller's own

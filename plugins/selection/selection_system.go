@@ -7,37 +7,34 @@ import (
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/camera"
+	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/uid"
 )
 
 var _ goke.System = (*SelectionSystem)(nil)
 
-// SelectionSystem turns what an event handler wrote into Resources into Selected tags on
-// Selectable entities.
+// SelectionSystem turns what an event handler wrote into Resources into the Selected tag on
+// Selectable entities — a bit flipped in place, seen the same tick.
 type SelectionSystem struct {
 	space  *aabbworld.Space
 	camera camera.Camera
 	state  *Resources
+	tags   Tags
 
-	query        *goke.Query
-	present      goke.OptComp[Selected]
-	selectedAdd  goke.Comp[Selected]
-	addEditor    *goke.Editor
-	removeEditor *goke.Editor
+	query *goke.Query
+	marks goke.Comp[plugin.Tags[Family]]
 }
 
 // NewSelectionSystem builds a SelectionSystem driven by state over space and cam.
-func NewSelectionSystem(state *Resources, space *aabbworld.Space, cam camera.Camera) *SelectionSystem {
-	return &SelectionSystem{state: state, space: space, camera: cam}
+func NewSelectionSystem(state *Resources, space *aabbworld.Space, cam camera.Camera, tags Tags) *SelectionSystem {
+	return &SelectionSystem{state: state, space: space, camera: cam, tags: tags}
 }
 
 func (s *SelectionSystem) Init(si *goke.SysInit) {
-	s.query = si.NewQueryBuilder().Include(goke.Include[Selectable]()).Optional(&s.present).Build()
-	s.addEditor = s.query.NewEditorBuilder(&s.selectedAdd).Build()
-	s.removeEditor = s.query.NewEditorBuilder().Remove(goke.Remove[Selected]()).Build()
+	s.query = si.NewQueryBuilder(&s.marks).Build()
 }
 
-func (s *SelectionSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
+func (s *SelectionSystem) Update(_ *goke.CmdBuf, _ time.Duration) {
 	if s.state.PendingIDs != nil {
 		ids := s.state.PendingIDs
 		s.state.PendingIDs = nil
@@ -45,7 +42,7 @@ func (s *SelectionSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 		for _, id := range ids {
 			hit[id] = struct{}{}
 		}
-		s.applySelection(cb, hit, false)
+		s.applySelection(hit, false)
 	}
 	if s.state.Pending != nil {
 		p := s.state.Pending
@@ -54,47 +51,25 @@ func (s *SelectionSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 		hit := make(map[uid.UID64]struct{})
 		collect := func(id uid.UID64) { hit[id] = struct{}{} }
 		s.space.Query(box, aabbworld.AnyCapability, collect)
-		s.applySelection(cb, hit, p.Additive)
+		s.applySelection(hit, p.Additive)
 	}
 }
 
-// applySelection tags every hit entity Selected and, unless additive, untags the rest.
-func (s *SelectionSystem) applySelection(cb *goke.CmdBuf, hit map[uid.UID64]struct{}, additive bool) {
+// applySelection tags every hit Selectable entity Selected and, unless additive, untags the rest.
+func (s *SelectionSystem) applySelection(hit map[uid.UID64]struct{}, additive bool) {
 	s.query.All()
 	for s.query.Next() {
 		cursor := s.query.Cursor()
-		if !s.present.Present(cursor) {
-			var toAdd []uid.UID64
-			for _, id := range cursor.IDs {
-				if _, ok := hit[id]; ok {
-					toAdd = append(toAdd, id)
-				}
+		marks := s.marks.Slice(cursor)
+		for i, id := range cursor.IDs {
+			if !marks[i].Has(s.tags.Selectable) {
+				continue
 			}
-			if len(toAdd) > 0 {
-				buf := s.query.BeginMigrate(cb)
-				for _, id := range toAdd {
-					buf.Add(id)
-				}
-				buf.Commit(s.addEditor)
+			if _, ok := hit[id]; ok {
+				marks[i] = marks[i].With(s.tags.Selected)
+			} else if !additive {
+				marks[i] = marks[i].Without(s.tags.Selected)
 			}
-			continue
-		}
-
-		if additive {
-			continue
-		}
-		var toRemove []uid.UID64
-		for _, id := range cursor.IDs {
-			if _, ok := hit[id]; !ok {
-				toRemove = append(toRemove, id)
-			}
-		}
-		if len(toRemove) > 0 {
-			buf := s.query.BeginMigrate(cb)
-			for _, id := range toRemove {
-				buf.Add(id)
-			}
-			buf.Commit(s.removeEditor)
 		}
 	}
 }

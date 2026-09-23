@@ -1,6 +1,7 @@
 package navigation
 
 import (
+	"github.com/kjkrol/gram/plugin"
 	"testing"
 	"time"
 
@@ -29,19 +30,20 @@ func newCommandWorld(t *testing.T) *commandWorld {
 	cw := &commandWorld{grid: board.DefaultGrids{}.Square(10, 1, 10), state: &Resources{}}
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
-	cmds := newMoveCommandSystem(newPathFinder(cw.grid, terrain, &board.SingleOccupancy{}), cw.state)
+	cmds := newMoveCommandSystem(newPathFinder(cw.grid, terrain, &board.SingleOccupancy{}), cw.state, selTags.Selected)
 	cw.oldTarget = cw.cellAt(3)
 
 	cw.ecs = goke.New()
 	cw.ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		var cell goke.Comp[board.Cell]
 		var pos goke.Comp[world.Base]
-		var sel goke.Comp[selection.Selected]
+		var sel goke.Comp[plugin.Tags[selection.Family]]
 		var order goke.Comp[MoveOrder]
 
 		f := si.NewFactory(&cell, &pos, &sel, &order)
 		f.Create(1)
 		f.Next()
+		sel.Slice(&f.Cursor)[0] = selectedMarks
 		cw.moving = f.Cursor.IDs[0]
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: cw.cellAt(0)}
 		pos.Slice(&f.Cursor)[0].Pos = world.Position{AABB: board.CellAABB(cw.grid, cw.cellAt(0), 8)}
@@ -50,6 +52,7 @@ func newCommandWorld(t *testing.T) *commandWorld {
 		g := si.NewFactory(&cell, &pos, &sel)
 		g.Create(1)
 		g.Next()
+		sel.Slice(&g.Cursor)[0] = selectedMarks
 		cw.idle = g.Cursor.IDs[0]
 		cell.Slice(&g.Cursor)[0] = board.Cell{ID: cw.cellAt(5)}
 		pos.Slice(&g.Cursor)[0].Pos = world.Position{AABB: board.CellAABB(cw.grid, cw.cellAt(5), 8)}

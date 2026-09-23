@@ -75,7 +75,7 @@ func (a *arena) Init(ctx game.Initializer) error {
 
 	a.collision = collision.NewPlugin(a.world)
 	if err := a.collision.RegisterBehavior(
-		plugin.Between[plugin.Anything, plugin.Anything](behavior.CountContacts(&a.stats)),
+		plugin.Between(plugin.Any, plugin.Any, behavior.CountContacts(&a.stats)),
 	); err != nil {
 		return err
 	}

@@ -114,16 +114,17 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 		return err
 	}
 
-	s.nav = navigation.NewPlugin(s.board, s.world)
+	s.selection = selection.NewPlugin(s.world)
+	if err := ctx.Use(s.selection); err != nil {
+		return err
+	}
+
+	s.nav = navigation.NewPlugin(s.board, s.world, s.selection)
 	if err := ctx.Use(s.nav); err != nil {
 		return err
 	}
 
-	s.selection = selection.NewPlugin(s.world)
 	s.state = &State{}
-	if err := ctx.Use(s.selection); err != nil {
-		return err
-	}
 
 	s.defineKinds()
 
@@ -163,12 +164,11 @@ func (s *mainStage) defineKinds() {
 	s.unit = kind.Define[unit](s.world.Kinds(), "unit", kind.Spec{
 		kind.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(brd, u.start, EntitySize)} }),
 		kind.Const(world.Velocity{}),
-		kind.Const(world.Steering{MaxSpeed: UnitSpeed, Accel: UnitSpeed * 2, V0: UnitSpeed / 2, TurnRate: 0.15}),
+		kind.Const(world.Steering{MaxSpeed: UnitSpeed, Accel: UnitSpeed * 2, Brake: UnitSpeed * 4, V0: UnitSpeed / 2, TurnRate: 0.15}),
 		kind.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
 		kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }).
 			WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
-		kind.Const(selection.Selectable{}),
-		kind.Const(selection.Selected{}),
+		kind.Tagged(s.selection.Tags().Selectable, s.selection.Tags().Selected),
 		kind.Const(collision.Collider{}),
 		kind.Const(collision.Physics{}),
 		kind.Const(board.Mover{Domain: board.Land}),

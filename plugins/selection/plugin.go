@@ -19,14 +19,23 @@ type Plugin struct {
 	camera      camera.Camera
 	module      *module
 	renderer    *Renderer
+	tags        Tags
 }
 
 var _ plugin.Plugin = (*Plugin)(nil)
 
 // NewPlugin builds the selection plugin over worldPlugin's space and camera.
 func NewPlugin(worldPlugin *world.Plugin) *Plugin {
-	return &Plugin{state: &Resources{}, worldPlugin: worldPlugin, camera: worldPlugin.Camera()}
+	reg := worldPlugin.Kinds()
+	tags := Tags{
+		Selectable: reg.DefineTag[Family]("selection.selectable"),
+		Selected:   reg.DefineTag[Family]("selection.selected"),
+	}
+	return &Plugin{state: &Resources{}, worldPlugin: worldPlugin, camera: worldPlugin.Camera(), tags: tags}
 }
+
+// Tags returns selection's tags, to give Selectable to a kind or to read Selected.
+func (p *Plugin) Tags() Tags { return p.tags }
 
 // =================================================================
 // plugin.Plugin contract
@@ -35,7 +44,7 @@ func NewPlugin(worldPlugin *world.Plugin) *Plugin {
 func (p *Plugin) Name() string { return "gram.selection" }
 
 func (p *Plugin) Install(ctx plugin.Installer) error {
-	sys := NewSelectionSystem(p.state, p.worldPlugin.Space(), p.camera)
+	sys := NewSelectionSystem(p.state, p.worldPlugin.Space(), p.camera, p.tags)
 	p.module = &module{sys: sys}
 	ctx.UseModule(p.module)
 	return nil
@@ -45,7 +54,7 @@ func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) { p.module.RunPlan(ct
 
 // WithRenderer builds the highlight renderer; atlas is unused, selection draws primitives.
 func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
-	p.renderer = NewRenderer(p.camera, p.state)
+	p.renderer = NewRenderer(p.camera, p.state, p.tags.Selected)
 }
 
 func (p *Plugin) Renderer() render.Renderer {

@@ -7,11 +7,10 @@ import (
 	"github.com/kjkrol/aabbworld/geom"
 )
 
-// Body marks a terrain body: impassable cells made solid for collision and sight — see
-// Plugin.WithCollision.
-type Body struct{}
+// Family is board's tag family; Plugin.Body lives in it.
+type Family struct{}
 
-// MaxBodyCells caps how many cells one Body spans along either axis.
+// MaxBodyCells caps how many cells one terrain body spans along either axis.
 const MaxBodyCells = 16
 
 // bodyBox is one body in the making: its box, the terrain kind it is made of, whether it is solid

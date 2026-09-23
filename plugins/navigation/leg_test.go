@@ -1,6 +1,7 @@
 package navigation
 
 import (
+	"github.com/kjkrol/gram/plugin"
 	"testing"
 	"time"
 
@@ -254,7 +255,7 @@ func TestCommandSystem_Update_RetargetMidLegKeepsLeg(t *testing.T) {
 	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	occupancy := &board.SingleOccupancy{}
 	cmdState := &Resources{}
-	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState)
+	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState, selTags.Selected)
 
 	from, _ := grid.CellIndex(0, 0)
 	to, _ := grid.CellIndex(1, 0)
@@ -263,7 +264,7 @@ func TestCommandSystem_Update_RetargetMidLegKeepsLeg(t *testing.T) {
 
 	var cell goke.Comp[board.Cell]
 	var order goke.Comp[MoveOrder]
-	var selected goke.Comp[selection.Selected]
+	var selected goke.Comp[plugin.Tags[selection.Family]]
 	var q *goke.Query
 
 	ecs := goke.New()
@@ -271,6 +272,7 @@ func TestCommandSystem_Update_RetargetMidLegKeepsLeg(t *testing.T) {
 		f := si.NewFactory(&cell, &order, &selected)
 		f.Create(1)
 		f.Next()
+		selected.Slice(&f.Cursor)[0] = selectedMarks
 		id := f.Cursor.IDs[0]
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: from}
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: to, Leg: leg}

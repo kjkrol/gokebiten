@@ -6,6 +6,7 @@ import (
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/camera"
+	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/board"
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/gram/plugins/world"
@@ -45,25 +46,27 @@ type PathRenderer struct {
 	finder   *pathFinder
 	previews map[uid.UID64]*preview
 
+	selected plugin.Tag[selection.Family]
+
 	query *goke.Query
 	base  goke.Comp[world.Base]
 	cell  goke.Comp[board.Cell]
 	order goke.Comp[MoveOrder]
+	marks goke.Comp[plugin.Tags[selection.Family]]
 	mover goke.OptComp[board.Mover]
 }
 
 var _ render.Renderer = (*PathRenderer)(nil)
 
-func NewPathRenderer(cam camera.Camera, grid board.Grid, atlas render.AtlasSource, sprites PathSprites) *PathRenderer {
-	return &PathRenderer{grid: grid, sprites: sprites, batch: render.NewQuadBatch(atlas, cam)}
+func NewPathRenderer(cam camera.Camera, grid board.Grid, atlas render.AtlasSource, sprites PathSprites, selected plugin.Tag[selection.Family]) *PathRenderer {
+	return &PathRenderer{grid: grid, sprites: sprites, batch: render.NewQuadBatch(atlas, cam), selected: selected}
 }
 
 func (r *PathRenderer) BindSpace(space *aabbworld.Space) { r.space = space }
 
 func (r *PathRenderer) Init(si *goke.SysInit) {
-	r.query = si.NewQueryBuilder(&r.base, &r.cell, &r.order).
+	r.query = si.NewQueryBuilder(&r.base, &r.cell, &r.order, &r.marks).
 		Optional(&r.mover).
-		Include(goke.Include[selection.Selected]()).
 		Build()
 }
 
@@ -76,8 +79,12 @@ func (r *PathRenderer) Draw(screen *ebiten.Image) {
 			bases := r.base.Slice(cursor)
 			cells := r.cell.Slice(cursor)
 			orders := r.order.Slice(cursor)
+			marks := r.marks.Slice(cursor)
 			movers := r.mover.Slice(cursor)
 			for i := range cursor.IDs {
+				if !marks[i].Has(r.selected) {
+					continue
+				}
 				center := board.Center(bases[i].Pos)
 				r.drawPath(center, bases[i].Vel.Dir, pathCells(cells[i], orders[i]))
 				for _, route := range r.queued(cursor.IDs[i], board.DomainAt(movers, i), &orders[i]) {

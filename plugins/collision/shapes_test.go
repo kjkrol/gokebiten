@@ -25,7 +25,7 @@ func shapesRun(t *testing.T, test collision.ShapeTest) (meetings []collision.Mee
 	if test != nil {
 		c.WithShapeTest(test)
 	}
-	if err := c.RegisterBehavior(plugin.Between[plugin.Anything, plugin.Anything](func(_ plugin.Tick, m collision.Meeting) {
+	if err := c.RegisterBehavior(plugin.Between(plugin.Any, plugin.Any, func(_ plugin.Tick, m collision.Meeting) {
 		meetings = append(meetings, m)
 	})); err != nil {
 		t.Fatalf("RegisterBehavior: %v", err)

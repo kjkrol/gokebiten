@@ -1,6 +1,7 @@
 package board_test
 
 import (
+	"maps"
 	"math"
 	"slices"
 	"testing"
@@ -43,6 +44,7 @@ type mover struct {
 	heading geom.Vec
 	sight   *vision.Sight
 	domain  board.Domain
+	offset  float64 // shifts the box right, to straddle two cells
 }
 
 const unitSize = 22
@@ -54,7 +56,7 @@ type bodiesWorld struct {
 	brd   *board.Plugin
 	ecs   *goke.ECS
 	base  goke.Comp[world.Base]
-	body  goke.OptComp[board.Body]
+	body  goke.OptComp[plugin.Tags[board.Family]]
 	sight goke.OptComp[vision.Sight]
 	q     *goke.Query
 }
@@ -90,7 +92,12 @@ func newBodiesWorld(t *testing.T, grid board.Grid, width, height uint32, terrain
 
 	for i, u := range units {
 		spec := kind.Spec{
-			kind.Load(func(m mover) world.Position { return world.Position{AABB: board.CellAABB(grid, m.cell, unitSize)} }),
+			kind.Load(func(m mover) world.Position {
+				box := board.CellAABB(grid, m.cell, unitSize)
+				box.TopLeft.X += m.offset
+				box.BottomRight.X += m.offset
+				return world.Position{AABB: box}
+			}),
 			kind.Const(world.Velocity{}),
 			kind.Const(collision.Collider{}),
 			kind.Const(collision.Physics{}),
@@ -145,19 +152,18 @@ func (bw *bodiesWorld) snapshot() (bodies, units []geom.AABB) {
 	for bw.q.All(); bw.q.Next(); {
 		cur := bw.q.Cursor()
 		bases := bw.base.Slice(cur)
-		isBody := bw.body.Present(cur)
+		bodyMarks := bw.body.Slice(cur)
 		for i := range cur.IDs {
-			if isBody {
+			if bodyMarks != nil && bodyMarks[i].Has(bw.brd.Body()) {
 				bodies = append(bodies, bases[i].Pos.AABB.AABB)
 			} else {
 				byType[bases[i].TypeID] = bases[i].Pos.AABB.AABB
 			}
 		}
 	}
-	for id := kind.ID(0); int(id) < len(byType)+1; id++ {
-		if b, ok := byType[id]; ok {
-			units = append(units, b)
-		}
+	types := slices.Sorted(maps.Keys(byType))
+	for _, id := range types {
+		units = append(units, byType[id])
 	}
 	return bodies, units
 }
@@ -166,8 +172,8 @@ func (bw *bodiesWorld) snapshot() (bodies, units []geom.AABB) {
 func (bw *bodiesWorld) isBody(id uid.UID64) bool {
 	for bw.q.All(); bw.q.Next(); {
 		cur := bw.q.Cursor()
-		if bw.body.Present(cur) && slices.Contains(cur.IDs, id) {
-			return true
+		if m := bw.body.Slice(cur); m != nil && slices.Contains(cur.IDs, id) {
+			return m[slices.Index(cur.IDs, id)].Has(bw.brd.Body())
 		}
 	}
 	return false
@@ -345,9 +351,9 @@ func TestBodies_AnOpaqueCellOnlyBlocksSight(t *testing.T) {
 	}
 	for bw.q.All(); bw.q.Next(); {
 		cur := bw.q.Cursor()
-		if bw.body.Present(cur) {
-			for _, b := range bw.base.Slice(cur) {
-				if b.Caps&aabbworld.CanCollide != 0 {
+		if m := bw.body.Slice(cur); m != nil {
+			for i, b := range bw.base.Slice(cur) {
+				if m[i].Has(bw.brd.Body()) && b.Caps&aabbworld.CanCollide != 0 {
 					t.Errorf("the forest body carries caps %v, want none that collide", b.Caps)
 				}
 			}

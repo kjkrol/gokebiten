@@ -11,36 +11,31 @@ import (
 // onCourse is the cosine of the widest angle at which one still counts as heading at the other.
 const onCourse = 0.5
 
-// Skittish is a ready-made tag for the entities to steer — any tag of the game's own does as well.
-type Skittish struct{}
-
-// Threat marks an entity that is fled from the moment it comes into view,
-// course or no course — what a predator is given so nothing waits to be aimed at.
-type Threat struct{}
-
-// Flee steers entities away from what is closing on them, and from any Threat on sight.
+// Flee steers entities away from what is closing on them, and from any Threat on sight —
+// register it between Skittish and Any.
 type Flee struct {
-	off bool // zero value is on
+	threat plugin.Tag[Family]
+	off    bool // zero value is on
 }
 
-// NewFlee is a Flee that is switched on.
-func NewFlee() *Flee { return &Flee{} }
+// NewFlee is a Flee that is switched on, fleeing whatever carries tags.Threat.
+func NewFlee(tags Tags) *Flee { return &Flee{threat: tags.Threat} }
 
 // SetEnabled turns the behavior off and on again without unregistering it.
 func (b *Flee) SetEnabled(on bool) { b.off = !on }
 
-// Steer turns the observer away from what closes on it; register with plugin.Asking[Threat]().
+// Steer turns the observer away from what closes on it, and from any Threat in view.
 func (b *Flee) Steer(_ plugin.Tick, s vision.Sighting) {
 	if b.off || s.Steering == nil {
 		return
 	}
-	if away, ok := awayFrom(s); ok {
+	if away, ok := awayFrom(s, b.threat); ok {
 		s.Steering.Request(away)
 	}
 }
 
 // awayFrom sums a push per sighting worth avoiding, nearest weighing most; Threats alone win.
-func awayFrom(s vision.Sighting) (geom.Vec, bool) {
+func awayFrom(s vision.Sighting, threat plugin.Tag[Family]) (geom.Vec, bool) {
 	ox, oy := centre(&s.Base.Pos)
 	heading := s.Base.Vel.Dir
 
@@ -53,7 +48,7 @@ func awayFrom(s vision.Sighting) (geom.Vec, bool) {
 			continue
 		}
 		switch {
-		case seen.Carries[Threat]():
+		case seen.Marks.Carries(threat):
 			threats.X += dx / (d * d)
 			threats.Y += dy / (d * d)
 		case closing(heading, seen.Base.Vel.Dir, -dx/d, -dy/d):

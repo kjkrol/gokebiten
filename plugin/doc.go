@@ -19,17 +19,18 @@
 // # Behaviors
 //
 // A [Behavior] is game logic a plugin runs inside its own pass, built with [Between] — react to
-// every pair the host meets where one entity carries A and the other B, [Anything] standing for
+// every pair the host meets where one entity carries tag a and the other b, [Any] standing for
 // either side — or [Each] — react on every entity the host visits that carries T. The payload
 // type P is what says which plugin hosts it; a host refuses another's with [ErrUnhostedBehavior],
 // and one registered after the host's queries were built with [ErrHostBuilt]. Register before Use.
 //
-// A behavior that needs to tell the entities it is handed apart declares the tags it will ask
-// about with [Asking]; the payload then carries a [TagSet] whose Carries answers. The tags join the
-// host's queries as optional components, so a behavior costs no query of its own; one PairHost's
-// behaviors may name at most [MaxTags] distinct tags between them.
+// A [Tag] is a bit of a family: [Tags] is the family's component, holding up to
+// [MaxTagsPerFamily] of them, and an empty type of the plugin's or the game's names the family.
+// The families a host's behaviors name join its queries as optional components, so a behavior
+// costs no query of its own, and a host reads what an entity carries as [Marks] — what a payload
+// passes on for [Carries]. One PairHost's behaviors may name at most [MaxFamilies] families.
 //
-// A plugin hosts behaviors with [PairHost] (Bind its tags to the host's queries once, then
+// A plugin hosts behaviors with [PairHost] (Bind its families to the host's queries once, then
 // Dispatch, DispatchEitherWay or DispatchGrouped per pair or per observer) and [EachHost] (Bind,
 // then Run over each chunk walked).
 //

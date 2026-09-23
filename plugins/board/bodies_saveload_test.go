@@ -7,6 +7,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/game"
 	"github.com/kjkrol/gram/internal/engine"
+	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/board"
 	"github.com/kjkrol/gram/plugins/collision"
 	"github.com/kjkrol/gram/plugins/world"
@@ -15,12 +16,14 @@ import (
 // bodyProbe counts Body entities once the engine's Setup has run.
 type bodyProbe struct {
 	base  goke.Comp[world.Base]
+	marks goke.Comp[plugin.Tags[board.Family]]
+	body  plugin.Tag[board.Family]
 	query *goke.Query
 }
 
 func (p *bodyProbe) SetupSystems() []goke.System {
 	return []goke.System{goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		p.query = si.NewQueryBuilder(&p.base).Include(goke.Include[board.Body]()).Build()
+		p.query = si.NewQueryBuilder(&p.base, &p.marks).Build()
 	}}}
 }
 
@@ -28,7 +31,11 @@ func (p *bodyProbe) count() int {
 	n := 0
 	p.query.All()
 	for p.query.Next() {
-		n += len(p.query.Cursor().IDs)
+		for _, m := range p.marks.Slice(p.query.Cursor()) {
+			if m.Has(p.body) {
+				n++
+			}
+		}
 	}
 	return n
 }
@@ -64,7 +71,7 @@ func (g *bodiesStage) Init(ctx game.Initializer) error {
 	if err := ctx.Use(g.board); err != nil {
 		return err
 	}
-	g.probe = &bodyProbe{}
+	g.probe = &bodyProbe{body: g.board.Body()}
 	ctx.Setup(g.probe)
 	return nil
 }

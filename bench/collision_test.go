@@ -63,7 +63,7 @@ func benchCollision(b *testing.B, rect uint32, percent float64) (*goke.ECS, int,
 	})
 	c := collision.NewPlugin(w)
 	stats := &behavior.ContactStats{}
-	if err := c.RegisterBehavior(plugin.Between[plugin.Anything, plugin.Anything](behavior.CountContacts(stats))); err != nil {
+	if err := c.RegisterBehavior(plugin.Between(plugin.Any, plugin.Any, behavior.CountContacts(stats))); err != nil {
 		b.Fatal(err)
 	}
 	if err := ctx.Use(c); err != nil {

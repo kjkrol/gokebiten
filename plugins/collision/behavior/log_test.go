@@ -31,7 +31,7 @@ func collide(t *testing.T, opts ...behavior.LogOption) (idA, idB uid.UID64) {
 
 	ecs := goke.New()
 	engine := collision.New(space, ecs)
-	if err := engine.RegisterBehavior(plugin.Between[plugin.Anything, plugin.Anything](behavior.LogContacts(opts...))); err != nil {
+	if err := engine.RegisterBehavior(plugin.Between(plugin.Any, plugin.Any, behavior.LogContacts(opts...))); err != nil {
 		t.Fatalf("RegisterBehavior: %v", err)
 	}
 

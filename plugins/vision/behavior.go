@@ -16,11 +16,11 @@ type Sighting struct {
 	Seen     []Seen
 }
 
-// Seen is one entity in an observer's view: which, where and how it moves, how
-// far off — and, through Carries, which of the tags the behavior declared.
+// Seen is one entity in an observer's view: which, where and how it moves, how far off — and
+// which tags it carries, of the families the plugin's behaviors name (plugin.Carries).
 type Seen struct {
 	ID   uid.UID64
 	Base *world.Base
 	Dist float32
-	plugin.TagSet
+	plugin.Marks
 }

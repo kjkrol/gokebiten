@@ -112,6 +112,7 @@ func (w *module) LoadComps() []goke.CompToken {
 func (w *module) PostLoad() goke.System {
 	return goke.SystemFn{OnInit: func(si *goke.SysInit) {
 		w.remapTypes(si)
+		w.kinds.remapTags(si)
 		w.telemetry.Count = len(w.reindex(si))
 	}}
 }

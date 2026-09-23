@@ -1,6 +1,7 @@
 package navigation
 
 import (
+	"github.com/kjkrol/gram/plugin"
 	"testing"
 	"time"
 
@@ -98,13 +99,13 @@ func TestCommandSystem_Update_SpreadsGroupOverDistinctFreeCells(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(10, 10, legCellSize)
 	occupancy := &board.SingleOccupancy{}
 	cmdState := &Resources{}
-	cmds := newMoveCommandSystem(newPathFinder(grid, openTerrain(), occupancy), cmdState)
+	cmds := newMoveCommandSystem(newPathFinder(grid, openTerrain(), occupancy), cmdState, selTags.Selected)
 	at := func(x, y uint32) board.CellID { c, _ := grid.CellIndex(x, y); return c }
 	target := at(5, 5)
 	starts := []board.CellID{at(5, 0), at(5, 4), at(5, 2)}
 
 	var cell goke.Comp[board.Cell]
-	var selected goke.Comp[selection.Selected]
+	var selected goke.Comp[plugin.Tags[selection.Family]]
 	var order goke.OptComp[MoveOrder]
 	var q *goke.Query
 	var nearest uid.UID64
@@ -114,6 +115,9 @@ func TestCommandSystem_Update_SpreadsGroupOverDistinctFreeCells(t *testing.T) {
 		f := si.NewFactory(&cell, &selected)
 		f.Create(len(starts))
 		f.Next()
+		for i := range f.Cursor.IDs {
+			selected.Slice(&f.Cursor)[i] = selectedMarks
+		}
 		for i, id := range f.Cursor.IDs {
 			cell.Slice(&f.Cursor)[i] = board.Cell{ID: starts[i]}
 			occupancy.Enter(starts[i], id)

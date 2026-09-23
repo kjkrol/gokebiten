@@ -37,5 +37,5 @@ func (m *module) SetupSystems() []goke.System { return nil }
 
 // LoadComps lists the component types selection owns — see [goke.CompProvider].
 func (m *module) LoadComps() []goke.CompToken {
-	return []goke.CompToken{goke.LoadComp[Selected](), goke.LoadComp[Selectable]()}
+	return nil // the family's Tags are declared by the world's Kinds through DefineTag
 }

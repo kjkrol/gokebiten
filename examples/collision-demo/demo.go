@@ -118,7 +118,7 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 
 	s.collision = collision.NewPlugin(s.world)
 	if err := s.collision.RegisterBehavior(
-		plugin.Between[plugin.Anything, plugin.Anything](behavior.CountContacts(&s.collisionStats)),
+		plugin.Between(plugin.Any, plugin.Any, behavior.CountContacts(&s.collisionStats)),
 		plugin.Each[behavior.HitMark](behavior.ShowHits(hitDuration)),
 	); err != nil {
 		return err

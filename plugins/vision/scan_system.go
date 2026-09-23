@@ -36,7 +36,7 @@ type ScanSystem struct {
 	// What the host is being run over: the observer in hand, everyone it sees, and their tags.
 	observer   Sighting
 	seen       []Seen
-	seenTags   []uint64
+	seenTags   []plugin.Marks
 	matched    []Seen
 	sightingOf func(matched []int) Sighting
 }
@@ -75,10 +75,6 @@ func (s *ScanSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 		sights := s.sight.Slice(cursor)
 		bases := s.base.Slice(cursor)
 		steers := s.steer.Slice(cursor)
-		var observerTags uint64
-		if hosting {
-			observerTags = s.host.InChunk(walked, cursor)
-		}
 
 		var outlines []SightOutline
 		if s.outline.Present(cursor) {
@@ -101,7 +97,7 @@ func (s *ScanSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 					s.observer.Steering = &steers[i]
 				}
 				s.gather(&sight.Seen)
-				s.host.DispatchGrouped(t, observerTags, s.seenTags, s.sightingOf)
+				s.host.DispatchGrouped(t, s.host.InChunk(walked, cursor, i), s.seenTags, s.sightingOf)
 			}
 		}
 	}
@@ -122,7 +118,7 @@ func (s *ScanSystem) gather(found *Sighted) {
 		}
 		cursor := s.lookup.Cursor()
 		tags := s.host.At(sought, cursor)
-		s.seen = append(s.seen, Seen{ID: id, Base: s.lookupBase.At(cursor), Dist: found.Dists[k], TagSet: s.host.TagSet(tags)})
+		s.seen = append(s.seen, Seen{ID: id, Base: s.lookupBase.At(cursor), Dist: found.Dists[k], Marks: tags})
 		s.seenTags = append(s.seenTags, tags)
 	}
 }

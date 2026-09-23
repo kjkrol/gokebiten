@@ -63,8 +63,9 @@ func (d *Demo) Stages() (map[string]game.Stage, string) {
 
 // =========================== Stage ===========================
 
-// unitTag marks the demo's units, so a sighting of one can be told from a sighting of terrain.
-type unitTag struct{}
+// units is the demo's tag family; unit marks its units, so a sighting of one can be told from a
+// sighting of terrain.
+type units struct{}
 
 type mainStage struct {
 	world     *world.Plugin
@@ -73,6 +74,7 @@ type mainStage struct {
 	collision *collision.Plugin
 	selection *selection.Plugin
 	vision    *vision.Plugin
+	unitTag   plugin.Tag[units]
 	kinds     []kind.Of[unit]
 	noticed   map[[2]uid.UID64]bool
 	stack     game.Scenes
@@ -108,25 +110,26 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 		return err
 	}
 
-	s.nav = navigation.NewPlugin(s.board, s.world)
+	s.selection = selection.NewPlugin(s.world)
+	if err := ctx.Use(s.selection); err != nil {
+		return err
+	}
+
+	s.nav = navigation.NewPlugin(s.board, s.world, s.selection)
 	if err := ctx.Use(s.nav); err != nil {
 		return err
 	}
 
 	s.noticed = map[[2]uid.UID64]bool{}
+	s.unitTag = s.world.Kinds().DefineTag[units]("unit")
 	s.vision = vision.NewPlugin(s.world)
 	if err := s.vision.RegisterBehavior(
-		plugin.Between[plugin.Anything, plugin.Anything](faceTravel),
-		plugin.Between[unitTag, unitTag](s.noticedEachOther),
+		plugin.Between(plugin.Any, plugin.Any, faceTravel),
+		plugin.Between(s.unitTag, s.unitTag, s.noticedEachOther),
 	); err != nil {
 		return err
 	}
 	if err := ctx.Use(s.vision); err != nil {
-		return err
-	}
-
-	s.selection = selection.NewPlugin(s.world)
-	if err := ctx.Use(s.selection); err != nil {
 		return err
 	}
 
@@ -161,18 +164,17 @@ func (s *mainStage) defineKinds() {
 	spec := kind.Spec{
 		kind.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(brd, u.start, EntitySize)} }),
 		kind.Const(world.Velocity{}),
-		kind.Const(world.Steering{MaxSpeed: UnitSpeed, Accel: UnitSpeed * 2, V0: UnitSpeed / 2, TurnRate: 0.15}),
+		kind.Const(world.Steering{MaxSpeed: UnitSpeed, Accel: UnitSpeed * 2, Brake: UnitSpeed * 4, V0: UnitSpeed / 2, TurnRate: 0.15}),
 		kind.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
 		kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }).
 			WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
-		kind.Const(selection.Selectable{}),
-		kind.Const(selection.Selected{}),
+		kind.Tagged(s.selection.Tags().Selectable, s.selection.Tags().Selected),
 		kind.Const(collision.Collider{}),
 		kind.Const(collision.Physics{}),
 		kind.Const(board.Mover{Domain: board.Land}),
 		kind.Const(vision.Sight{Facing: geom.NewVec(1, 0), HalfAngle: sightHalf, Radius: sightRadius}),
 		kind.Const(vision.SightOutline{}),
-		kind.Const(unitTag{}),
+		kind.Tagged(s.unitTag),
 	}
 	names := []string{"red", "blue", "yellow"}
 	for _, name := range names {
@@ -237,9 +239,6 @@ func faceTravel(_ plugin.Tick, s vision.Sighting) {
 // noticedEachOther logs the first time one unit sees another.
 func (s *mainStage) noticedEachOther(_ plugin.Tick, sighting vision.Sighting) {
 	for _, seen := range sighting.Seen {
-		if !seen.Carries[unitTag]() {
-			continue
-		}
 		pair := [2]uid.UID64{sighting.Self, seen.ID}
 		if !s.noticed[pair] {
 			s.noticed[pair] = true

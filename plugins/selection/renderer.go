@@ -7,6 +7,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/vector"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/camera"
+	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/render"
 )
@@ -47,15 +48,17 @@ type Renderer struct {
 	camera camera.Camera
 	style  HighlightStyle
 
-	query *goke.Query
-	base  goke.Comp[world.Base]
+	query    *goke.Query
+	base     goke.Comp[world.Base]
+	marks    goke.Comp[plugin.Tags[Family]]
+	selected plugin.Tag[Family]
 }
 
 var _ render.Renderer = (*Renderer)(nil)
 
 // NewRenderer builds a Renderer over state with DefaultHighlightStyle.
-func NewRenderer(cam camera.Camera, state *Resources) *Renderer {
-	return &Renderer{state: state, camera: cam, style: DefaultHighlightStyle()}
+func NewRenderer(cam camera.Camera, state *Resources, selected plugin.Tag[Family]) *Renderer {
+	return &Renderer{state: state, camera: cam, style: DefaultHighlightStyle(), selected: selected}
 }
 
 // WithStyle overrides how the highlight is drawn — the escape hatch for a custom HighlightStyle.
@@ -65,7 +68,7 @@ func (r *Renderer) WithStyle(style HighlightStyle) *Renderer {
 }
 
 func (r *Renderer) Init(si *goke.SysInit) {
-	r.query = si.NewQueryBuilder(&r.base).Include(goke.Include[Selected]()).Build()
+	r.query = si.NewQueryBuilder(&r.base, &r.marks).Build()
 }
 
 func (r *Renderer) Draw(screen *ebiten.Image) {
@@ -73,8 +76,11 @@ func (r *Renderer) Draw(screen *ebiten.Image) {
 	for r.query.Next() {
 		cursor := r.query.Cursor()
 		bases := r.base.Slice(cursor)
+		marks := r.marks.Slice(cursor)
 		for i := range cursor.IDs {
-			r.style.Draw(screen, r.camera, bases[i].Pos.AABB.AABB)
+			if marks[i].Has(r.selected) {
+				r.style.Draw(screen, r.camera, bases[i].Pos.AABB.AABB)
+			}
 		}
 	}
 
