@@ -6,7 +6,7 @@ DIRTY       := $(shell git diff --quiet || echo "-dirty")
 RESULT_FILE := bench_results/bench_$(COMMIT_DATE)_$(COMMIT_HASH)$(DIRTY).txt
 BENCH_COUNT ?= 5
 
-.PHONY: all demo-minimal demo-collision demo-navigation demo-scenes demo-vision deps tidy test bench bench-save clean
+.PHONY: all demo-minimal demo-collision demo-navigation demo-navigation-hex demo-navigation-vision demo-navigation-vision-hex demo-island demo-scenes demo-vision deps tidy test bench bench-save clean
 
 all: demo-collision
 
@@ -16,6 +16,14 @@ demo-minimal: run-minimal
 demo-collision: run-collision
 
 demo-navigation: run-navigation
+
+demo-navigation-hex: run-navigation-hex
+
+demo-navigation-vision: run-navigation-vision
+
+demo-navigation-vision-hex: run-navigation-vision-hex
+
+demo-island: run-island
 
 demo-scenes: run-scenes
 
@@ -30,6 +38,18 @@ run-collision: deps
 
 run-navigation: deps
 	$(GO) run ./examples/navigation-demo
+
+run-navigation-hex: deps
+	$(GO) run ./examples/navigation-hex-demo
+
+run-navigation-vision: deps
+	$(GO) run ./examples/navigation-vision-demo
+
+run-navigation-vision-hex: deps
+	$(GO) run ./examples/navigation-vision-hex-demo
+
+run-island: deps
+	$(GO) run ./examples/island-demo
 
 run-scenes: deps
 	$(GO) run ./examples/scenes-demo

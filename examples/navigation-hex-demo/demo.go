@@ -3,6 +3,7 @@ package main
 import (
 	"image/color"
 	"log"
+	"math"
 	"slices"
 	"time"
 
@@ -20,25 +21,33 @@ import (
 	"github.com/kjkrol/uid"
 )
 
+// The board is a parallelogram of pointy-top hexes in axial (q, r) coordinates: every row
+// shifts right by half a hex, so the world is as wide as the last row reaches and the triangles
+// either side hold no cells.
 const (
-	TPS          = 60
-	GridWidth    = 24
-	GridHeight   = 16
-	CellSize     = 32
-	ScreenWidth  = GridWidth * CellSize
-	ScreenHeight = GridHeight * CellSize
-	EntitySize   = 22
-	UnitSpeed    = CellSize * 2
-	MaxEntCount  = 40 // units plus the terrain bodies the board makes of its walls
+	TPS        = 60
+	GridWidth  = 20
+	GridHeight = 12
+	HexSize    = 24 // circumradius
+	EntitySize = 22
+	UnitSpeed  = HexSize * 3
+	// MaxEntCount is the units plus the terrain bodies the board makes of its walls: a hex is
+	// seven boxes before merging.
+	MaxEntCount = 120
 
-	saveBasePath = "board-navigation-demo"
+	saveBasePath = "board-navigation-hex-demo"
+)
+
+var (
+	ScreenWidth  = int(math.Ceil(HexSize*(math.Sqrt(3)*(GridWidth-1)+math.Sqrt(3)/2*(GridHeight-1)) + 2*HexSize))
+	ScreenHeight = int(math.Ceil(HexSize * (1.5*(GridHeight-1) + 2)))
 )
 
 type State struct{ Saves int }
 
 // =========================== Game ===========================
 
-// Demo is the board/navigation/selection demo — exactly one Stage (mainStage below).
+// Demo is the navigation demo on a hex board — exactly one Stage (mainStage below).
 type Demo struct{ stage *mainStage }
 
 var _ game.Game = (*Demo)(nil)
@@ -47,7 +56,7 @@ func NewDemo() *Demo { return &Demo{stage: &mainStage{}} }
 
 func (d *Demo) Props() game.Props {
 	return game.Props{
-		Title:       "gram board & navigation plugins demo",
+		Title:       "gram navigation on a hex board",
 		ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight,
 		TargetTPS: TPS,
 	}
@@ -59,7 +68,7 @@ func (d *Demo) Stages() (map[string]game.Stage, string) {
 
 // =========================== Stage ===========================
 
-// mainStage wires the board/navigation/selection demo; its plugins are its own fields.
+// mainStage wires the hex board, navigation and selection; its plugins are its own fields.
 type mainStage struct {
 	world     *world.Plugin
 	board     *board.Plugin
@@ -73,13 +82,13 @@ type mainStage struct {
 
 var _ game.Stage = (*mainStage)(nil)
 
-func (s *mainStage) Name() string { return "board-navigation-demo" }
+func (s *mainStage) Name() string { return "board-navigation-hex-demo" }
 
 func (s *mainStage) Stack() game.Scenes { return s.stack }
 
 func (s *mainStage) Init(ctx game.Initializer) error {
 	s.world = ctx.UseWorld(world.Config{
-		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight},
+		Space:    world.SpaceCfg{Width: uint32(ScreenWidth), Height: uint32(ScreenHeight)},
 		Entities: world.EntitiesCfg{MaxCount: MaxEntCount, MinSize: EntitySize, MaxSize: EntitySize},
 	})
 	s.world.WithCameraControls()
@@ -89,7 +98,7 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 		return err
 	}
 
-	grid := board.DefaultGrids{}.Square(GridWidth, GridHeight, CellSize)
+	grid := board.DefaultGrids{}.Hex(GridWidth, GridHeight, HexSize)
 	s.board = board.NewPlugin(grid, &board.SingleOccupancy{}, s.world).WithCollision(s.collision)
 	s.registerCellKinds()
 	if err := ctx.Use(s.board); err != nil {
@@ -173,22 +182,23 @@ func (s *mainStage) Spawn() error {
 	brd := s.board.Res.Logic.Board
 	cell := func(x, y uint32) board.CellID { c, _ := brd.CellIndex(x, y); return c }
 
-	// A wall down column 12 from row 2, and a road round it: along row 1 and down both flanks.
+	// A wall down the q = wallCol column from r = 1 to the bottom, and a road round it: along
+	// r = 0 and down both flanks (which slant with the rows, as every hex column does).
 	var cells []board.CellEntry
-	for y := uint32(2); y < GridHeight; y++ {
-		cells = append(cells, board.CellEntry{Kind: "wall", Cell: cell(wallCol, y)})
+	for r := uint32(1); r < GridHeight; r++ {
+		cells = append(cells, board.CellEntry{Kind: "wall", Cell: cell(wallCol, r)})
 	}
-	for x := roadLeft; x <= roadRight; x++ {
-		cells = append(cells, board.CellEntry{Kind: "road", Cell: cell(x, roadTop)})
+	for q := roadLeft; q <= roadRight; q++ {
+		cells = append(cells, board.CellEntry{Kind: "road", Cell: cell(q, roadTop)})
 	}
-	for y := roadTop + 1; y <= roadBottom; y++ {
-		cells = append(cells, board.CellEntry{Kind: "road", Cell: cell(roadLeft, y)}, board.CellEntry{Kind: "road", Cell: cell(roadRight, y)})
+	for r := roadTop + 1; r <= roadBottom; r++ {
+		cells = append(cells, board.CellEntry{Kind: "road", Cell: cell(roadLeft, r)}, board.CellEntry{Kind: "road", Cell: cell(roadRight, r)})
 	}
 	s.board.Seed(board.Layout{Default: "grass", Cells: cells})
 
 	s.world.Seed(
-		s.red.Entry(unit{start: cell(2, 4), target: cell(GridWidth-3, 4)}),
-		s.blue.Entry(unit{start: cell(2, 12), target: cell(GridWidth-3, 12)}),
+		s.red.Entry(unit{start: cell(3, 3), target: cell(GridWidth-4, 3)}),
+		s.blue.Entry(unit{start: cell(3, 9), target: cell(GridWidth-4, 9)}),
 	)
 	return nil
 }
@@ -214,8 +224,8 @@ func (m *mainScene) Layers() []render.Renderer {
 	s := m.stage
 
 	worldAtlas := render.NewAtlas()
-	worldAtlas.RegisterAt(s.red.SpriteID(), EntitySize, render.Solid(color.RGBA{R: 220, G: 90, B: 90, A: 255}))
-	worldAtlas.RegisterAt(s.blue.SpriteID(), EntitySize, render.Solid(color.RGBA{R: 90, G: 140, B: 220, A: 255}))
+	worldAtlas.RegisterAt(s.red.SpriteID(), EntitySize, render.Diamond(color.RGBA{R: 220, G: 90, B: 90, A: 255}))
+	worldAtlas.RegisterAt(s.blue.SpriteID(), EntitySize, render.Diamond(color.RGBA{R: 90, G: 140, B: 220, A: 255}))
 	worldAtlas.Close()
 	s.world.WithRenderer(worldAtlas)
 
@@ -224,13 +234,13 @@ func (m *mainScene) Layers() []render.Renderer {
 	wall, _ := kinds.Get("wall")
 	road, _ := kinds.Get("road")
 	boardAtlas := render.NewAtlas()
-	boardAtlas.RegisterAt(grass.SpriteID, CellSize, render.Solid(color.RGBA{R: 60, G: 95, B: 60, A: 255}))
-	boardAtlas.RegisterAt(wall.SpriteID, CellSize, render.Solid(color.RGBA{R: 40, G: 40, B: 40, A: 255}))
-	boardAtlas.RegisterAt(road.SpriteID, CellSize, render.Solid(color.RGBA{R: 150, G: 130, B: 80, A: 255}))
+	boardAtlas.RegisterAt(grass.SpriteID, hexSprite, render.Hexagon(color.RGBA{R: 60, G: 95, B: 60, A: 255}))
+	boardAtlas.RegisterAt(wall.SpriteID, hexSprite, render.Hexagon(color.RGBA{R: 40, G: 40, B: 40, A: 255}))
+	boardAtlas.RegisterAt(road.SpriteID, hexSprite, render.Hexagon(color.RGBA{R: 150, G: 130, B: 80, A: 255}))
 	boardAtlas.Close()
 	s.board.WithRenderer(boardAtlas)
 
-	pathAtlas, pathSprites := navigation.RegisterDefaultPathSprites(CellSize, 2, color.RGBA{R: 255, G: 140, B: 0, A: 255})
+	pathAtlas, pathSprites := navigation.RegisterDefaultPathSprites(hexSprite, 2, color.RGBA{R: 255, G: 140, B: 0, A: 255})
 	s.nav.SetPathSprites(pathSprites)
 	s.nav.WithRenderer(pathAtlas)
 
@@ -272,18 +282,21 @@ func (m *mainScene) HandleEvents(events *control.InputEvents, runtime game.Runti
 func (m *mainScene) Focusable() bool { return true }
 
 const (
-	wallCol     = 12
-	shortcutRow = 8
+	// hexSprite is the texture side for a hex sprite: the hex's height, so nothing is upscaled.
+	hexSprite = 2 * HexSize
+
+	wallCol     = 10
+	shortcutRow = 6
 
 	roadLeft, roadRight uint32 = 2, GridWidth - 3
-	roadTop, roadBottom uint32 = 1, 13
+	roadTop, roadBottom uint32 = 0, GridHeight - 1
 )
 
 // buildShortcut lays a road along shortcutRow from flank to flank, through the wall.
 func buildShortcut(brd *board.Board, kinds board.CellKindDict) {
 	road, _ := kinds.Get("road")
-	for x := roadLeft + 1; x < roadRight; x++ {
-		c, _ := brd.CellIndex(x, shortcutRow)
+	for q := roadLeft + 1; q < roadRight; q++ {
+		c, _ := brd.CellIndex(q, shortcutRow)
 		brd.Set(c, road)
 	}
 }

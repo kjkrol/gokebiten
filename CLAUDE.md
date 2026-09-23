@@ -30,6 +30,10 @@ go build ./... && go vet ./... && gofmt -l . && go test ./...   # standard verif
 go test ./plugins/world/... -run TestName -v                     # a single test
 make demo-collision                                                # go mod tidy && run examples/collision-demo
 make demo-navigation                                               # go mod tidy && run examples/navigation-demo
+make demo-navigation-hex                                           # the same on a hex board
+make demo-navigation-vision                                        # board + navigation + vision: walls and forests occlude
+make demo-navigation-vision-hex                                    # the same on a hex board
+make demo-island                                                   # a map larger than the window under a moving camera
 make demo-scenes                                                  # go mod tidy && run examples/scenes-demo
 make demo-vision                                                  # go mod tidy && run examples/vision-demo
 make demo-minimal                                                 # the README example
@@ -37,7 +41,7 @@ make bench                                                        # every benchm
 make bench-save                                                   # 5 repeats into bench_results/ (ignored by git)
 ```
 
-The five `examples/*` programs are real Ebitengine GUI apps (open a window)
+The `examples/*` programs are real Ebitengine GUI apps (open a window)
 — `go test` alone can't exercise them. To sanity-check one still runs after
 a change in a headless environment: build to a temp path, run under
 `timeout <n>s`, treat exit 124 (still running, not crashed) as healthy.
@@ -169,12 +173,17 @@ shows how much of it is boilerplate vs. real behavior.
   command queue and a translator each — bindings for a person, a brain for an AI; plugins define
   the command types and ship default, labelled bindings) and a networking plugin over them; `doc/movement.md` sketches
   movement along a route through `Steering` (motion profile, lookahead point, waypoints, walls
-  and holes as entities). `Populate` and
+  as terrain bodies, holes). `Populate` and
   `PostLoad` rebuild it too, so it is whole before the first tick; a despawned
   entity is gone from it on the next. Anything reading the space in its own pass
   sees the boxes as they were after the last rebuild.
 - **`board`** — optional grid + terrain over `world`; its grids wrap per axis,
-  following the world's `Edges` (`SetWrap(x, y)`). Depends on `world`.
+  following the world's `Edges` (`SetWrap(x, y)`). Built `WithCollision(c)`, it makes impassable
+  terrain solid: one immovable `Body` entity per merged run of impassable cells (boxes from
+  `Grid.CellBoxes`, so a hex is covered by strips; at most `MaxBodyCells` a side), spawned through
+  `world.Bodies` under a kind from `Kinds.Reserve`, rebuilt when `TerrainMap.Version` moves and
+  once after a load; then `board.RunPlan` has work and runs after `collision.RunPlan`. Depends on
+  `world`, and on `collision` for the bodies.
 - **`collision`** — optional collision detection over `world`'s space, one
   `Detector` system a tick. An entity collides exactly while it carries `Collider` —
   `kind.Const(collision.Collider{})`, or `Attach`/`Detach` mid-game. The `Detector`
@@ -212,8 +221,8 @@ shows how much of it is boilerplate vs. real behavior.
   from the profile before the goal; a waypoint is passed by projection, the goal by radius. A
   `MoveOrder` queues up to `MaxWaypoints` further goals (Shift + right click appends). Depends on
   `board` and `world`.
-- **`selection`** — mouse click/drag → `Selected` tag on `world` entities.
-  Depends on `world`.
+- **`selection`** — mouse click/drag → `Selected` tag on `world` entities that carry
+  `Selectable` (a kind's choice; terrain bodies never do). Depends on `world`.
 - **`vision`** — narrowed perception: a `Sight` cone scanned against `world`'s
   space each tick fills its own `Sight.Seen` (who this entity can see, nearest first), and
   `SightOutline` on an entity gets its view's shape computed and drawn. It

@@ -1,19 +1,24 @@
+// Command navigation-vision-demo puts sight on navigated units: their cones stop at the wall
+// and at the forest, both terrain bodies the board made solid or opaque.
 package main
 
 import (
 	"image/color"
 	"log"
-	"slices"
+	"math"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/game"
+	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/board"
 	"github.com/kjkrol/gram/plugins/collision"
 	"github.com/kjkrol/gram/plugins/navigation"
 	"github.com/kjkrol/gram/plugins/selection"
+	"github.com/kjkrol/gram/plugins/vision"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
 	"github.com/kjkrol/gram/render"
@@ -29,16 +34,15 @@ const (
 	ScreenHeight = GridHeight * CellSize
 	EntitySize   = 22
 	UnitSpeed    = CellSize * 2
-	MaxEntCount  = 40 // units plus the terrain bodies the board makes of its walls
+	MaxEntCount  = 80 // units plus the terrain bodies of the wall and the forests
 
-	saveBasePath = "board-navigation-demo"
+	sightRadius = 200
+	sightHalf   = math.Pi / 5
 )
-
-type State struct{ Saves int }
 
 // =========================== Game ===========================
 
-// Demo is the board/navigation/selection demo — exactly one Stage (mainStage below).
+// Demo is the board + navigation + vision demo — exactly one Stage (mainStage below).
 type Demo struct{ stage *mainStage }
 
 var _ game.Game = (*Demo)(nil)
@@ -47,7 +51,7 @@ func NewDemo() *Demo { return &Demo{stage: &mainStage{}} }
 
 func (d *Demo) Props() game.Props {
 	return game.Props{
-		Title:       "gram board & navigation plugins demo",
+		Title:       "gram — sight across a board: walls and forests occlude",
 		ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight,
 		TargetTPS: TPS,
 	}
@@ -59,21 +63,24 @@ func (d *Demo) Stages() (map[string]game.Stage, string) {
 
 // =========================== Stage ===========================
 
-// mainStage wires the board/navigation/selection demo; its plugins are its own fields.
+// unitTag marks the demo's units, so a sighting of one can be told from a sighting of terrain.
+type unitTag struct{}
+
 type mainStage struct {
 	world     *world.Plugin
 	board     *board.Plugin
 	nav       *navigation.Plugin
 	collision *collision.Plugin
 	selection *selection.Plugin
-	red, blue kind.Of[unit]
+	vision    *vision.Plugin
+	kinds     []kind.Of[unit]
+	noticed   map[[2]uid.UID64]bool
 	stack     game.Scenes
-	state     *State
 }
 
 var _ game.Stage = (*mainStage)(nil)
 
-func (s *mainStage) Name() string { return "board-navigation-demo" }
+func (s *mainStage) Name() string { return "board-navigation-vision-demo" }
 
 func (s *mainStage) Stack() game.Scenes { return s.stack }
 
@@ -91,7 +98,12 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 
 	grid := board.DefaultGrids{}.Square(GridWidth, GridHeight, CellSize)
 	s.board = board.NewPlugin(grid, &board.SingleOccupancy{}, s.world).WithCollision(s.collision)
-	s.registerCellKinds()
+	s.board.CellKindDict().Create(
+		board.CellKind{Name: "grass", Cost: 2, Passable: true},
+		board.CellKind{Name: "wall", Cost: 1, Passable: false},
+		board.CellKind{Name: "forest", Cost: 3, Passable: true, Opaque: true},
+		board.CellKind{Name: "road", Cost: 1, Passable: true},
+	)
 	if err := ctx.Use(s.board); err != nil {
 		return err
 	}
@@ -101,8 +113,19 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 		return err
 	}
 
+	s.noticed = map[[2]uid.UID64]bool{}
+	s.vision = vision.NewPlugin(s.world)
+	if err := s.vision.RegisterBehavior(
+		plugin.Between[plugin.Anything, plugin.Anything](faceTravel),
+		plugin.Between[unitTag, unitTag](s.noticedEachOther),
+	); err != nil {
+		return err
+	}
+	if err := ctx.Use(s.vision); err != nil {
+		return err
+	}
+
 	s.selection = selection.NewPlugin(s.world)
-	s.state = &State{}
 	if err := ctx.Use(s.selection); err != nil {
 		return err
 	}
@@ -120,38 +143,22 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	return ctx.Track(comp)
 }
 
-// registerCellKinds defines every terrain kind the board can hold.
-func (s *mainStage) registerCellKinds() {
-	s.board.CellKindDict().Create(
-		board.CellKind{Name: "grass", Cost: 2, Passable: true},
-		board.CellKind{Name: "wall", Cost: 1, Passable: false},
-		board.CellKind{Name: "road", Cost: 1, Passable: true},
-	)
-}
+func (s *mainStage) Restore(game.Persistence) (bool, error) { return false, nil }
 
-func (s *mainStage) Restore(p game.Persistence) (bool, error) {
-	saves, err := p.List(saveBasePath)
-	if err != nil {
-		return false, err
-	}
-	if !slices.Contains(saves, "") {
-		return false, nil
-	}
-	if err := p.Load(saveBasePath, "", s.state); err != nil {
-		return false, err
-	}
-	log.Printf("loaded saved board (save #%d)", s.state.Saves)
-	return true, nil
-}
-
-// unit is the row the "red"/"blue" kinds spawn from: where the unit starts and where it heads.
+// unit is the row every unit kind spawns from: where it starts and where it heads.
 type unit struct{ start, target board.CellID }
 
-// defineKinds says what this game's entities are, fresh or restored.
+var unitColors = []color.RGBA{
+	{R: 220, G: 90, B: 90, A: 255},
+	{R: 90, G: 140, B: 220, A: 255},
+	{R: 230, G: 200, B: 80, A: 255},
+}
+
+// defineKinds says what this game's entities are: one kind per colour, all scouts.
 func (s *mainStage) defineKinds() {
 	brd := s.board.Res.Logic.Board
 	occupancy := s.board.Occupancy()
-	unitSpec := kind.Spec{
+	spec := kind.Spec{
 		kind.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(brd, u.start, EntitySize)} }),
 		kind.Const(world.Velocity{}),
 		kind.Const(world.Steering{MaxSpeed: UnitSpeed, Accel: UnitSpeed * 2, V0: UnitSpeed / 2, TurnRate: 0.15}),
@@ -162,10 +169,14 @@ func (s *mainStage) defineKinds() {
 		kind.Const(selection.Selected{}),
 		kind.Const(collision.Collider{}),
 		kind.Const(collision.Physics{}),
+		kind.Const(vision.Sight{Facing: geom.NewVec(1, 0), HalfAngle: sightHalf, Radius: sightRadius}),
+		kind.Const(vision.SightOutline{}),
+		kind.Const(unitTag{}),
 	}
-	kinds := s.world.Kinds()
-	s.red = kind.Define[unit](kinds, "red", unitSpec)
-	s.blue = kind.Define[unit](kinds, "blue", unitSpec)
+	names := []string{"red", "blue", "yellow"}
+	for _, name := range names {
+		s.kinds = append(s.kinds, kind.Define[unit](s.world.Kinds(), name, spec))
+	}
 }
 
 // Spawn says who is there when the game starts fresh.
@@ -173,10 +184,21 @@ func (s *mainStage) Spawn() error {
 	brd := s.board.Res.Logic.Board
 	cell := func(x, y uint32) board.CellID { c, _ := brd.CellIndex(x, y); return c }
 
-	// A wall down column 12 from row 2, and a road round it: along row 1 and down both flanks.
+	// A wall down column 12 with a gap at row 8, a forest either side of the gap, and a road
+	// along row 1 with both flanks.
 	var cells []board.CellEntry
 	for y := uint32(2); y < GridHeight; y++ {
+		if y == gapRow {
+			continue
+		}
 		cells = append(cells, board.CellEntry{Kind: "wall", Cell: cell(wallCol, y)})
+	}
+	for _, f := range [][2]uint32{{6, 6}, {17, 10}} {
+		for dy := uint32(0); dy < 3; dy++ {
+			for dx := uint32(0); dx < 4; dx++ {
+				cells = append(cells, board.CellEntry{Kind: "forest", Cell: cell(f[0]+dx, f[1]+dy)})
+			}
+		}
 	}
 	for x := roadLeft; x <= roadRight; x++ {
 		cells = append(cells, board.CellEntry{Kind: "road", Cell: cell(x, roadTop)})
@@ -187,8 +209,9 @@ func (s *mainStage) Spawn() error {
 	s.board.Seed(board.Layout{Default: "grass", Cells: cells})
 
 	s.world.Seed(
-		s.red.Entry(unit{start: cell(2, 4), target: cell(GridWidth-3, 4)}),
-		s.blue.Entry(unit{start: cell(2, 12), target: cell(GridWidth-3, 12)}),
+		s.kinds[0].Entry(unit{start: cell(2, 4), target: cell(GridWidth-3, 4)}),
+		s.kinds[1].Entry(unit{start: cell(2, 12), target: cell(GridWidth-3, 12)}),
+		s.kinds[2].Entry(unit{start: cell(GridWidth-3, gapRow), target: cell(2, gapRow)}),
 	)
 	return nil
 }
@@ -198,8 +221,30 @@ func (s *mainStage) Update(ctx goke.RunCtx, d time.Duration) {
 	s.collision.RunPlan(ctx, d)
 	s.board.RunPlan(ctx, d)
 	s.nav.RunPlan(ctx, d)
+	s.vision.RunPlan(ctx, d)
 	s.selection.RunPlan(ctx, d)
 	ctx.Sync()
+}
+
+// faceTravel points each unit's Sight where it is going, and leaves it there when it stops.
+func faceTravel(_ plugin.Tick, s vision.Sighting) {
+	if s.Base.Vel.Value > 0 {
+		s.Sight.Facing = s.Base.Vel.Dir
+	}
+}
+
+// noticedEachOther logs the first time one unit sees another.
+func (s *mainStage) noticedEachOther(_ plugin.Tick, sighting vision.Sighting) {
+	for _, seen := range sighting.Seen {
+		if !seen.Carries[unitTag]() {
+			continue
+		}
+		pair := [2]uid.UID64{sighting.Self, seen.ID}
+		if !s.noticed[pair] {
+			s.noticed[pair] = true
+			log.Printf("unit %d sees unit %d at %.0f", sighting.Self, seen.ID, seen.Dist)
+		}
+	}
 }
 
 // =========================== Scene ===========================
@@ -214,19 +259,23 @@ func (m *mainScene) Layers() []render.Renderer {
 	s := m.stage
 
 	worldAtlas := render.NewAtlas()
-	worldAtlas.RegisterAt(s.red.SpriteID(), EntitySize, render.Solid(color.RGBA{R: 220, G: 90, B: 90, A: 255}))
-	worldAtlas.RegisterAt(s.blue.SpriteID(), EntitySize, render.Solid(color.RGBA{R: 90, G: 140, B: 220, A: 255}))
+	for i, k := range s.kinds {
+		worldAtlas.RegisterAt(k.SpriteID(), EntitySize, render.Solid(unitColors[i]))
+	}
 	worldAtlas.Close()
 	s.world.WithRenderer(worldAtlas)
 
 	kinds := s.board.CellKindDict()
-	grass, _ := kinds.Get("grass")
-	wall, _ := kinds.Get("wall")
-	road, _ := kinds.Get("road")
 	boardAtlas := render.NewAtlas()
-	boardAtlas.RegisterAt(grass.SpriteID, CellSize, render.Solid(color.RGBA{R: 60, G: 95, B: 60, A: 255}))
-	boardAtlas.RegisterAt(wall.SpriteID, CellSize, render.Solid(color.RGBA{R: 40, G: 40, B: 40, A: 255}))
-	boardAtlas.RegisterAt(road.SpriteID, CellSize, render.Solid(color.RGBA{R: 150, G: 130, B: 80, A: 255}))
+	for name, c := range map[string]color.RGBA{
+		"grass":  {R: 60, G: 95, B: 60, A: 255},
+		"wall":   {R: 40, G: 40, B: 40, A: 255},
+		"forest": {R: 25, G: 60, B: 30, A: 255},
+		"road":   {R: 150, G: 130, B: 80, A: 255},
+	} {
+		k, _ := kinds.Get(name)
+		boardAtlas.RegisterAt(k.SpriteID, CellSize, render.Solid(c))
+	}
 	boardAtlas.Close()
 	s.board.WithRenderer(boardAtlas)
 
@@ -234,12 +283,13 @@ func (m *mainScene) Layers() []render.Renderer {
 	s.nav.SetPathSprites(pathSprites)
 	s.nav.WithRenderer(pathAtlas)
 
+	s.vision.WithRenderer(nil)
 	s.selection.WithRenderer(nil)
 
-	return []render.Renderer{s.board.Renderer(), s.nav.Renderer(), s.world.Renderer(), s.selection.Renderer()}
+	return []render.Renderer{s.board.Renderer(), s.nav.Renderer(), s.vision.Renderer(), s.world.Renderer(), s.selection.Renderer()}
 }
 
-func (m *mainScene) HandleEvents(events *control.InputEvents, runtime game.Runtime, composition game.Composition) {
+func (m *mainScene) HandleEvents(events *control.InputEvents, runtime game.Runtime, _ game.Composition) {
 	s := m.stage
 	s.selection.EventHandler().HandleEvents(events)
 	s.nav.EventHandler().HandleEvents(events)
@@ -255,16 +305,6 @@ func (m *mainScene) HandleEvents(events *control.InputEvents, runtime game.Runti
 			runtime.TogglePause()
 		case ebiten.KeyB:
 			s.board.Res.Render.ToggleShowGridLines()
-		case ebiten.KeyR:
-			buildShortcut(s.board.Res.Logic.Board, s.board.CellKindDict())
-			log.Print("built a road through the wall — in-flight units re-path onto it as soon as they deviate")
-		case ebiten.KeyF5:
-			s.state.Saves++
-			if err := runtime.Persistence().Save(saveBasePath, "", s.state); err != nil {
-				log.Printf("save: %v", err)
-				continue
-			}
-			log.Printf("saved (save #%d)", s.state.Saves)
 		}
 	}
 }
@@ -272,18 +312,9 @@ func (m *mainScene) HandleEvents(events *control.InputEvents, runtime game.Runti
 func (m *mainScene) Focusable() bool { return true }
 
 const (
-	wallCol     = 12
-	shortcutRow = 8
+	wallCol = 12
+	gapRow  = 8
 
 	roadLeft, roadRight uint32 = 2, GridWidth - 3
 	roadTop, roadBottom uint32 = 1, 13
 )
-
-// buildShortcut lays a road along shortcutRow from flank to flank, through the wall.
-func buildShortcut(brd *board.Board, kinds board.CellKindDict) {
-	road, _ := kinds.Get("road")
-	for x := roadLeft + 1; x < roadRight; x++ {
-		c, _ := brd.CellIndex(x, shortcutRow)
-		brd.Set(c, road)
-	}
-}
