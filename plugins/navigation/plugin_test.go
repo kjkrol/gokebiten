@@ -39,7 +39,7 @@ func TestPlugin_Install_WiresBoardForEventHandler(t *testing.T) {
 	boardPlugin := board.NewPlugin(grid, &board.SingleOccupancy{}, worldPlugin)
 	boardPlugin.Res.Logic.Board.SetAll(board.CellKind{Cost: 1, Passable: true})
 
-	navPlugin := NewPlugin(10, boardPlugin, worldPlugin)
+	navPlugin := NewPlugin(boardPlugin, worldPlugin)
 	ctx := &stubInstallCtx{ecs: goke.New()}
 	if err := navPlugin.Install(ctx); err != nil {
 		t.Fatalf("Install: %v", err)

@@ -9,8 +9,10 @@
 // removed. Its [Path] is the cached route, consumed step by step, at most [MaxPathLength] cells at
 // a time with a longer route fetched in chunks; its [Leg] is the single step in flight — every
 // cell it holds in Occupancy until it reaches the next centre. [CellEntered] is a one-tick tag
-// added the tick an entity's Cell changes. The [Plugin], built with a speed over a board and a
-// world, runs before the world's RunPlan.
+// added the tick an entity's Cell changes. A navigated entity carries a world.Steering profile:
+// navigation only asks it for a heading at the lookahead point and for its own top speed, braking
+// from the profile before the goal. The [Plugin], built over a board and a world, runs before the
+// world's RunPlan.
 //
 // # Commands
 //

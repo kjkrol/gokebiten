@@ -29,7 +29,10 @@ what every unit that carries `Steering` today gets.
 
 This settles the levels of the movement commands from [views.md](views.md): `MoveTo{Cell}` is a
 goal for the planner (navigation), `Steer{Dir}` is a reactive intention (flee, chase); both end in
-a `Request`. An AI may speak at either level.
+a `Request`. An AI may speak at either level. Speed is the unit's own: navigation asks for its
+`MaxSpeed` and brakes from its `Accel`, and `navigation.NewPlugin` takes no speed — unit types
+differ in tempo through their kind. A unit with a `MoveOrder` but no `Steering` profile is not
+navigated.
 
 ### The motion profile lives in Steering
 
@@ -49,16 +52,18 @@ never past `MaxSpeed`; and it **writes `Vel.Value = Speed` afresh every tick**, 
 of today: `VelocitySystem` multiplies `Vel.Value` in place, so whoever owns the base speed must
 rewrite it every tick or the modifiers compound — navigation happens to, other units happen not to.
 
-Everything below follows from the profile. The turning radius is `Speed / TurnRate`: wide arcs at
-full speed, tight ones when setting off. The braking distance is `Speed² / (2·Accel)`: navigation
-asks for `WantSpeed = 0` that far from the goal and the unit comes to rest on it. The profile is
+Everything below follows from the profile. The turning radius is `Speed·dt / TurnRate`: wide arcs
+at full speed, tight ones when setting off. Braking follows `v = sqrt(2·Accel·d)`: navigation asks
+for that speed at distance `d` from the goal, never below the speed braking leaves at the arrival
+radius, and the unit comes to rest on the goal. The profile is
 the kind's (`kind.Const(world.Steering{MaxSpeed: 120, Accel: 200, V0: 40, TurnRate: 0.1})`), so
 unit types differ in how they move without any code.
 
 ## 2. Where to look: the lookahead point
 
 Instead of the centre of the current cell, the unit aims at a point on its path a distance
-`d = Speed / TurnRate` ahead — the arc it can physically make. Walk the path's segments from the
+`reach = Speed·dt / TurnRate` ahead — the turning radius: the way covered in a tick over the radians
+turned in a tick. Walk the path's segments from the
 unit's projection onto them, lay off `d`, take the point (on a torus through `shortestAxisDelta`,
 as today). As the point passes a bend in the path, the requested heading starts to rotate before
 the unit reaches the cell, and the `SteeringSystem` carries it round the arc. With `TurnRate = 0`
@@ -133,7 +138,15 @@ is re-planned or the waypoint queue changes and kept beside the `Path` — a fra
 The lookahead point in navigation and the arc sampling in the style share one piece of code, so
 what is drawn and what is driven cannot drift apart.
 
-## 9. Arbitration — open
+## 9. Turn-based movement — open, its own plan
+
+A strictly turn-based game wants every unit to move at one tempo, not its own, and wants to say
+who moves when. That is a layer above navigation: it sets the tempo for the duration of a move
+(overriding the profile's speed while the move lasts) and issues `MoveTo` one unit at a time,
+waiting for each arrival. Nothing in navigation needs to know; it is planned separately, after
+the waypoint queue.
+
+## 10. Arbitration — open
 
 The planner and a reaction may want to steer the same unit in the same tick: a unit on its route
 while `Flee` says "sideways". The rule to start with: the reactive request wins the tick, and the
@@ -141,7 +154,7 @@ planner, finding itself off the route, re-plans (that exists). The alternative �
 that sums weighted requests, in the manner of classic steering behaviors — is more machinery,
 worth it only once the simple rule fails somewhere real.
 
-## 10. What changes in code, when it comes to that
+## 11. What changes in code, when it comes to that
 
 Not a plan, a list. `navigationSystem` becomes a source of `Request` calls and no longer writes
 `Vel`; navigated units must carry `Steering` (their kind gives it); `arrivalEpsilon` applies to

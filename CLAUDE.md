@@ -207,7 +207,10 @@ shows how much of it is boilerplate vs. real behavior.
   `RegisterBehavior(plugin.Between[A, B](fn), ...)`. `Collider` is the plugin's one
   aggregate: what the entity struck (`Collider.Contacts()`). Depends on `world`.
 - **`navigation`** — pathfinding/movement toward a `MoveOrder` across a
-  `board`. Depends on `board` and `world`.
+  `board`. A navigated unit carries a `world.Steering` profile: navigation only asks it for a
+  heading (at a lookahead point, so turns start before the bend) and for its own top speed, braking
+  from the profile before the goal; a waypoint is passed by projection, the goal by radius. Depends
+  on `board` and `world`.
 - **`selection`** — mouse click/drag → `Selected` tag on `world` entities.
   Depends on `world`.
 - **`vision`** — narrowed perception: a `Sight` cone scanned against `world`'s

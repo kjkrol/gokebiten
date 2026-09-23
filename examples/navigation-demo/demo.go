@@ -91,7 +91,7 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 		return err
 	}
 
-	s.nav = navigation.NewPlugin(UnitSpeed, s.board, s.world)
+	s.nav = navigation.NewPlugin(s.board, s.world)
 	if err := ctx.Use(s.nav); err != nil {
 		return err
 	}
@@ -123,9 +123,9 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 // registerCellKinds defines every terrain kind the board can hold.
 func (s *mainStage) registerCellKinds() {
 	s.board.CellKindDict().Create(
-		board.CellKind{Name: "grass", Cost: 1, Passable: true},
+		board.CellKind{Name: "grass", Cost: 2, Passable: true},
 		board.CellKind{Name: "wall", Cost: 1, Passable: false},
-		board.CellKind{Name: "road", Cost: 0.4, Passable: true},
+		board.CellKind{Name: "road", Cost: 1, Passable: true},
 	)
 }
 
@@ -154,6 +154,7 @@ func (s *mainStage) defineKinds() {
 	unitSpec := kind.Spec{
 		kind.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(brd, u.start, EntitySize)} }),
 		kind.Const(world.Velocity{}),
+		kind.Const(world.Steering{MaxSpeed: UnitSpeed, Accel: UnitSpeed * 2, V0: UnitSpeed / 2, TurnRate: 0.15}),
 		kind.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
 		kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }).
 			WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
@@ -171,11 +172,18 @@ func (s *mainStage) Spawn() error {
 	brd := s.board.Res.Logic.Board
 	cell := func(x, y uint32) board.CellID { c, _ := brd.CellIndex(x, y); return c }
 
-	var walls []board.CellEntry
+	// A wall down column 12 from row 2, and a road round it: along row 1 and down both flanks.
+	var cells []board.CellEntry
 	for y := uint32(2); y < GridHeight; y++ {
-		walls = append(walls, board.CellEntry{Kind: "wall", Cell: cell(wallCol, y)})
+		cells = append(cells, board.CellEntry{Kind: "wall", Cell: cell(wallCol, y)})
 	}
-	s.board.Seed(board.Layout{Default: "grass", Cells: walls})
+	for x := roadLeft; x <= roadRight; x++ {
+		cells = append(cells, board.CellEntry{Kind: "road", Cell: cell(x, roadTop)})
+	}
+	for y := roadTop + 1; y <= roadBottom; y++ {
+		cells = append(cells, board.CellEntry{Kind: "road", Cell: cell(roadLeft, y)}, board.CellEntry{Kind: "road", Cell: cell(roadRight, y)})
+	}
+	s.board.Seed(board.Layout{Default: "grass", Cells: cells})
 
 	s.world.Seed(
 		s.red.Entry(unit{start: cell(2, 4), target: cell(GridWidth-3, 4)}),
@@ -264,10 +272,16 @@ func (m *mainScene) Focusable() bool { return true }
 const (
 	wallCol     = 12
 	shortcutRow = 8
+
+	roadLeft, roadRight uint32 = 2, GridWidth - 3
+	roadTop, roadBottom uint32 = 1, 13
 )
 
+// buildShortcut lays a road along shortcutRow from flank to flank, through the wall.
 func buildShortcut(brd *board.Board, kinds board.CellKindDict) {
 	road, _ := kinds.Get("road")
-	c, _ := brd.CellIndex(wallCol, shortcutRow)
-	brd.Set(c, road)
+	for x := roadLeft + 1; x < roadRight; x++ {
+		c, _ := brd.CellIndex(x, shortcutRow)
+		brd.Set(c, road)
+	}
 }

@@ -43,20 +43,21 @@ func (l Leg) cells() []board.CellID {
 // query it to react to a unit stepping onto a cell.
 type CellEntered struct{ ID board.CellID }
 
-// navigationSystem paths MoveOrder-commanded entities toward their target,
-// setting Velocity's direction and base speed toward the next waypoint.
+// navigationSystem paths MoveOrder-commanded entities toward their target, asking their Steering
+// for a heading at the lookahead point and a speed from their profile.
 type navigationSystem struct {
 	grid       board.Grid
 	terrain    board.Terrain
 	occupancy  board.Occupancy
-	speed      float64
 	space      *aabbworld.Space
 	pathFinder *pathFinder
 
 	query *goke.Query
 	cell  goke.Comp[board.Cell]
 	base  goke.Comp[world.Base]
+	steer goke.Comp[world.Steering]
 	order goke.OptComp[MoveOrder]
+	route []geom.Vec // the centres ahead, unwrapped, reused each entity
 
 	cellEnteredAdd goke.Comp[CellEntered]
 	enterVM        *goke.ValueEditor
@@ -73,22 +74,19 @@ var _ goke.System = (*navigationSystem)(nil)
 // targetWaitTimeout is how long an entity waits for an occupied target before settling nearby.
 const targetWaitTimeout = 500 * time.Millisecond
 
-// arrivalEpsilon is how close, in world units, counts as having reached a waypoint.
+// arrivalEpsilon is how close, in world units, counts as having reached the goal.
 const arrivalEpsilon = 2.0
 
-// newNavigationSystem builds a navigationSystem moving entities at speed world units a second.
-func newNavigationSystem(pathFinder *pathFinder, grid board.Grid, terrain board.Terrain, occupancy board.Occupancy, speed float64) *navigationSystem {
-	return &navigationSystem{
-		grid: grid, terrain: terrain, occupancy: occupancy, speed: speed,
-		pathFinder: pathFinder,
-	}
+// newNavigationSystem builds a navigationSystem over grid; entities move at their Steering profile.
+func newNavigationSystem(pathFinder *pathFinder, grid board.Grid, terrain board.Terrain, occupancy board.Occupancy) *navigationSystem {
+	return &navigationSystem{grid: grid, terrain: terrain, occupancy: occupancy, pathFinder: pathFinder}
 }
 
 // BindSpace attaches the shared spatial index, so arrivals snap to the cell centre.
 func (s *navigationSystem) BindSpace(space *aabbworld.Space) { s.space = space }
 
 func (s *navigationSystem) Init(si *goke.SysInit) {
-	s.query = si.NewQueryBuilder(&s.cell, &s.base).
+	s.query = si.NewQueryBuilder(&s.cell, &s.base, &s.steer).
 		Optional(&s.order).
 		Build()
 	s.arrivedEditor = s.query.NewEditorBuilder().Remove(goke.Remove[MoveOrder]()).Build()
@@ -121,10 +119,14 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 		var bothIDs []uid.UID64
 		var bothVals []CellEntered
 
+		steers := s.steer.Slice(cursor)
+		dt := d.Seconds()
+
 		for i, id := range cursor.IDs {
 			target := orders[i].Target
 			p := &orders[i].Path
 			leg := &orders[i].Leg
+			st := &steers[i]
 			current := cells[i].ID
 			actual, ok := s.grid.CellAt(board.Center(bases[i].Pos))
 			if !ok {
@@ -165,7 +167,7 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 			if !leg.Active && (p.Length == 0 || p.Index >= p.Length) && cells[i].ID != target {
 				newPath, found := s.pathFinder.findPath(id, cells[i].ID, target)
 				if !found {
-					bases[i].Vel.Value = 0
+					st.RequestSpeed(0)
 					orders[i].Waited += d
 					if orders[i].Waited < targetWaitTimeout {
 						continue
@@ -193,28 +195,51 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 			if !leg.Active && waypoint != cells[i].ID {
 				reserved, ok := s.reserveLeg(cells[i].ID, waypoint, id)
 				if !ok {
-					bases[i].Vel.Value = 0
+					st.RequestSpeed(0)
 					p.Length = 0
 					continue
 				}
 				*leg = reserved
 			}
 
-			want := s.grid.CellCenter(waypoint)
 			have := board.Center(bases[i].Pos)
-			dx, dy := want.X-have.X, want.Y-have.Y
-			if s.space != nil {
-				dx = shortestAxisDelta(have.X, want.X, s.space.Width, s.space.Edges.WrapsX())
-				dy = shortestAxisDelta(have.Y, want.Y, s.space.Height, s.space.Edges.WrapsY())
-			}
-			dist := math.Hypot(dx, dy)
-			if dist > arrivalEpsilon {
-				bases[i].Vel.Dir = geom.NewVec(dx/dist, dy/dist)
-				bases[i].Vel.Value = s.speed
+			want := s.unwrap(have, s.grid.CellCenter(waypoint))
+
+			if waypoint != target {
+				from := cells[i].ID
+				if leg.Active {
+					from = leg.From
+				}
+				if !passed(have, want, s.unwrap(have, s.grid.CellCenter(from))) {
+					s.aim(st, have, s.ahead(have, want, p, waypoint, target), dt)
+					st.RequestSpeed(st.MaxSpeed)
+					continue
+				}
+				if leg.Active {
+					s.releaseLeg(*leg, id)
+					s.occupancy.Enter(leg.To, id)
+					moveTo(leg.To)
+					*leg = Leg{}
+				}
+				if p.Index < p.Length && p.Steps[p.Index] == waypoint {
+					p.Index++
+				}
+				// keep going: the next waypoint is aimed at now, reserved next tick
+				s.aim(st, have, s.ahead(have, want, p, waypoint, target)[1:], dt)
+				st.RequestSpeed(st.MaxSpeed)
 				continue
 			}
 
-			bases[i].Vel.Value = 0
+			dx, dy := want.X-have.X, want.Y-have.Y
+			dist := math.Hypot(dx, dy)
+			if dist > arrivalEpsilon {
+				st.Request(geom.NewVec(dx, dy))
+				st.RequestSpeed(approach(st, dist))
+				continue
+			}
+
+			st.RequestSpeed(0)
+			st.Speed = 0
 
 			if s.space != nil && (dx != 0 || dy != 0) {
 				s.space.Move(&bases[i].Pos.AABB, geom.NewVec(dx, dy))
@@ -231,15 +256,13 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 				p.Index++
 			}
 
-			if waypoint == target {
-				if entered {
-					n := len(enteredIDs) - 1
-					bothIDs = append(bothIDs, enteredIDs[n])
-					bothVals = append(bothVals, enteredVals[n])
-					enteredIDs, enteredVals = enteredIDs[:n], enteredVals[:n]
-				} else {
-					arrivedIDs = append(arrivedIDs, id)
-				}
+			if entered {
+				n := len(enteredIDs) - 1
+				bothIDs = append(bothIDs, enteredIDs[n])
+				bothVals = append(bothVals, enteredVals[n])
+				enteredIDs, enteredVals = enteredIDs[:n], enteredVals[:n]
+			} else {
+				arrivedIDs = append(arrivedIDs, id)
 			}
 		}
 
@@ -259,6 +282,93 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 			buf.Commit(s.arrivedEditor)
 		}
 	}
+}
+
+// unwrap is to as seen from have: the short way round on a wrapping axis.
+func (s *navigationSystem) unwrap(have, to geom.Vec) geom.Vec {
+	if s.space == nil {
+		return to
+	}
+	return geom.NewVec(
+		have.X+shortestAxisDelta(have.X, to.X, s.space.Width, s.space.Edges.WrapsX()),
+		have.Y+shortestAxisDelta(have.Y, to.Y, s.space.Height, s.space.Edges.WrapsY()),
+	)
+}
+
+// ahead is the route to steer by: want, then the centres of the steps after waypoint, up to target.
+func (s *navigationSystem) ahead(have, want geom.Vec, p *Path, waypoint, target board.CellID) []geom.Vec {
+	s.route = append(s.route[:0], want)
+	if waypoint == target {
+		return s.route
+	}
+	k := int(p.Index)
+	if k < int(p.Length) && p.Steps[k] == waypoint {
+		k++
+	}
+	last := want
+	for ; k < int(p.Length) && len(s.route) < maxAhead; k++ {
+		last = s.unwrap(last, s.grid.CellCenter(p.Steps[k]))
+		s.route = append(s.route, last)
+	}
+	return s.route
+}
+
+// maxAhead caps how many centres ahead the lookahead point is sought along.
+const maxAhead = 8
+
+// aim asks st for the heading to the lookahead point on route.
+func (s *navigationSystem) aim(st *world.Steering, have geom.Vec, route []geom.Vec, dt float64) {
+	reach := 0.0
+	if st.TurnRate > 0 {
+		reach = st.Speed * dt / st.TurnRate
+	}
+	at := lookahead(have, route, reach)
+	if at != have {
+		st.Request(geom.NewVec(at.X-have.X, at.Y-have.Y))
+	}
+}
+
+// lookahead is the point reach along the polyline have → route[0] → route[1] …, or its end.
+func lookahead(have geom.Vec, route []geom.Vec, reach float64) geom.Vec {
+	if len(route) == 0 {
+		return have
+	}
+	if reach <= 0 {
+		return route[0]
+	}
+	at := have
+	for _, p := range route {
+		dx, dy := p.X-at.X, p.Y-at.Y
+		d := math.Hypot(dx, dy)
+		if d >= reach {
+			if d == 0 {
+				return p
+			}
+			return geom.NewVec(at.X+dx/d*reach, at.Y+dy/d*reach)
+		}
+		reach -= d
+		at = p
+	}
+	return at
+}
+
+// passed reports have beyond the plane through w perpendicular to the segment from → w.
+func passed(have, w, from geom.Vec) bool {
+	ax, ay := w.X-from.X, w.Y-from.Y
+	if ax == 0 && ay == 0 {
+		return math.Hypot(have.X-w.X, have.Y-w.Y) <= arrivalEpsilon
+	}
+	return (have.X-w.X)*ax+(have.Y-w.Y)*ay >= 0
+}
+
+// approach is the speed that brings st to rest on the goal dist away, never below the speed
+// braking would leave it at the arrival radius.
+func approach(st *world.Steering, dist float64) float64 {
+	if st.Accel <= 0 {
+		return st.MaxSpeed
+	}
+	v := max(math.Sqrt(2*st.Accel*dist), math.Sqrt(2*st.Accel*arrivalEpsilon))
+	return min(v, st.MaxSpeed)
 }
 
 // reserveLeg claims every cell a step from→to can touch, or none of them and false.

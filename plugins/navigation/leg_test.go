@@ -42,7 +42,7 @@ func newLegWorld(t *testing.T, w, h uint32, units ...legUnit) *legWorld {
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	lw.terrain = terrain
-	steer := newNavigationSystem(newPathFinder(lw.grid, terrain, lw.occupancy), lw.grid, terrain, lw.occupancy, float64(legCellSize*2))
+	steer := newNavigationSystem(newPathFinder(lw.grid, terrain, lw.occupancy), lw.grid, terrain, lw.occupancy)
 	space := testSpace(t)
 	steer.BindSpace(space)
 
@@ -51,7 +51,8 @@ func newLegWorld(t *testing.T, w, h uint32, units ...legUnit) *legWorld {
 		for _, u := range units {
 			var cell goke.Comp[board.Cell]
 			var pos goke.Comp[world.Base]
-			comps := []goke.Addable{&cell, &pos}
+			var profile goke.Comp[world.Steering]
+			comps := []goke.Addable{&cell, &pos, &profile}
 			var order goke.Comp[MoveOrder]
 			if u.hasOrder {
 				comps = append(comps, &order)
@@ -63,6 +64,7 @@ func newLegWorld(t *testing.T, w, h uint32, units ...legUnit) *legWorld {
 			p := world.Position{AABB: board.CellAABB(lw.grid, u.start, legEntitySize)}
 			cell.Slice(&f.Cursor)[0] = board.Cell{ID: u.start}
 			pos.Slice(&f.Cursor)[0].Pos = p
+			profile.Slice(&f.Cursor)[0] = world.Steering{MaxSpeed: float64(legCellSize * 2)}
 			if u.hasOrder {
 				order.Slice(&f.Cursor)[0] = MoveOrder{Target: u.target}
 			}
@@ -73,9 +75,11 @@ func newLegWorld(t *testing.T, w, h uint32, units ...legUnit) *legWorld {
 	}})
 
 	steerHandle := lw.ecs.RegSys(steer)
+	steeringHandle := lw.ecs.RegSys(world.NewSteeringSystem())
 	moveHandle := lw.ecs.RegSys(world.NewMoveSystem(space))
 	lw.ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(steerHandle, d)
+		ctx.Run(steeringHandle, d)
 		ctx.Run(moveHandle, d)
 		ctx.Sync()
 	})
@@ -303,7 +307,7 @@ func TestModule_PostLoad_RestoresLegCells(t *testing.T) {
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 	occupancy := &board.SingleOccupancy{}
-	m := &module{navigationSystem: newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy, 10)}
+	m := &module{navigationSystem: newNavigationSystem(newPathFinder(grid, terrain, occupancy), grid, terrain, occupancy)}
 
 	from, _ := grid.CellIndex(0, 0)
 	to, _ := grid.CellIndex(1, 1)

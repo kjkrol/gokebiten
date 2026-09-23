@@ -16,8 +16,6 @@ import (
 // Plugin moves entities along a MoveOrder's path across a board, re-pathing when terrain changes.
 // WithCommands adds right-click move orders; WithRenderer draws the remaining route.
 type Plugin struct {
-	speed float64
-
 	boardPlugin *board.Plugin
 	worldPlugin *world.Plugin
 
@@ -34,9 +32,9 @@ type Plugin struct {
 
 var _ plugin.Plugin = (*Plugin)(nil)
 
-// NewPlugin builds a navigation plugin moving entities at speed world units a second.
-func NewPlugin(speed float64, boardPlugin *board.Plugin, worldPlugin *world.Plugin) *Plugin {
-	return &Plugin{speed: speed, boardPlugin: boardPlugin, worldPlugin: worldPlugin, camera: worldPlugin.Camera()}
+// NewPlugin builds a navigation plugin over a board; entities move as their Steering profile says.
+func NewPlugin(boardPlugin *board.Plugin, worldPlugin *world.Plugin) *Plugin {
+	return &Plugin{boardPlugin: boardPlugin, worldPlugin: worldPlugin, camera: worldPlugin.Camera()}
 }
 
 // =================================================================
@@ -51,7 +49,7 @@ func (p *Plugin) Install(ctx plugin.Installer) error {
 
 	occupancy := p.boardPlugin.Occupancy()
 	finder := newPathFinder(brd, brd, occupancy)
-	navSys := newNavigationSystem(finder, brd, brd, occupancy, p.speed)
+	navSys := newNavigationSystem(finder, brd, brd, occupancy)
 	navSys.BindSpace(p.worldPlugin.Space())
 
 	p.res = &Resources{}

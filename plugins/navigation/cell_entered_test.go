@@ -33,7 +33,7 @@ func newEnteredWorld(t *testing.T, w, h uint32, start, target board.CellID) *ent
 	terrain.SetAll(board.CellKind{Cost: 1, Passable: true})
 
 	steer := newNavigationSystem(
-		newPathFinder(ew.grid, terrain, occupancy), ew.grid, terrain, occupancy, float64(legCellSize*2))
+		newPathFinder(ew.grid, terrain, occupancy), ew.grid, terrain, occupancy)
 	space := testSpace(t)
 	steer.BindSpace(space)
 
@@ -47,8 +47,9 @@ func newEnteredWorld(t *testing.T, w, h uint32, start, target board.CellID) *ent
 		var cell goke.Comp[board.Cell]
 		var pos goke.Comp[world.Base]
 		var order goke.Comp[MoveOrder]
+		var profile goke.Comp[world.Steering]
 
-		f := si.NewFactory(&cell, &pos, &order)
+		f := si.NewFactory(&cell, &pos, &order, &profile)
 		f.Create(1)
 		f.Next()
 		ew.id = f.Cursor.IDs[0]
@@ -56,6 +57,7 @@ func newEnteredWorld(t *testing.T, w, h uint32, start, target board.CellID) *ent
 		cell.Slice(&f.Cursor)[0] = board.Cell{ID: start}
 		pos.Slice(&f.Cursor)[0].Pos = p
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
+		profile.Slice(&f.Cursor)[0] = world.Steering{MaxSpeed: float64(legCellSize * 2)}
 		occupancy.Enter(start, ew.id)
 
 		enteredQ = si.NewQueryBuilder(&enteredComp).Build()
@@ -63,6 +65,7 @@ func newEnteredWorld(t *testing.T, w, h uint32, start, target board.CellID) *ent
 	}})
 
 	steerHandle := ew.ecs.RegSys(steer)
+	steeringHandle := ew.ecs.RegSys(world.NewSteeringSystem())
 	moveHandle := ew.ecs.RegSys(world.NewMoveSystem(space))
 	observer := ew.ecs.RegSys(goke.SystemFn{OnUpdate: func(*goke.CmdBuf, time.Duration) {
 		clear(ew.entered)
@@ -87,6 +90,7 @@ func newEnteredWorld(t *testing.T, w, h uint32, start, target board.CellID) *ent
 
 	ew.ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(steerHandle, d)
+		ctx.Run(steeringHandle, d)
 		ctx.Run(moveHandle, d)
 		ctx.Sync()
 		ctx.Run(observer, d)
