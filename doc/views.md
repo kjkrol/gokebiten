@@ -102,8 +102,8 @@ game event: menus, pause, switching Stages.
 `selection.DefaultEventHandler`, `navigation.DefaultCommandEventHandler` and world's camera handler
 become the default bindings producing commands; the `Pending*` fields of the plugins' `Resources`
 go. `world.Steering.Request` stays as motion mechanics — how an entity carries out a heading — and
-an AI's intention arrives as a command (`Steer{Entity, Dir}`, or higher, `MoveTo`); which level, the
-implementation plan decides.
+an AI's intention arrives as a command (`Steer{Entity, Dir}`, or higher, `MoveTo`); how those two
+levels meet in one actuator, and how a unit follows a route through it, is [movement.md](movement.md).
 
 ### What it buys
 

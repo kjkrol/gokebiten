@@ -167,7 +167,9 @@ shows how much of it is boilerplate vs. real behavior.
   over any bounds source, `Plugin.View()` is the camera's) — the entity renderer draws only what
   the camera's View contains. `doc/views.md` maps where this leads: players (a view, a
   command queue and a translator each — bindings for a person, a brain for an AI; plugins define
-  the command types and ship default, labelled bindings) and a networking plugin over them. `Populate` and
+  the command types and ship default, labelled bindings) and a networking plugin over them; `doc/movement.md` sketches
+  movement along a route through `Steering` (motion profile, lookahead point, waypoints, walls
+  and holes as entities). `Populate` and
   `PostLoad` rebuild it too, so it is whole before the first tick; a despawned
   entity is gone from it on the next. Anything reading the space in its own pass
   sees the boxes as they were after the last rebuild.
