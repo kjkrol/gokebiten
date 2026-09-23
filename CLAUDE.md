@@ -318,5 +318,8 @@ README in step. All benchmarks live in `bench/` (package `bench_test`), built on
 an entry per tag. The headless installer in `bench/headless_test.go` is the fifth copy of the same
 helper (the others are in the demo's and plugins' tests) — a candidate for one exported test helper.
 
+Comments in code are short: one or two sentences saying what a thing is and what it is for. No
+essays, no restating the signature, no background — that belongs in `doc/*.md` or a `doc.go`.
+
 Commit messages use the conventional prefixes (`feat`, `fix`, `docs`, `refactor`, `perf`, `test`,
 `chore`) and carry no `Co-Authored-By` trailer.

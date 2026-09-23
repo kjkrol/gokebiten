@@ -10,8 +10,8 @@ import (
 
 var _ goke.System = (*SteeringSystem)(nil)
 
-// SteeringSystem carries out Steering requests between the decision pass and movement:
-// it counts down Reflex and swings Velocity.Dir towards Want by at most TurnRate.
+// SteeringSystem carries out Steering requests between the decision pass and movement: heading by
+// at most TurnRate a tick, and base speed rewritten each tick for an entity with a motion profile.
 type SteeringSystem struct {
 	query *goke.Query
 	steer goke.Comp[Steering]
@@ -24,7 +24,8 @@ func (s *SteeringSystem) Init(si *goke.SysInit) {
 	s.query = si.NewQueryBuilder(&s.steer, &s.base).Build()
 }
 
-func (s *SteeringSystem) Update(*goke.CmdBuf, time.Duration) {
+func (s *SteeringSystem) Update(_ *goke.CmdBuf, d time.Duration) {
+	dt := d.Seconds()
 	s.query.All()
 	for s.query.Next() {
 		cursor := s.query.Cursor()
@@ -41,6 +42,10 @@ func (s *SteeringSystem) Update(*goke.CmdBuf, time.Duration) {
 				if st.Delay == 0 {
 					st.Want = st.Pending
 				}
+			}
+			if st.MaxSpeed > 0 {
+				st.advance(dt)
+				bases[i].Vel.Value = st.Speed
 			}
 		}
 	}

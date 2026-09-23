@@ -39,8 +39,9 @@
 // # Systems
 //
 // [Plugin.RunPlan] runs the tick: every registered [Behavior] (a decision system, see
-// [Plugin.RegisterBehavior]), then [SteeringSystem] and [VelocitySystem] fold [Steering] requests
-// and every [SpeedModifier] into each entity's speed, then [MoveSystem] moves every box under the
+// [Plugin.RegisterBehavior]), then [SteeringSystem] carries out [Steering] requests (heading, and base
+// speed for an entity with a motion profile), [VelocitySystem] folds every [SpeedModifier] into
+// that speed, then [MoveSystem] moves every box under the
 // edge rules and hands the space every Base as an aabbworld.Item — Space.Rebuild. The space keeps
 // no state of its own between ticks: Populate and PostLoad rebuild it too, so it is whole before
 // the first tick, and a despawned entity is gone from it on the next. Anything reading the space

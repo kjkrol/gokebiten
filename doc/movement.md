@@ -22,7 +22,10 @@ waits (`targetWaitTimeout`) and then settles for the `nearestFree` cell.
 ## 1. One actuator: Steering
 
 The only thing that moves a unit — turns it and speeds it up — is `world.Steering`. Everything
-else asks: `Steering.Request(dir, speed)`. Navigation stops writing `Vel.Dir` and `Vel.Value`.
+else asks: `Steering.Request(dir)` for a heading, `Steering.RequestSpeed(v)` for a speed. Navigation
+stops writing `Vel.Dir` and `Vel.Value`. The profile is active when `MaxSpeed` is above zero;
+without one, `Steering` steers headings only and `Vel.Value` stays whoever's it was — which is
+what every unit that carries `Steering` today gets.
 
 This settles the levels of the movement commands from [views.md](views.md): `MoveTo{Cell}` is a
 goal for the planner (navigation), `Steer{Dir}` is a reactive intention (flee, chase); both end in
@@ -34,7 +37,7 @@ Beside `TurnRate` and `Reflex`, `Steering` carries how the unit accelerates:
 
 | Field | Meaning |
 |:---|:---|
-| `MaxSpeed` | the unit's top base speed, world units a second; must fit in `Position.MaxSpeed(tps)`, the step `StepReach` allows — a kind that says more is refused at `Define` |
+| `MaxSpeed` | the unit's top base speed, world units a second; zero means no profile. A speed past the step `StepReach` allows (`Position.MaxSpeed(tps)`) is clipped by the move, tick by tick — a kind does not know the tick rate, so nothing refuses it earlier |
 | `Accel` | how fast it speeds up and slows down, units a second²; a separate brake only when a game asks for one |
 | `V0` | the speed it has the instant it sets off from standing: a walker walks at once, a tank starts from nothing |
 | `Speed`, `WantSpeed` | state: the current base speed, and the one asked for |

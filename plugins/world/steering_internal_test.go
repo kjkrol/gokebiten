@@ -196,3 +196,136 @@ func TestSteering_KeepsActingOnTheLastDecisionWhileReacting(t *testing.T) {
 		}
 	}
 }
+
+// speedTicks spawns one entity carrying st at vel, runs n ticks at 60 TPS with the given speed
+// modifiers, and reports the Steering's base speed and the entity's Velocity.Value after each.
+func speedTicks(t *testing.T, st Steering, vel Velocity, modifiers []SpeedModifier, n int) (speeds, values []float64) {
+	t.Helper()
+
+	wm := testWorld()
+	wm.modifiers = modifiers
+	wm.populate(testKind(
+		Position{AABB: plane.NewAABB(geom.NewVec(500, 500), 10, 10)},
+		vel,
+		kind.Const(st),
+	), []any{nil})
+
+	var base goke.Comp[Base]
+	var steer goke.Comp[Steering]
+	var query *goke.Query
+	ecs := goke.New()
+	ecs.Setup(append(wm.SetupSystems(), goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		query = si.NewQueryBuilder(&base, &steer).Build()
+	}})...)
+	wm.RegSystems(ecs)
+	ecs.SetPlan(wm.RunPlan)
+
+	for range n {
+		ecs.Tick(time.Second / 60)
+		query.All()
+		for query.Next() {
+			cur := query.Cursor()
+			for i := range cur.IDs {
+				speeds = append(speeds, steer.Slice(cur)[i].Speed)
+				values = append(values, base.Slice(cur)[i].Vel.Value)
+			}
+		}
+	}
+	return speeds, values
+}
+
+// halving is a SpeedModifier that halves whatever speed it is handed.
+type halving struct{}
+
+func (halving) Bind(*goke.QueryBuilder) {}
+func (halving) Apply(_ *goke.Cursor, _ int, _ *Base, acc float64) float64 {
+	return acc * 0.5
+}
+
+func TestSteering_NoProfileLeavesSpeedAlone(t *testing.T) {
+	_, values := speedTicks(t, Steering{TurnRate: 0.5}, Velocity{Dir: east, Value: 60}, nil, 3)
+	for tick, v := range values {
+		if v != 60 {
+			t.Fatalf("tick %d: Velocity.Value = %v, want the kind's 60 left alone without a profile", tick+1, v)
+		}
+	}
+}
+
+func TestSteering_SetsOffAtV0ThenAccelerates(t *testing.T) {
+	st := Steering{MaxSpeed: 100, Accel: 200, V0: 40, WantSpeed: 100}
+	speeds, values := speedTicks(t, st, Velocity{Dir: east}, nil, 40)
+
+	step := 200 * (time.Second / 60).Seconds() // one tick of Accel, at the tick length the harness uses
+	if speeds[0] != 40 {
+		t.Errorf("tick 1: Speed = %v, want V0 = 40 the instant it sets off", speeds[0])
+	}
+	if got, want := speeds[1], 40+step; math.Abs(got-want) > 1e-9 {
+		t.Errorf("tick 2: Speed = %v, want %v (V0 plus one tick of Accel)", got, want)
+	}
+	for tick := 1; tick < len(speeds); tick++ {
+		if speeds[tick] < speeds[tick-1] {
+			t.Fatalf("tick %d: Speed fell from %v to %v while accelerating", tick+1, speeds[tick-1], speeds[tick])
+		}
+	}
+	if last := speeds[len(speeds)-1]; last != 100 {
+		t.Errorf("after 40 ticks Speed = %v, want it settled at MaxSpeed 100", last)
+	}
+	for tick := range speeds {
+		if values[tick] != speeds[tick] {
+			t.Fatalf("tick %d: Velocity.Value = %v, Speed = %v; the base speed is not written through", tick+1, values[tick], speeds[tick])
+		}
+	}
+}
+
+func TestSteering_SpeedIsHeldWithinTheProfile(t *testing.T) {
+	s := &Steering{MaxSpeed: 100}
+	s.RequestSpeed(500)
+	if s.WantSpeed != 100 {
+		t.Errorf("RequestSpeed(500) asked for %v, want MaxSpeed 100", s.WantSpeed)
+	}
+	s.RequestSpeed(-1)
+	if s.WantSpeed != 0 {
+		t.Errorf("RequestSpeed(-1) asked for %v, want 0", s.WantSpeed)
+	}
+	none := &Steering{}
+	none.RequestSpeed(50)
+	if none.WantSpeed != 0 {
+		t.Errorf("RequestSpeed without a profile asked for %v, want nothing", none.WantSpeed)
+	}
+}
+
+func TestSteering_BrakesToAHalt(t *testing.T) {
+	st := Steering{MaxSpeed: 100, Accel: 200, V0: 40, Speed: 100, WantSpeed: 0}
+	speeds, _ := speedTicks(t, st, Velocity{Dir: east, Value: 100}, nil, 40)
+
+	step := 200 * (time.Second / 60).Seconds()
+	if got, want := speeds[0], 100-step; math.Abs(got-want) > 1e-9 {
+		t.Errorf("tick 1: Speed = %v, want %v (one tick of braking)", got, want)
+	}
+	for tick := 1; tick < len(speeds); tick++ {
+		if speeds[tick] > speeds[tick-1] || speeds[tick] < 0 {
+			t.Fatalf("tick %d: Speed went from %v to %v while braking", tick+1, speeds[tick-1], speeds[tick])
+		}
+	}
+	if last := speeds[len(speeds)-1]; last != 0 {
+		t.Errorf("after 40 ticks Speed = %v, want a halt at 0", last)
+	}
+}
+
+func TestSteering_NoAccelChangesSpeedAtOnce(t *testing.T) {
+	st := Steering{MaxSpeed: 100, WantSpeed: 70}
+	speeds, _ := speedTicks(t, st, Velocity{Dir: east}, nil, 1)
+	if speeds[0] != 70 {
+		t.Errorf("tick 1: Speed = %v, want 70 at once with no Accel", speeds[0])
+	}
+}
+
+func TestSteering_RewritesTheBaseSpeedAheadOfModifiers(t *testing.T) {
+	st := Steering{MaxSpeed: 100, WantSpeed: 100}
+	speeds, values := speedTicks(t, st, Velocity{Dir: east}, []SpeedModifier{halving{}}, 3)
+	for tick := range values {
+		if got, want := values[tick], speeds[tick]*0.5; got != want {
+			t.Fatalf("tick %d: Velocity.Value = %v, want %v — the modifier compounds instead of scaling a fresh base speed", tick+1, got, want)
+		}
+	}
+}
