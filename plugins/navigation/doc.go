@@ -1,6 +1,6 @@
 // Package navigation moves entities along a MoveOrder's path across a
-// board, re-pathing automatically when terrain along the route changes.
-// WithCommands adds right-click move orders for Selected entities;
+// board, re-pathing automatically when terrain along the route changes,
+// and carries out MoveTo commands for Selected entities;
 // WithRenderer draws the remaining route.
 //
 // # MoveOrder and Path
@@ -17,9 +17,9 @@
 //
 // # Commands
 //
-// WithCommands turns a right-click into a move order for every Selected entity, and a Shift-click
-// into a goal queued behind their orders: the [DefaultCommandEventHandler] writes a [MoveCommand]
-// into [Resources], and the command system issues or extends the orders.
+// A [MoveTo] sends every Selected entity to a cell, or with Append queues the cell behind their
+// orders; the plugin listens for it on the players plugin and its command system issues or extends
+// the orders. [Plugin.DefaultBindings] make a right click one, Shift + right click an appending one.
 //
 // # Renderer
 //

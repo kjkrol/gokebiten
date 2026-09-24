@@ -25,11 +25,13 @@ behind each item lives in [movement.md](movement.md) and [views.md](views.md).
   entities with `Ground` so an effect can change terrain for a while — [movement §13](movement.md).
 - Hex boards on screen, route arrows every 15°, camera panning in screen pixels, a `QuadBatch`
   that draws in chunks; six demos, `effect-demo` among them.
+- Players: `plugins/players` with one local player over the world's camera; typed commands
+  (`Select`, `MoveTo`, `Pan`, `Zoom`) owned and drained by the plugins that define them; labelled
+  bindings with defaults shipped by the plugins — [views §2](views.md).
 
 ## Next
 
-1. **Players** — a plugin: a view, a command queue and a translator per player; command types and
-   labelled default bindings shipped by the plugins; one local player first, split screen after —
+1. **Split screen** — a camera and a screen rectangle per local player, renderers per rectangle —
    [views §2](views.md).
 2. **Hover** — what is under the cursor, a `Space.Query` at a point in the translator — [views §2](views.md).
 3. **`RouteStyle`** — `CellArrows` by default, `SmoothRoute` opt-in, arcs from the profile,

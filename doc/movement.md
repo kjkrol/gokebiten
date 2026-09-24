@@ -155,9 +155,8 @@ behind it is passed by projection like a waypoint, the next becomes the `Target`
 the same tick, so the unit does not stop at the intermediate ones; it brakes only before the
 last. Navigation's default bindings, in the sense of [views.md](views.md): right click →
 `MoveTo{Cell}`, "Move here" (replaces the order and its queue); Shift + right click →
-`AddWaypoint{Cell}`, "Add waypoint" (appends; an idle unit gets a fresh order). Today
-`DefaultCommandEventHandler` does both through `MoveCommand{Cell, Append}`; the labelled binding
-comes with the players layer. The route renderer draws the way to every queued goal, planning
+`MoveTo{Cell, Append: true}`, "Add a waypoint" (appends; an idle unit gets a fresh order) —
+`navigation.Plugin.DefaultBindings()`, bound on a player. The route renderer draws the way to every queued goal, planning
 each leg once and keeping it until the goals change.
 
 ## 8. Drawing the route is a choice of style

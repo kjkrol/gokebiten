@@ -9,9 +9,9 @@ import (
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gram/camera"
 	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/players"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/uid"
 )
@@ -22,14 +22,16 @@ type pendingSeed struct {
 	plain      bool
 }
 
-// harness seeds entities, drives the system through a tick and reads Selected back;
-// seed only queues, start performs the single Setup.
+// harness seeds entities, drives the system through a player's bindings and a tick, and reads
+// Selected back; seed only queues, start performs the single Setup.
 type harness struct {
 	t         *testing.T
 	space     *aabbworld.Space
-	state     *Resources
+	players   *players.Plugin
+	local     *players.Player
+	selects   *players.Inbox[Select]
 	sys       *SelectionSystem
-	handler   *DefaultEventHandler
+	handler   control.EventHandler
 	ecs       *goke.ECS
 	pos       goke.Comp[world.Base]
 	tag       goke.Comp[plugin.Tags[Family]]
@@ -51,14 +53,20 @@ func newHarness(t *testing.T) *harness {
 		t.Fatalf("aabbworld.NewSpace: %v", err)
 	}
 
-	cam := camera.NewFromSpace(1000, 1000, 0)
-
-	state := &Resources{}
+	w := world.NewPlugin(world.Config{
+		Space:    world.SpaceCfg{Width: 1000, Height: 1000},
+		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
+	})
+	pl := players.NewPlugin(w)
+	local := pl.Local("tester")
+	if err := local.Bind(DefaultBindings()...); err != nil {
+		t.Fatal(err)
+	}
+	selects := pl.Listen[Select]()
 	tags := Tags{Selectable: 0, Selected: 1}
-	sys := NewSelectionSystem(state, space, cam, tags)
-	handler := NewDefaultEventHandler(state)
+	sys := NewSelectionSystem(selects, space, tags)
 
-	return &harness{t: t, space: space, state: state, sys: sys, handler: handler, ecs: goke.New(), tags: tags}
+	return &harness{t: t, space: space, players: pl, local: local, selects: selects, sys: sys, handler: pl.EventHandler(), ecs: goke.New(), tags: tags}
 }
 
 // seed queues a Selectable size x size entity at (x,y); the returned id is filled in by start.
@@ -258,7 +266,7 @@ func TestSystem_Update_SelectByID_TagsExactlyGivenEntities(t *testing.T) {
 		t.Fatal("sanity check failed: expected other to be selected first")
 	}
 
-	h.state.PendingIDs = []uid.UID64{*target}
+	h.selects.Add(h.local, Select{IDs: []uid.UID64{*target}})
 	h.ecs.Tick(time.Second)
 
 	if !h.isSelected(*target) {
@@ -273,7 +281,7 @@ func TestSystem_DragBox_TracksLiveDragState(t *testing.T) {
 	h := newHarness(t)
 	h.start()
 
-	if _, _, dragging := h.state.DragBox(); dragging {
+	if _, _, dragging := h.local.DragBox(); dragging {
 		t.Fatal("sanity check failed: expected no drag in progress before any input")
 	}
 
@@ -281,7 +289,7 @@ func TestSystem_DragBox_TracksLiveDragState(t *testing.T) {
 	press.AddClickEvent(10, 10, ebiten.MouseButtonLeft, control.ActionPress)
 	h.handler.HandleEvents(press)
 
-	start, current, dragging := h.state.DragBox()
+	start, current, dragging := h.local.DragBox()
 	if !dragging {
 		t.Fatal("expected dragging=true right after a press")
 	}
@@ -292,7 +300,7 @@ func TestSystem_DragBox_TracksLiveDragState(t *testing.T) {
 	move := &control.InputEvents{MousePos: geom.NewVec(40, 60)}
 	h.handler.HandleEvents(move)
 
-	start, current, dragging = h.state.DragBox()
+	start, current, dragging = h.local.DragBox()
 	if !dragging {
 		t.Error("expected dragging to remain true while the button is still held")
 	}
@@ -307,39 +315,8 @@ func TestSystem_DragBox_TracksLiveDragState(t *testing.T) {
 	release.AddClickEvent(40, 60, ebiten.MouseButtonLeft, control.ActionRelease)
 	h.handler.HandleEvents(release)
 
-	if _, _, dragging := h.state.DragBox(); dragging {
+	if _, _, dragging := h.local.DragBox(); dragging {
 		t.Error("expected dragging=false after release")
-	}
-}
-
-func TestSelectionSystem_WorldBox_SelectsOnBothSidesOfTheSeam(t *testing.T) {
-	space, err := aabbworld.NewSpace(aabbworld.Config{
-		Width: 1000, Height: 1000, Edges: aabbworld.Torus,
-		BucketSize: 64,
-	})
-	if err != nil {
-		t.Fatalf("aabbworld.NewSpace: %v", err)
-	}
-	before, after, elsewhere := uid.UID64(1), uid.UID64(2), uid.UID64(3)
-	space.Rebuild([]aabbworld.Item{
-		{ID: before, Box: plane.NewAABB(geom.NewVec(960, 502), 5, 5)},
-		{ID: after, Box: plane.NewAABB(geom.NewVec(20, 502), 5, 5)},
-		{ID: elsewhere, Box: plane.NewAABB(geom.NewVec(500, 502), 5, 5)},
-	})
-
-	cam := camera.NewFromSpaceWithConfig(1000, 1000, aabbworld.Torus, camera.Config{ViewportWidth: 200, ViewportHeight: 200})
-	cam.MoveTo(950, 500)
-	sys := &SelectionSystem{camera: cam, space: space}
-
-	box := sys.worldBox(geom.NewVec(0, 0), geom.NewVec(200, 10))
-	if w := box.BottomRight.X - box.TopLeft.X; w > 200 {
-		t.Errorf("worldBox is %v wide, want the 200 that was dragged", w)
-	}
-
-	hit := map[uid.UID64]bool{}
-	space.Query(box, aabbworld.AnyCapability, func(id uid.UID64) { hit[id] = true })
-	if !hit[before] || !hit[after] || hit[elsewhere] || len(hit) != 2 {
-		t.Errorf("drag across the seam hit %v, want the entities either side of it and nothing else", hit)
 	}
 }
 

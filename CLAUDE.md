@@ -29,7 +29,7 @@ in `internal/engine`; root `gram` just re-exports `Engine`/`Props`/
 go build ./... && go vet ./... && gofmt -l . && go test ./...   # standard verification sequence
 go test ./plugins/world/... -run TestName -v                     # a single test
 make demo-collision                                                # go mod tidy && run examples/collision-demo
-make demo-navigation                                               # go mod tidy && run examples/navigation-demo
+make demo-navigation                                               # go mod tidy && run examples/navigation-demo (players: bindings for select, move, camera)
 make demo-navigation-hex                                           # the same on a hex board
 make demo-navigation-vision                                        # board + navigation + vision: walls cut sight, forests dim it, a hawk flies over
 make demo-navigation-vision-hex                                    # the same on a hex board
@@ -255,8 +255,9 @@ shows how much of it is boilerplate vs. real behavior.
   `board`. A navigated unit carries a `world.Steering` profile: navigation only asks it for a
   heading (at a lookahead point, so turns start before the bend) and for its own top speed, braking
   from the profile before the goal; a waypoint is passed by projection, the goal by radius. A
-  `MoveOrder` queues up to `MaxWaypoints` further goals (Shift + right click appends). Depends on
-  `board`, `world` and `selection` (its `Selected` tag picks whom a right click orders).
+  `MoveOrder` queues up to `MaxWaypoints` further goals. A `MoveTo{Cell, Append}` command orders
+  every `Selected` entity; `nav.DefaultBindings()` make a right click one, Shift appends. Depends
+  on `board`, `world`, `selection` (its `Selected` tag picks whom a command orders) and `players`.
 - **`effects`** — temporary changes to entities, cast from anywhere: `p.Define(name,
   Spec{Lasts, Stacking, Grant(tags...), Alter(func(*T))})`, `p.Cast`/`CastFor`/`Dispel`/`Has` by
   entity id, `Active` slots saved with the entity, originals of altered components kept by the
@@ -267,9 +268,22 @@ shows how much of it is boilerplate vs. real behavior.
   copies into the terrain each tick — so an `Alter[board.Ground]` is a temporary change of
   terrain — and the board drops such an entity itself when it finds it `Idle` without an
   `Active`. Depends on `world`.
-- **`selection`** — mouse click/drag → the `Selected` tag on `world` entities that carry
-  `Selectable`, both bits of `selection.Family` from `Plugin.Tags()` (a kind's choice via
-  `kind.Tagged`; terrain bodies never do); a bit flip, seen the same tick. Depends on `world`.
+- **`selection`** — a `Select` command (ids, or a world box, additive or not) → the `Selected`
+  tag on `world` entities that carry `Selectable`, both bits of `selection.Family` from
+  `Plugin.Tags()` (a kind's choice via `kind.Tagged`; terrain bodies never do); a bit flip, seen
+  the same tick. `selection.DefaultBindings()` make a left drag one (Shift adds). Depends on
+  `world` and `players` (its inbox).
+- **`players`** — whoever acts in the game: `Local(name)` a player at the keyboard over the
+  world's camera and `View`; `Listen[C]()` makes the caller the owner of command type `C` and
+  returns the `Inbox[C]` its system drains in its own pass (`Drain`); `Issue(player, cmd)` is
+  how a command comes in, from a binding, an AI or a network (`ErrUnknownCommand` for a type
+  nobody listens for). A `Binding` is a `Trigger` (`KeyPress`, `ButtonPress`, `Drag`, `Wheel`,
+  `ButtonHeld`, `CursorAtEdge`, with exact `Mods`), the command `Command[C]` builds from a
+  `Context` (cursor, drag start, `World`/`WorldBox` through the player's camera) and a label;
+  `Player.Bind` refuses two on one trigger, Setup refuses a command nobody listens for. Plugins
+  ship defaults (`selection.DefaultBindings()`, `nav.DefaultBindings()`, `players.CameraBindings()`
+  for `Pan`/`Zoom`, which players carries out itself). The Scene hands input to
+  `players.EventHandler()`; `players.RunPlan` runs last and empties the inboxes. Depends on `world`.
 - **`vision`** — narrowed perception: a `Sight` cone scanned against `world`'s
   space each tick fills its own `Sight.Seen` (who this entity can see, nearest first), and
   `SightOutline` on an entity gets its view's shape computed and drawn. An entity carrying

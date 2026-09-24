@@ -28,6 +28,16 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
   `Ground` component is contiguous in memory; `CellKindDict.Get` and `Layout` keep taking strings.
 
 **Plugins**
+- `plugins/players`: who acts in the game. A local player over the world's camera and `View`;
+  commands as typed data — `selection.Select`, `navigation.MoveTo`, `players.Pan`/`Zoom` —
+  owned by the plugin that defines them (`Listen[C]` gives the `Inbox[C]` its system drains) and
+  issued by a player's bindings, an AI or a network alike (`Issue`); labelled bindings on triggers
+  (`KeyPress`, `ButtonPress`, `Drag`, `Wheel`, `ButtonHeld`, `CursorAtEdge`, exact `Mods`) with
+  defaults from the plugins (`selection.DefaultBindings`, `nav.DefaultBindings`,
+  `players.CameraBindings`); two on one trigger refused at `Bind`, a command nobody listens for at
+  Setup. Gone: `selection.Resources`/`DefaultEventHandler`, `navigation.Resources`/`MoveCommand`/
+  `DefaultCommandEventHandler`, `world.WithCameraControls`; `selection.NewPlugin` and
+  `navigation.NewPlugin` take the players plugin.
 - Tags are bits of families: `plugin.Tags[F]` is one component per family, `Kinds.DefineTag`
   names the bits (saved by name), `kind.Tagged` gives them to a kind, `Between(a, b, fn)` takes
   them as values; `Selectable` and `Selected`, the vision behaviors' tags and terrain bodies are

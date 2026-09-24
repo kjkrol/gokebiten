@@ -7,6 +7,7 @@ import (
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/plugins/board"
+	"github.com/kjkrol/gram/plugins/players"
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/uid"
 )
@@ -98,8 +99,8 @@ func TestPathFinder_NearestFree_SkipsOccupiedTakenAndUnreachableCells(t *testing
 func TestCommandSystem_Update_SpreadsGroupOverDistinctFreeCells(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(10, 10, legCellSize)
 	occupancy := &board.SingleOccupancy{}
-	cmdState := &Resources{}
-	cmds := newMoveCommandSystem(newPathFinder(grid, openTerrain(), occupancy), cmdState, selTags.Selected)
+	moves := &players.Inbox[MoveTo]{}
+	cmds := newMoveCommandSystem(newPathFinder(grid, openTerrain(), occupancy), moves, selTags.Selected)
 	at := func(x, y uint32) board.CellID { c, _ := grid.CellIndex(x, y); return c }
 	target := at(5, 5)
 	starts := []board.CellID{at(5, 0), at(5, 4), at(5, 2)}
@@ -134,7 +135,7 @@ func TestCommandSystem_Update_SpreadsGroupOverDistinctFreeCells(t *testing.T) {
 		ctx.Sync()
 	})
 
-	cmdState.Pending = &MoveCommand{Cell: target}
+	moves.Add(nil, MoveTo{Cell: target})
 	ecs.Tick(time.Second)
 
 	seen := make(map[board.CellID]bool)

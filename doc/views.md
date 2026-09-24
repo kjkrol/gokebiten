@@ -3,7 +3,9 @@
 [← Back to README](../README.md)
 
 > A design sketch, not a contract: what the layers are, who owns what, and what each one leaves
-> to the next. Code exists for the first layer only.
+> to the next. Code exists for the first two layers: `world.View` and `plugins/players` (one local
+> player; the inbox is the shape the "How plugins listen" section arrived at — the owning plugin
+> drains its commands in its own pass instead of a receiver run in players' pass).
 
 ## 1. `world.View` — a rectangle and the entities in it
 
@@ -40,7 +42,7 @@ one player looking at the whole screen should not have to know about any of this
 - A **world event** is what plugins already publish through behaviors — a `collision.Meeting`, a
   `vision.Sighting` — the world telling the game what happened. Commands go the other way.
 
-Today gram has commands without the name, one private channel per plugin: `selection.Resources`
+Before the players plugin, gram had commands without the name, one private channel per plugin: `selection.Resources`
 holds a `Pending` selection and `PendingIDs`, `navigation.Resources` a `PendingTarget`, and vision's
 behaviors call `world.Steering.Request` directly. Each channel is fed by that plugin's own
 `control.EventHandler`, so it is glued to the mouse: an AI cannot order a unit to move or select a
@@ -65,7 +67,7 @@ Each plugin defines the command types of its own domain — `navigation.MoveTo`,
 `selection.Select`, `world.Pan` and `world.Zoom` — and the game adds its own, exactly as the
 payloads of behaviors work today (`Meeting` is collision's, `Sighting` is vision's). Whoever
 defines a type also registers its receiver. Navigation's first word exists already:
-`MoveCommand{Cell, Append}`, filled by its default event handler; the player layer is where it
+`MoveCommand{Cell, Append}`, filled by its default event handler (now `MoveTo`); the player layer is where it
 becomes a labelled binding. "What is under the cursor" — a hover — is the translator's too: a
 `Space.Query` at a point, no collision involved.
 

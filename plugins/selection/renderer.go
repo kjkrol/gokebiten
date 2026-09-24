@@ -8,6 +8,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/camera"
 	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugins/players"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/render"
 )
@@ -42,11 +43,11 @@ func DefaultHighlightStyle() HighlightStyle {
 
 var marqueeColor = color.RGBA{R: 255, G: 140, B: 0, A: 255}
 
-// Renderer outlines every Selected entity and draws the marquee of a drag in progress.
+// Renderer outlines every Selected entity and draws the marquee of each local player's drag in progress.
 type Renderer struct {
-	state  *Resources
-	camera camera.Camera
-	style  HighlightStyle
+	players *players.Plugin
+	camera  camera.Camera
+	style   HighlightStyle
 
 	query    *goke.Query
 	base     goke.Comp[world.Base]
@@ -56,9 +57,9 @@ type Renderer struct {
 
 var _ render.Renderer = (*Renderer)(nil)
 
-// NewRenderer builds a Renderer over state with DefaultHighlightStyle.
-func NewRenderer(cam camera.Camera, state *Resources, selected plugin.Tag[Family]) *Renderer {
-	return &Renderer{state: state, camera: cam, style: DefaultHighlightStyle(), selected: selected}
+// NewRenderer builds a Renderer with DefaultHighlightStyle; pl's local players' drags are drawn.
+func NewRenderer(cam camera.Camera, pl *players.Plugin, selected plugin.Tag[Family]) *Renderer {
+	return &Renderer{players: pl, camera: cam, style: DefaultHighlightStyle(), selected: selected}
 }
 
 // WithStyle overrides how the highlight is drawn — the escape hatch for a custom HighlightStyle.
@@ -84,7 +85,14 @@ func (r *Renderer) Draw(screen *ebiten.Image) {
 		}
 	}
 
-	if start, current, dragging := r.state.DragBox(); dragging {
+	if r.players == nil {
+		return
+	}
+	for _, pl := range r.players.Locals() {
+		start, current, dragging := pl.DragBox()
+		if !dragging {
+			continue
+		}
 		x0, y0 := float32(start.X), float32(start.Y)
 		x1, y1 := float32(current.X), float32(current.Y)
 		if x1 < x0 {

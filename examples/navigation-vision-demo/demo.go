@@ -7,6 +7,7 @@ import (
 	"image/color"
 	"log"
 	"math"
+	"slices"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -18,6 +19,7 @@ import (
 	"github.com/kjkrol/gram/plugins/board"
 	"github.com/kjkrol/gram/plugins/collision"
 	"github.com/kjkrol/gram/plugins/navigation"
+	"github.com/kjkrol/gram/plugins/players"
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/gram/plugins/vision"
 	"github.com/kjkrol/gram/plugins/world"
@@ -74,6 +76,7 @@ type mainStage struct {
 	nav       *navigation.Plugin
 	collision *collision.Plugin
 	selection *selection.Plugin
+	players   *players.Plugin
 	vision    *vision.Plugin
 	unitTag   plugin.Tag[units]
 	kinds     []kind.Of[unit]
@@ -93,7 +96,6 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 		Space:    world.SpaceCfg{Width: ScreenWidth, Height: ScreenHeight},
 		Entities: world.EntitiesCfg{MaxCount: MaxEntCount, MinSize: EntitySize, MaxSize: EntitySize},
 	})
-	s.world.WithCameraControls()
 
 	s.collision = collision.NewPlugin(s.world)
 	if err := ctx.Use(s.collision); err != nil {
@@ -112,13 +114,22 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 		return err
 	}
 
-	s.selection = selection.NewPlugin(s.world)
+	s.players = players.NewPlugin(s.world)
+	s.selection = selection.NewPlugin(s.world, s.players)
 	if err := ctx.Use(s.selection); err != nil {
 		return err
 	}
 
-	s.nav = navigation.NewPlugin(s.board, s.world, s.selection)
+	s.nav = navigation.NewPlugin(s.board, s.world, s.selection, s.players)
 	if err := ctx.Use(s.nav); err != nil {
+		return err
+	}
+
+	local := s.players.Local("player")
+	if err := local.Bind(slices.Concat(selection.DefaultBindings(), s.nav.DefaultBindings(), players.CameraBindings())...); err != nil {
+		return err
+	}
+	if err := ctx.Use(s.players); err != nil {
 		return err
 	}
 
@@ -254,6 +265,7 @@ func (s *mainStage) Update(ctx goke.RunCtx, d time.Duration) {
 	s.nav.RunPlan(ctx, d)
 	s.vision.RunPlan(ctx, d)
 	s.selection.RunPlan(ctx, d)
+	s.players.RunPlan(ctx, d)
 	ctx.Sync()
 }
 
@@ -320,9 +332,7 @@ func (m *mainScene) Layers() []render.Renderer {
 
 func (m *mainScene) HandleEvents(events *control.InputEvents, runtime game.Runtime, _ game.Composition) {
 	s := m.stage
-	s.selection.EventHandler().HandleEvents(events)
-	s.nav.EventHandler().HandleEvents(events)
-	s.world.EventHandler().HandleEvents(events)
+	s.players.EventHandler().HandleEvents(events)
 	for _, k := range events.KeyEvents {
 		if k.Action != control.ActionPress {
 			continue

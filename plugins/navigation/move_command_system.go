@@ -8,16 +8,17 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/board"
+	"github.com/kjkrol/gram/plugins/players"
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/uid"
 )
 
-// moveCommandSystem issues move orders: a right-click gives every Selected entity its own free
-// cell at or around the target, nearest entity first; a Shift-click queues the target behind an
-// order already in flight instead.
+// moveCommandSystem carries out MoveTo commands: each gives every Selected entity its own free
+// cell at or around the target, nearest entity first, or with Append queues the target behind an
+// order already in flight.
 type moveCommandSystem struct {
 	pathFinder *pathFinder
-	state      *Resources
+	moves      *players.Inbox[MoveTo]
 	selected   plugin.Tag[selection.Family]
 
 	query   *goke.Query
@@ -30,9 +31,9 @@ type moveCommandSystem struct {
 
 var _ goke.System = (*moveCommandSystem)(nil)
 
-// newMoveCommandSystem builds a moveCommandSystem issuing move orders via pathFinder.
-func newMoveCommandSystem(pathFinder *pathFinder, state *Resources, selected plugin.Tag[selection.Family]) *moveCommandSystem {
-	return &moveCommandSystem{state: state, pathFinder: pathFinder, selected: selected}
+// newMoveCommandSystem builds a moveCommandSystem draining moves into orders via pathFinder.
+func newMoveCommandSystem(pathFinder *pathFinder, moves *players.Inbox[MoveTo], selected plugin.Tag[selection.Family]) *moveCommandSystem {
+	return &moveCommandSystem{moves: moves, pathFinder: pathFinder, selected: selected}
 }
 
 func (s *moveCommandSystem) Init(si *goke.SysInit) {
@@ -41,13 +42,12 @@ func (s *moveCommandSystem) Init(si *goke.SysInit) {
 }
 
 func (s *moveCommandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
-	if s.state.Pending == nil {
-		return
-	}
-	cmd := *s.state.Pending
-	target := cmd.Cell
-	s.state.Pending = nil
+	s.moves.Drain(func(i players.Issued[MoveTo]) { s.carryOut(cb, i.Command) })
+}
 
+// carryOut gives the Selected entities their orders toward cmd.Cell.
+func (s *moveCommandSystem) carryOut(cb *goke.CmdBuf, cmd MoveTo) {
+	target := cmd.Cell
 	pf := s.pathFinder
 	at := pf.terrain.Kind(target)
 

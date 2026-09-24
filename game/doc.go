@@ -22,7 +22,8 @@
 // # Scene, Scenes and Composition
 //
 // A [Scene] is one thing a Stage can show: Layers, its renderers bottom to top, built once when
-// the Stage is entered; HandleEvents, this tick's input, run only while the Scene is active; and
+// the Stage is entered; HandleEvents, this tick's input, run only while the Scene is active (the
+// moves of the game go to the players plugin's EventHandler, the rest — pause, quit — stay here); and
 // Focusable, whether it can ever be active. [Scenes], built by [NewStack], is the Stage's static
 // registry of them by Name. Its [Composition] is the live state: which Scenes are visible, in what
 // order, and Active, the topmost focusable one — so a non-focusable HUD can sit on top and never

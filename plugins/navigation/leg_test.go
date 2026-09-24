@@ -7,6 +7,7 @@ import (
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/plugins/board"
+	"github.com/kjkrol/gram/plugins/players"
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/uid"
@@ -254,8 +255,8 @@ func TestCommandSystem_Update_RetargetMidLegKeepsLeg(t *testing.T) {
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	occupancy := &board.SingleOccupancy{}
-	cmdState := &Resources{}
-	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState, selTags.Selected)
+	moves := &players.Inbox[MoveTo]{}
+	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), moves, selTags.Selected)
 
 	from, _ := grid.CellIndex(0, 0)
 	to, _ := grid.CellIndex(1, 0)
@@ -288,7 +289,7 @@ func TestCommandSystem_Update_RetargetMidLegKeepsLeg(t *testing.T) {
 		ctx.Sync()
 	})
 
-	cmdState.Pending = &MoveCommand{Cell: newTarget}
+	moves.Add(nil, MoveTo{Cell: newTarget})
 	ecs.Tick(time.Second)
 
 	_, mt := readCellAndMoveOrder(t, q, &cell, &order)

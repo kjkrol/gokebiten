@@ -5,11 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gram/camera"
-	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/plugins/board"
+	"github.com/kjkrol/gram/plugins/players"
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/uid"
@@ -25,13 +23,10 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 	oldTarget, _ := grid.CellIndex(3, 0)
 	newTarget, _ := grid.CellIndex(8, 0)
 
-	cam := camera.NewFromSpace(1000, 1000, 0)
-
-	cmdState := &Resources{}
-	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState, selTags.Selected)
-	cmdHandler := NewDefaultCommandEventHandler(grid, cam, cmdState)
-	selState := &selection.Resources{}
-	selSys := selection.NewSelectionSystem(selState, nil, cam, selTags)
+	moves := &players.Inbox[MoveTo]{}
+	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), moves, selTags.Selected)
+	selects := &players.Inbox[selection.Select]{}
+	selSys := selection.NewSelectionSystem(selects, nil, selTags)
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Base]
@@ -73,14 +68,10 @@ func TestCommandSystem_Update_RetargetsOnlySelectedEntities(t *testing.T) {
 		ctx.Sync()
 	})
 
-	selState.PendingIDs = []uid.UID64{selectedID}
+	selects.Add(nil, selection.Select{IDs: []uid.UID64{selectedID}})
 	ecs.Tick(time.Second)
 
-	center := grid.CellCenter(newTarget)
-	sx, sy := cam.ToScreen(float32(center.X), float32(center.Y))
-	events := &control.InputEvents{}
-	events.AddClickEvent(int(sx), int(sy), ebiten.MouseButtonRight, control.ActionPress)
-	cmdHandler.HandleEvents(events)
+	moves.Add(nil, MoveTo{Cell: newTarget})
 	ecs.Tick(time.Second)
 
 	got := map[uid.UID64]MoveOrder{}
@@ -119,13 +110,10 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 	start, _ := grid.CellIndex(0, 0)
 	newTarget, _ := grid.CellIndex(8, 0)
 
-	cam := camera.NewFromSpace(1000, 1000, 0)
-
-	cmdState := &Resources{}
-	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState, selTags.Selected)
-	cmdHandler := NewDefaultCommandEventHandler(grid, cam, cmdState)
-	selState := &selection.Resources{}
-	selSys := selection.NewSelectionSystem(selState, nil, cam, selTags)
+	moves := &players.Inbox[MoveTo]{}
+	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), moves, selTags.Selected)
+	selects := &players.Inbox[selection.Select]{}
+	selSys := selection.NewSelectionSystem(selects, nil, selTags)
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Base]
@@ -160,7 +148,7 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 		ctx.Sync()
 	})
 
-	selState.PendingIDs = []uid.UID64{idleID}
+	selects.Add(nil, selection.Select{IDs: []uid.UID64{idleID}})
 	ecs.Tick(time.Second)
 
 	readQuery.All()
@@ -171,11 +159,7 @@ func TestCommandSystem_Update_AssignsFreshOrderToIdleSelectedEntity(t *testing.T
 		}
 	}
 
-	center := grid.CellCenter(newTarget)
-	sx, sy := cam.ToScreen(float32(center.X), float32(center.Y))
-	events := &control.InputEvents{}
-	events.AddClickEvent(int(sx), int(sy), ebiten.MouseButtonRight, control.ActionPress)
-	cmdHandler.HandleEvents(events)
+	moves.Add(nil, MoveTo{Cell: newTarget})
 	ecs.Tick(time.Second)
 
 	var gotMoveTo MoveOrder
@@ -218,13 +202,10 @@ func TestCommandSystem_Update_UnreachableTargetLeavesInFlightEntityUntouched(t *
 	wall, _ := grid.CellIndex(8, 0)
 	terrain.Set(wall, board.CellKind{Cost: 1, Solid: true})
 
-	cam := camera.NewFromSpace(1000, 1000, 0)
-
-	cmdState := &Resources{}
-	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), cmdState, selTags.Selected)
-	cmdHandler := NewDefaultCommandEventHandler(grid, cam, cmdState)
-	selState := &selection.Resources{}
-	selSys := selection.NewSelectionSystem(selState, nil, cam, selTags)
+	moves := &players.Inbox[MoveTo]{}
+	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), moves, selTags.Selected)
+	selects := &players.Inbox[selection.Select]{}
+	selSys := selection.NewSelectionSystem(selects, nil, selTags)
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Base]
@@ -261,14 +242,10 @@ func TestCommandSystem_Update_UnreachableTargetLeavesInFlightEntityUntouched(t *
 		ctx.Sync()
 	})
 
-	selState.PendingIDs = []uid.UID64{movingID}
+	selects.Add(nil, selection.Select{IDs: []uid.UID64{movingID}})
 	ecs.Tick(time.Second)
 
-	center := grid.CellCenter(wall)
-	sx, sy := cam.ToScreen(float32(center.X), float32(center.Y))
-	events := &control.InputEvents{}
-	events.AddClickEvent(int(sx), int(sy), ebiten.MouseButtonRight, control.ActionPress)
-	cmdHandler.HandleEvents(events)
+	moves.Add(nil, MoveTo{Cell: wall})
 	ecs.Tick(time.Second)
 
 	readQuery.All()

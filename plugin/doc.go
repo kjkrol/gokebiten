@@ -7,7 +7,8 @@
 // A [Plugin] has a Name (saves match its state by it, and Use rejects a duplicate), an Install
 // that queues its ECS wiring, a RunPlan the game calls once a tick in the order it needs, and
 // optional faces: WithRenderer and Renderer for what it draws, EventHandler for the input it
-// reads, Serializable for the state it saves, RegisterBehavior for the behaviors it hosts. A
+// reads (the players plugin's, in practice: other plugins take commands, not input), Serializable
+// for the state it saves, RegisterBehavior for the behaviors it hosts. A
 // [Builtin] plugin is one the engine installs itself, such as the world; Use refuses it.
 //
 // # Installer

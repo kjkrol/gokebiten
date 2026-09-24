@@ -9,13 +9,14 @@ import (
 	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/board"
+	"github.com/kjkrol/gram/plugins/players"
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/render"
 )
 
-// Plugin moves entities along a MoveOrder's path across a board, re-pathing when terrain changes.
-// WithCommands adds right-click move orders; WithRenderer draws the remaining route.
+// Plugin moves entities along a MoveOrder's path across a board, re-pathing when terrain changes,
+// and carries out MoveTo commands from players; WithRenderer draws the remaining route.
 type Plugin struct {
 	boardPlugin *board.Plugin
 	worldPlugin *world.Plugin
@@ -24,7 +25,7 @@ type Plugin struct {
 	board  *board.Board
 	module *module
 
-	res    *Resources
+	moves  *players.Inbox[MoveTo]
 	finder *pathFinder
 
 	pathSprites  PathSprites
@@ -35,9 +36,11 @@ type Plugin struct {
 
 var _ plugin.Plugin = (*Plugin)(nil)
 
-// NewPlugin builds a navigation plugin over a board; entities move as their Steering profile says.
-func NewPlugin(boardPlugin *board.Plugin, worldPlugin *world.Plugin, selectionPlugin *selection.Plugin) *Plugin {
-	return &Plugin{boardPlugin: boardPlugin, worldPlugin: worldPlugin, camera: worldPlugin.Camera(), selected: selectionPlugin.Tags().Selected}
+// NewPlugin builds a navigation plugin over a board, listening for MoveTo on playersPlugin; entities
+// move as their Steering profile says.
+func NewPlugin(boardPlugin *board.Plugin, worldPlugin *world.Plugin, selectionPlugin *selection.Plugin, playersPlugin *players.Plugin) *Plugin {
+	return &Plugin{boardPlugin: boardPlugin, worldPlugin: worldPlugin, camera: worldPlugin.Camera(),
+		selected: selectionPlugin.Tags().Selected, moves: playersPlugin.Listen[MoveTo]()}
 }
 
 // =================================================================
@@ -59,15 +62,14 @@ func (p *Plugin) Install(ctx plugin.Installer) error {
 	navSys := newNavigationSystem(finder, brd, brd, occupancy)
 	navSys.BindSpace(p.worldPlugin.Space())
 
-	p.res = &Resources{}
-	moveCommandSystem := newMoveCommandSystem(finder, p.res, p.selected)
+	moveCommandSystem := newMoveCommandSystem(finder, p.moves, p.selected)
 
 	p.module = &module{navigationSystem: navSys, moveCommandSystem: moveCommandSystem}
 	ctx.UseModule(p.module)
 	return nil
 }
 
-// RunPlan runs navigation, and commands if enabled, for this tick; call before world's RunPlan.
+// RunPlan runs navigation and the move commands for this tick; call before world's RunPlan.
 func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	p.module.RunPlan(ctx, d)
 }
@@ -87,10 +89,8 @@ func (p *Plugin) Renderer() render.Renderer {
 	return p.pathRenderer
 }
 
-// EventHandler returns the right-click move-order handler, or nil without WithCommands.
-func (p *Plugin) EventHandler() control.EventHandler {
-	return NewDefaultCommandEventHandler(p.board, p.camera, p.res)
-}
+// EventHandler returns nil — a player's bindings (DefaultBindings) issue the MoveTo commands.
+func (p *Plugin) EventHandler() control.EventHandler { return nil }
 
 // Serializable is a no-op — navigation has nothing to persist.
 func (p *Plugin) Serializable() plugin.Serializable { return nil }

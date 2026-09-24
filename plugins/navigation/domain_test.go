@@ -7,6 +7,7 @@ import (
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/plugins/board"
+	"github.com/kjkrol/gram/plugins/players"
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/uid"
@@ -64,8 +65,8 @@ func TestCommandSystem_Update_IgnoresATargetTheUnitsDomainMayNotEnter(t *testing
 	lake, _ := grid.CellIndex(8, 0)
 	terrain.Set(lake, board.CellKind{Name: board.Named("water"), Cost: 1, Allows: board.Water})
 
-	cmdState := &Resources{}
-	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, &board.SingleOccupancy{}), cmdState, selTags.Selected)
+	moves := &players.Inbox[MoveTo]{}
+	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, &board.SingleOccupancy{}), moves, selTags.Selected)
 
 	var cell goke.Comp[board.Cell]
 	var pos goke.Comp[world.Base]
@@ -92,7 +93,7 @@ func TestCommandSystem_Update_IgnoresATargetTheUnitsDomainMayNotEnter(t *testing
 		ctx.Sync()
 	})
 
-	cmdState.Pending = &MoveCommand{Cell: lake}
+	moves.Add(nil, MoveTo{Cell: lake})
 	ecs.Tick(time.Second)
 
 	for readQuery.All(); readQuery.Next(); {

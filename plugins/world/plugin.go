@@ -39,9 +39,6 @@ type Plugin struct {
 	kinds    *Kinds
 	seeded   []kind.Entry
 	view     *View // the camera's
-
-	cameraControls bool
-	scrollSpeed    int32
 }
 
 var _ plugin.Plugin = (*Plugin)(nil)
@@ -85,17 +82,6 @@ func (p *Plugin) DropView(v *View) {
 	}
 }
 
-// WithCameraControls enables the default wheel-zoom/middle-drag-pan/edge-scroll EventHandler;
-// scrollSpeed is screen pixels a tick, the same at any zoom.
-func (p *Plugin) WithCameraControls(scrollSpeed ...int32) *Plugin {
-	p.cameraControls = true
-	p.scrollSpeed = defaultCameraScrollSpeed
-	if len(scrollSpeed) > 0 {
-		p.scrollSpeed = scrollSpeed[0]
-	}
-	return p
-}
-
 // Camera returns world's shared Camera, built from Config.Space.
 func (p *Plugin) Camera() camera.Camera { return p.Res.Camera }
 
@@ -133,13 +119,8 @@ func (p *Plugin) Renderer() render.Renderer {
 	return p.renderer
 }
 
-// EventHandler returns the zoom, pan and edge-scroll handler, or nil without WithCameraControls.
-func (p *Plugin) EventHandler() control.EventHandler {
-	if !p.cameraControls {
-		return nil
-	}
-	return newDefaultCameraHandler(p.Res.Camera, p.scrollSpeed)
-}
+// EventHandler returns nil — the camera is moved by players' Pan and Zoom commands.
+func (p *Plugin) EventHandler() control.EventHandler { return nil }
 
 // Serializable returns world's persistable state (its camera's Viewport/Zoom).
 func (p *Plugin) Serializable() plugin.Serializable { return &p.Res }

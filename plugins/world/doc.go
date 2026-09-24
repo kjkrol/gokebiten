@@ -13,8 +13,7 @@
 // solver — and every tick it does, the [Each] behaviors of a [Leaving] registered with
 // [Plugin.RegisterBehavior] hear of it; with none registered it is despawned. Put back inside, it
 // loses the mark. The Plugin exposes the shared [aabbworld.Space] ([Plugin.Space]) and the shared
-// camera ([Plugin.Camera], with [Plugin.WithCameraControls] for wheel zoom, a middle-drag pan 1:1
-// with the cursor and an edge scroll of a set number of pixels a tick, at any zoom).
+// camera ([Plugin.Camera]; the players plugin moves it through Pan and Zoom commands).
 //
 // # Base, Position and Velocity
 //

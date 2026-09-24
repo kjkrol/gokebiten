@@ -1,18 +1,19 @@
-// Package selection turns mouse input into a Selected tag on Selectable world entities:
-// left-click to select, drag for a marquee, shift to add. WithRenderer outlines what is selected.
+// Package selection turns Select commands into a Selected tag on Selectable world entities;
+// its default bindings make a left drag one (a click is a drag of no length, Shift adds).
+// WithRenderer outlines what is selected.
 //
 // # Selectable, Selected and SelectionSystem
 //
 // [Tags] are two bits of selection's tag [Family], from [Plugin.Tags]: Selectable marks an
 // entity the player may select — a unit, not a stretch of terrain; give it with kind.Tagged —
-// and Selected one the player has selected, flipped in place. The [DefaultEventHandler] turns left-click
-// and left-drag into [Resources] — the drag in progress and a [PendingSelect] once the gesture
-// completes — and the [SelectionSystem] resolves it against the world's space through the camera
-// into Selected tags, additive with shift.
+// and Selected one the player has selected, flipped in place. A [Select] names entities by id or
+// by a box in world units, additive or not; [DefaultBindings] issue it from a left drag through
+// the player's camera, and the [SelectionSystem] drains the plugin's inbox on the players plugin
+// into Selected tags.
 //
 // # Renderer
 //
 // [Plugin.WithRenderer] builds the [Renderer] outlining every Selected entity and drawing the
-// marquee of a drag in progress, in a [HighlightStyle] ([DefaultHighlightStyle] is a thin red
-// outline; [HighlightStyleFn] adapts a function).
+// marquee of each local player's drag in progress, in a [HighlightStyle] ([DefaultHighlightStyle]
+// is a thin red outline; [HighlightStyleFn] adapts a function).
 package selection
