@@ -9,6 +9,7 @@ import (
 	"github.com/kjkrol/gram/plugins/collision"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 )
 
 // installCtx is the least of a plugin.Installer that world and collision need.
@@ -50,12 +51,12 @@ func TestWorldAndCollisions_MixedSizes_NeverTunnel(t *testing.T) {
 	}
 
 	runners := kind.Define[runner](w.Kinds(), "runner", kind.Spec{
-		kind.Load(func(r runner) world.Position { return posAt(r.x, 500-r.side/2, r.side, r.side) }),
-		kind.Load(func(r runner) world.Velocity {
+		comp.Load(func(r runner) world.Position { return posAt(r.x, 500-r.side/2, r.side, r.side) }),
+		comp.Load(func(r runner) world.Velocity {
 			return world.Velocity{Dir: geom.NewVec(r.heading, 0), Value: 100000}
 		}),
-		kind.Const(collision.Collider{}),
-		kind.Const(collision.Physics{}),
+		comp.Const(collision.Collider{}),
+		comp.Const(collision.Physics{}),
 	})
 	small, big := runner{x: 1000, side: 2, heading: 1}, runner{x: 1600, side: 100, heading: -1}
 	w.Seed(runners.Entry(small), runners.Entry(big))

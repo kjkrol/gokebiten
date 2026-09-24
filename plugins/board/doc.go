@@ -56,6 +56,12 @@
 // up to [MaxBodyCells] a side. The bodies follow [TerrainMap.Version]; call [Plugin.RunPlan] after
 // collision's.
 //
+// The board requires of every unit a [Cell] (where it starts) and a [Mover] (the domains it moves
+// in) through the world's kind.Roster — and makes them itself in [Units]: a game binds its rows to
+// the board once ([NewUnits]: the unit's size, where a row says it stands) and defines each kind by
+// its domain and steering profile plus its own components; Position and Cell come from the one
+// point, Mover and Layers from the one domain.
+//
 // # Occupancy
 //
 // [Occupancy] tracks who holds each cell and in which domains, gating and recording every step

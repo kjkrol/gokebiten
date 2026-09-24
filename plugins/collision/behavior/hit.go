@@ -10,7 +10,7 @@ import (
 )
 
 // HitMark is how long this entity shows a hit, and whether one is showing now —
-// give it to a kind with kind.Const(behavior.HitMark{Duration: 100 * time.Millisecond}).
+// give it to a kind with comp.Const(behavior.HitMark{Duration: 100 * time.Millisecond}).
 type HitMark struct {
 	Duration      time.Duration
 	ExpiresAtNano int64

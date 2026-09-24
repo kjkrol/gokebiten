@@ -14,6 +14,7 @@ import (
 	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/gram/render"
 	"github.com/kjkrol/uid"
 )
@@ -37,6 +38,7 @@ type Plugin struct {
 	module   *module
 	renderer *Renderer
 	kinds    *Kinds
+	roster   *kind.Roster
 	seeded   []kind.Entry
 	view     *View // the camera's
 }
@@ -55,10 +57,16 @@ func NewPlugin(cfg Config) *Plugin {
 	cam := camera.NewFromSpaceWithConfig(cfg.Space.Width, cfg.Space.Height, cfg.Space.Edges, cfg.Camera)
 	kinds := newKinds()
 	m.kinds = kinds
-	p := &Plugin{Res: Resources{Config: cfg, Telemetry: &m.telemetry, Camera: cam}, module: m, kinds: kinds}
+	p := &Plugin{Res: Resources{Config: cfg, Telemetry: &m.telemetry, Camera: cam}, module: m, kinds: kinds, roster: kind.NewRoster()}
 	p.view = p.NewView(cam.Bounds)
+	kind.Require[Position](&p.roster.Unit, "world", "where it stands")
+	p.roster.Unit.Default(comp.Const(Velocity{}))
 	return p
 }
+
+// Roster is what this world's plugins ask of the kinds a game defines; build a unit's Spec through
+// Roster().Unit.Spec.
+func (p *Plugin) Roster() *kind.Roster { return p.roster }
 
 // View is what the camera sees: refreshed each tick after movement, drawn by the entity renderer.
 func (p *Plugin) View() *View { return p.view }

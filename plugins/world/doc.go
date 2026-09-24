@@ -12,7 +12,9 @@
 // an open edge carries [Outside] — put on by whoever moved it there, the MoveSystem or collision's
 // solver — and every tick it does, the [Each] behaviors of a [Leaving] registered with
 // [Plugin.RegisterBehavior] hear of it; with none registered it is despawned. Put back inside, it
-// loses the mark. [Layers] are the planes an entity is on, one bit each, read by collision and
+// loses the mark. [Plugin.Roster] is what the plugins in the game ask of a unit's kind — see
+// package kind; world requires a Position and brings a Velocity. [Layers] are the planes an
+// entity is on, one bit each, read by collision and
 // sight: two entities meet only where they share a bit, and one carrying none is on every plane.
 // The Plugin exposes the shared [aabbworld.Space] ([Plugin.Space]) and the shared camera
 // ([Plugin.Camera]; the players plugin moves it through Pan and Zoom commands).
@@ -37,7 +39,7 @@
 //
 // A tag is a bit of a family: [plugin.Tags] is the family's component, an empty type of the
 // plugin's or the game's names the family, and [Kinds.DefineTag] hands out the bits by name — saved by name, so a build defining them in another order still loads. A
-// kind gives its entities tags with [kind.Tagged]; a query over the family's Tags narrows to
+// kind gives its entities tags with [comp.Tagged]; a query over the family's Tags narrows to
 // the entities carrying any of them, and setting or clearing a bit is a value write, seen the
 // same tick. Behaviors name tags in a plugin's Between; the marker components of old are gone.
 //

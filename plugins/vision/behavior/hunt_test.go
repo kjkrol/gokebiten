@@ -13,6 +13,7 @@ import (
 	"github.com/kjkrol/gram/plugins/vision/behavior"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 )
 
 type huntBody struct{ x, y float64 }
@@ -51,14 +52,14 @@ func search(t *testing.T, lookEvery time.Duration, hunter huntBody, prey []huntB
 	}
 
 	hunters := kind.Define[huntBody](w.Kinds(), "hunter", kind.Spec{
-		kind.Load(huntAt),
-		kind.Const(world.Velocity{Dir: east, Value: 1}),
-		kind.Const(vision.Sight{Facing: east, HalfAngle: math.Pi / 2.5, Radius: 600}),
-		kind.Const(world.Steering{}),
-		kind.Tagged(tags.Predator),
+		comp.Load(huntAt),
+		comp.Const(world.Velocity{Dir: east, Value: 1}),
+		comp.Const(vision.Sight{Facing: east, HalfAngle: math.Pi / 2.5, Radius: 600}),
+		comp.Const(world.Steering{}),
+		comp.Tagged(tags.Predator),
 	})
-	preyKind := kind.Define[huntBody](w.Kinds(), "prey", kind.Spec{kind.Load(huntAt), kind.Const(world.Velocity{}), kind.Tagged(tags.Prey)})
-	bystanderKind := kind.Define[huntBody](w.Kinds(), "bystander", kind.Spec{kind.Load(huntAt), kind.Const(world.Velocity{})})
+	preyKind := kind.Define[huntBody](w.Kinds(), "prey", kind.Spec{comp.Load(huntAt), comp.Const(world.Velocity{}), comp.Tagged(tags.Prey)})
+	bystanderKind := kind.Define[huntBody](w.Kinds(), "bystander", kind.Spec{comp.Load(huntAt), comp.Const(world.Velocity{})})
 
 	w.Seed(hunters.Entry(hunter))
 	for _, p := range prey {

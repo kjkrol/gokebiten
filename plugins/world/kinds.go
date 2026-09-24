@@ -8,6 +8,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/gram/render"
 )
 
@@ -38,9 +39,9 @@ type registered struct {
 	typeID   kind.ID
 	spriteID render.SpriteID
 	row      reflect.Type
-	position kind.Template[Position]
-	velocity kind.Template[Velocity]
-	comps    []kind.Comp
+	position comp.Template[Position]
+	velocity comp.Template[Velocity]
+	comps    []comp.Comp
 }
 
 var (
@@ -66,9 +67,9 @@ func (k *Kinds) Register(name string, row reflect.Type, spec kind.Spec) (kind.ID
 	var positions, velocities int
 	for _, c := range spec {
 		switch t := c.(type) {
-		case kind.Template[Position]:
+		case comp.Template[Position]:
 			r.position, positions = t, positions+1
-		case kind.Template[Velocity]:
+		case comp.Template[Velocity]:
 			r.velocity, velocities = t, velocities+1
 		default:
 			r.comps = append(r.comps, c)

@@ -30,6 +30,21 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
   domain may not keeps its order.
 - The camera pans in screen pixels at any zoom.
 
+**Kinds**
+- Package `kind/comp` holds what names one component of a Spec — `comp.Const`, `comp.Load`,
+  `comp.Tagged`, `comp.Without` — and `kind` keeps the kinds: `Spec`, `Define`, `Of`, `Roster`.
+- `world.Plugin.Roster()`: what the plugins in the game ask of a unit's kind, gathered as the
+  plugins are made. `kind.Require[T](role, by, why)` names what the game must supply (world:
+  `Position`; board: `Cell`, `Mover`; navigation: `Steering`), `Role.Default` what a plugin brings
+  (world: `Velocity{}`; collision: `Collider{}`, `Physics{}`; `comp.Without[T]()` drops one).
+  `Roster().Unit.Spec(own...)` builds the Spec and panics naming every requirement left unmet, by
+  plugin and reason.
+- `board.NewUnits[Row](brd, size, at)` and `Units.Define(name, domain, steering, extra...)`: a
+  game's units over a board are defined by where a row says they stand, the domain they move in
+  and their steering profile; `Position` and `Cell` come from the one point, `Mover` and `Layers`
+  from the one domain, the roster is run and `kind.Define` called. The demos define their units
+  through it.
+
 **Board**
 - Terrain kinds say whom they admit (`Allows`, a bitset of `Domain`s), whether they are `Solid`,
   how much they `Veil` sight (0 clear, 1 cutting; a forest 0.6), and what they cost per domain
@@ -60,7 +75,7 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
   `selection.Resources`/`DefaultEventHandler`, `navigation.Resources`/`MoveCommand`/
   `DefaultCommandEventHandler`, `world.WithCameraControls`.
 - Tags are bits of families: `plugin.Tags[F]` is one component per family, `Kinds.DefineTag`
-  names the bits (saved by name), `kind.Tagged` gives them to a kind, `Between(a, b, fn)` takes
+  names the bits (saved by name), `comp.Tagged` gives them to a kind, `Between(a, b, fn)` takes
   them as values; `Selectable` and `Selected`, the vision behaviors' tags and terrain bodies are
   bits. `navigation.NewPlugin` takes the selection plugin.
 - `plugins/effects`: temporary changes to entities — `Grant` and `Alter` in a `Spec`, `Lasts`

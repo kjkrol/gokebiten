@@ -8,6 +8,7 @@ import (
 	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/world"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/gram/render"
 )
 
@@ -26,6 +27,8 @@ var _ plugin.Plugin = (*Plugin)(nil)
 
 // NewPlugin builds the collision plugin over worldPlugin's shared spatial index.
 func NewPlugin(worldPlugin *world.Plugin) *Plugin {
+	worldPlugin.Roster().Unit.Default(comp.Const(Collider{}))
+	worldPlugin.Roster().Unit.Default(comp.Const(Physics{}))
 	return &Plugin{worldPlugin: worldPlugin}
 }
 

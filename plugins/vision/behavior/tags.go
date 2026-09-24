@@ -9,7 +9,7 @@ import (
 type Family struct{}
 
 // Tags is the ready-made tags: who steers clear, who is fled from on sight, who hunts and who
-// is hunted. Define them once with DefineTags and give them to kinds with kind.Tagged.
+// is hunted. Define them once with DefineTags and give them to kinds with comp.Tagged.
 type Tags struct {
 	Skittish, Threat, Predator, Prey plugin.Tag[Family]
 }

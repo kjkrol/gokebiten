@@ -20,6 +20,7 @@ import (
 	"github.com/kjkrol/gram/plugins/collision/behavior"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/gram/render"
 )
 
@@ -67,10 +68,10 @@ func (a *arena) Init(ctx game.Initializer) error {
 		Entities: world.EntitiesCfg{MaxCount: boxCount, MinSize: boxSize, MaxSize: boxSize},
 	})
 	a.boxes = kind.Define[box](a.world.Kinds(), "box", kind.Spec{
-		kind.Load(func(b box) world.Position { return b.pos }),
-		kind.Load(func(b box) world.Velocity { return b.vel }),
-		kind.Const(collision.Collider{}),
-		kind.Const(collision.Physics{Restitution: 1}),
+		comp.Load(func(b box) world.Position { return b.pos }),
+		comp.Load(func(b box) world.Velocity { return b.vel }),
+		comp.Const(collision.Collider{}),
+		comp.Const(collision.Physics{Restitution: 1}),
 	})
 
 	a.collision = collision.NewPlugin(a.world)

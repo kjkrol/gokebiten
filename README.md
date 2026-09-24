@@ -154,10 +154,10 @@ func (a *arena) Init(ctx game.Initializer) error {
 		Entities: world.EntitiesCfg{MaxCount: boxCount, MinSize: boxSize, MaxSize: boxSize},
 	})
 	a.boxes = kind.Define[box](a.world.Kinds(), "box", kind.Spec{
-		kind.Load(func(b box) world.Position { return b.pos }),
-		kind.Load(func(b box) world.Velocity { return b.vel }),
-		kind.Const(collision.Collider{}),
-		kind.Const(collision.Physics{Restitution: 1}),
+		comp.Load(func(b box) world.Position { return b.pos }),
+		comp.Load(func(b box) world.Velocity { return b.vel }),
+		comp.Const(collision.Collider{}),
+		comp.Const(collision.Physics{Restitution: 1}),
 	})
 
 	a.collision = collision.NewPlugin(a.world)
@@ -302,7 +302,7 @@ plugin's own constructors: `collision.Between(a, b, fn)` for every pair it meets
 carries tag `a` and the other `b` (`plugin.Any` as the wildcard), `board.Each[T](fn)` for every
 entity carrying `T`, `world.Every(fn)` for every entity the payload's host visits. A tag
 is a bit of a family — one `plugin.Tags[F]` component per family, named through `Kinds.DefineTag`,
-given to a kind with `kind.Tagged` — so markers cost no component types of their own. Ready-made
+given to a kind with `comp.Tagged` — so markers cost no component types of their own. Ready-made
 behaviors live in `plugins/collision/behavior` and `plugins/vision/behavior`; which tags they run
 between is the registration's to say. What a player *wants* goes the other way, as a command:
 the plugin that defines the type (`navigation.MoveTo`, `selection.Select`) is a `plugin.Commander`
@@ -312,7 +312,12 @@ the Commanders and carries what a player's bindings, an AI or a network issue.
 ## Kinds, spawning and saves
 
 `kind.Define[Row](world.Kinds(), "name", kind.Spec{...})` says what an entity is: each component
-`kind.Const(v)` (the same for all) or `kind.Load(func(row Row) T)` (read from that entity's row).
+`comp.Const(v)` (the same for all) or `comp.Load(func(row Row) T)` (read from that entity's row).
+A unit over a board is defined through `board.NewUnits[Row](brd, size, at)`:
+`units.Define(name, domain, steering, extra...)` derives `Position` and `Cell` from the one point
+`at` reads off a row and `Mover` and `Layers` from the one domain, then runs the world's roster —
+what the plugins in the game bring by default (a `Collider`, a `Physics`, a `Velocity`) and what
+they require (`Cell`, `Mover`, `Steering`), a Spec missing one panicking by plugin and reason.
 `Spawn` puts entries on the world's roster with `Seed`; the engine spawns them only when
 `Restore` loaded nothing. `Attach` and `Detach` are the mid-game counterparts of `Const`. Kinds
 tell save files every component type their entities carry, so a game's own tags and state

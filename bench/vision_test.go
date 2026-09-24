@@ -12,6 +12,7 @@ import (
 	"github.com/kjkrol/gram/plugins/vision"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 )
 
 // watcher is the row an observer spawns from.
@@ -31,14 +32,14 @@ func benchVision(b *testing.B, n int, outlines bool) *goke.ECS {
 		b.Fatal(err)
 	}
 	spec := kind.Spec{
-		kind.Load(func(d watcher) world.Position {
+		comp.Load(func(d watcher) world.Position {
 			return world.Position{AABB: plane.NewAABB(geom.NewVec(d.x, d.y), 10, 10)}
 		}),
-		kind.Const(world.Velocity{}),
-		kind.Const(vision.Sight{Facing: geom.NewVec(1.0, 0.0), HalfAngle: math.Pi / 6, Radius: 200}),
+		comp.Const(world.Velocity{}),
+		comp.Const(vision.Sight{Facing: geom.NewVec(1.0, 0.0), HalfAngle: math.Pi / 6, Radius: 200}),
 	}
 	if outlines {
-		spec = append(spec, kind.Const(vision.SightOutline{}))
+		spec = append(spec, comp.Const(vision.SightOutline{}))
 	}
 	watchers := kind.Define[watcher](w.Kinds(), "watcher", spec)
 	side := int(math.Ceil(math.Sqrt(float64(n))))

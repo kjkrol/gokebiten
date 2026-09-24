@@ -10,6 +10,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/uid"
 )
 
@@ -145,8 +146,8 @@ func TestKinds_ReserveTakesAnIDLikeDefineAndRefusesADuplicateName(t *testing.T) 
 		t.Errorf("first Reserve got ID %d, want 0", got)
 	}
 	rock := kind.Define[struct{}](w.Kinds(), "rock", kind.Spec{
-		kind.Const(world.Position{AABB: box(0, 0, 10, 10)}),
-		kind.Const(world.Velocity{}),
+		comp.Const(world.Position{AABB: box(0, 0, 10, 10)}),
+		comp.Const(world.Velocity{}),
 	})
 	if rock.ID() != 1 {
 		t.Errorf("Define after Reserve got ID %d, want 1", rock.ID())

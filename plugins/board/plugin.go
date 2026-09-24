@@ -10,6 +10,7 @@ import (
 	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/collision"
 	"github.com/kjkrol/gram/plugins/world"
+	"github.com/kjkrol/gram/plugins/world/kind"
 	"github.com/kjkrol/gram/render"
 	"github.com/kjkrol/uid"
 )
@@ -50,6 +51,8 @@ var _ plugin.Populator = (*Plugin)(nil)
 // NewPlugin builds a board over grid with the given occupancy cap, slowing worldPlugin's entities.
 func NewPlugin(grid Grid, occupancy Occupancy, worldPlugin *world.Plugin) *Plugin {
 	terrain := NewTerrainMap()
+	kind.Require[Cell](&worldPlugin.Roster().Unit, "board", "the cell it starts in")
+	kind.Require[Mover](&worldPlugin.Roster().Unit, "board", "the domains it moves in")
 	p := &Plugin{
 		occupancy:   occupancy,
 		worldPlugin: worldPlugin,

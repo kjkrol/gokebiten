@@ -11,6 +11,7 @@ import (
 	"github.com/kjkrol/gram/plugins/collision"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/uid"
 )
 
@@ -41,10 +42,10 @@ func TestCollision_ABoxPushedThroughAnOpenEdgeIsReportedToTheWorld(t *testing.T)
 	}
 
 	boxes := kind.Define[pushedOut](w.Kinds(), "box", kind.Spec{
-		kind.Load(func(b pushedOut) world.Position { return posAt(b.x, 500, 10, 10) }),
-		kind.Const(world.Velocity{}),
-		kind.Const(collision.Collider{}),
-		kind.Load(func(b pushedOut) collision.Physics {
+		comp.Load(func(b pushedOut) world.Position { return posAt(b.x, 500, 10, 10) }),
+		comp.Const(world.Velocity{}),
+		comp.Const(collision.Collider{}),
+		comp.Load(func(b pushedOut) collision.Physics {
 			if b.wall {
 				return collision.Physics{Mass: math.Inf(1)}
 			}

@@ -72,7 +72,7 @@ with `host.PairHost[P]`/`host.EachHost[P]`. Tags are bits of a family, not compo
 holding up to 64 tags of family `F` (an empty type a plugin or a game names the family by:
 `selection.Family`, `behavior.Family` in vision, `board.Family`), `kinds.DefineTag[F](name)`
 hands out the bits by name through `world.Kinds` (saved by name, remapped on load like `TypeID`),
-`kind.Tagged(tags...)` gives them to a kind, a query over the family's `Tags` narrows to entities
+`comp.Tagged(tags...)` gives them to a kind, a query over the family's `Tags` narrows to entities
 carrying any of them, and flipping a bit is a value write seen the same tick. `Between(a, b, fn)`
 takes tags as values (`plugin.Any` for either side); a payload's `plugin.Marks` answers
 `marks.Carries(tag)` for the families the host's behaviors name. This keeps goke's
@@ -99,8 +99,8 @@ each plugin's own typed `Seed` (`world.Plugin.Seed(roster)`,
 tracked `plugin.Populator` — only when `Restore` loaded nothing. Entity kinds
 are defined in `Stage.Init` with the `plugins/world/kind` package:
 `prey := kind.Define[P](world.Kinds(), "prey", kind.Spec{...})` — a `Spec` is
-just the list of a kind's components, each `kind.Const(v)` (same for all) or
-`kind.Load(func(row P) T)` (read from that entity's row), `world.Position` and
+just the list of a kind's components, each made in `kind/comp`: `comp.Const(v)` (same for all) or
+`comp.Load(func(row P) T)` (read from that entity's row), `world.Position` and
 `world.Velocity` among them (one of each, or `Define` panics by name; so does a
 `Load` over a row type other than `P`). `Define` hands back the kind itself,
 `kind.Of[P]`: `prey.Entry(row)` builds a roster entry for `world.Plugin.Seed`
@@ -173,6 +173,12 @@ shows how much of it is boilerplate vs. real behavior.
   solver); every tick it does, `world.Each` behaviors of a `world.Leaving`
   registered on the world hear of it, and with none it is despawned; back inside
   it loses the mark.
+  `world.Roster()` is what the plugins in the game ask of a unit's kind, gathered as the plugins
+  are made: `kind.Require[T](&roster.Unit, by, why)` names what the game must supply (world:
+  `Position`; board: `Cell`, `Mover`; navigation: `Steering`), `roster.Unit.Default(comp.Const(v))`
+  what a plugin brings itself (world: `Velocity{}`; collision: `Collider{}`, `Physics{}`, dropped
+  with `comp.Without[T]()`); a game builds a unit's Spec with `roster.Unit.Spec(own...)` and a
+  missing requirement panics by plugin and reason. A plugin's requirements go in its `NewPlugin`.
   `world.Layers` are the planes an entity is on, one bit each (none, or the component absent:
   every plane); collision and vision read it, so a hawk on `Air` and a walker on `Land` neither
   push nor block each other. A world without heights is a set of planes: that is the 2D model.
@@ -213,7 +219,11 @@ shows how much of it is boilerplate vs. real behavior.
   what it costs — `Costing(domain, cost)` prices it differently per domain, and
   `CostFor(domain)` is what a unit pays in the planner and in the Moving behavior board
   registers on the world (only entities carrying `Mover` are slowed); a unit's
-  `Mover` says which domains it moves in (none: `Land`). Every tick, after
+  `Mover` says which domains it moves in (none: `Land`). `board.NewUnits[Row](brd, size, at)` is
+  how a game defines its units: `units.Define(name, domain, steering, extra...)` derives
+  `Position` and `Cell` from the one point `at` reads off a row, `Mover` and `Layers` from the one
+  domain, runs the world's roster and `kind.Define`, and hands back the usual `kind.Of[Row]`.
+  Every tick, after
   collision's `RunPlan`, `board.RunPlan` reports a `Standing` (cell under the centre and its kind) to
   `board.Each` behaviors registered on the board, naturally `board.Each[board.Mover]`;
   `Standing.Fell(domain)` is a land unit in water or in a hole, and the reaction is the game's.
@@ -226,7 +236,7 @@ shows how much of it is boilerplate vs. real behavior.
   once after a load. Depends on `world`, and on `collision` for the bodies.
 - **`collision`** — optional collision detection over `world`'s space, one
   `CollisionSystem` system a tick. An entity collides exactly while it carries `Collider` —
-  `kind.Const(collision.Collider{})`, or `Attach`/`Detach` mid-game. The `CollisionSystem`
+  `comp.Const(collision.Collider{})`, or `Attach`/`Detach` mid-game. The `CollisionSystem`
   first settles every `Collider`'s `Base.Caps` (`CanCollide`, plus `Static` for an
   immovable `Physics`, `Sensor` for none) and rebuilds the space when any changed;
   two colliders touch only where their `world.Layers` meet — a board game uses `Domain` bits,
@@ -281,7 +291,7 @@ shows how much of it is boilerplate vs. real behavior.
   `Active`. Depends on `world`.
 - **`selection`** — a `Select` command (ids, or a world box, additive or not) → the `Selected`
   tag on `world` entities that carry `Selectable`, both bits of `selection.Family` from
-  `Plugin.Tags()` (a kind's choice via `kind.Tagged`; terrain bodies never do); a bit flip, seen
+  `Plugin.Tags()` (a kind's choice via `comp.Tagged`; terrain bodies never do); a bit flip, seen
   the same tick. A `plugin.Commander`: its `DefaultBindings()` make a left drag one (Shift adds).
   Depends on `world`.
 - **`players`** — whoever acts in the game, a carrier over `plugin.Commander`s:

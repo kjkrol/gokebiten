@@ -16,6 +16,7 @@ import (
 	"github.com/kjkrol/gram/plugins/vision"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/uid"
 )
 
@@ -93,17 +94,17 @@ func newBodiesWorld(t *testing.T, grid board.Grid, width, height uint32, terrain
 
 	for i, u := range units {
 		spec := kind.Spec{
-			kind.Load(func(m mover) world.Position {
+			comp.Load(func(m mover) world.Position {
 				box := board.CellAABB(grid, m.cell, unitSize)
 				box.TopLeft.X += m.offset
 				box.BottomRight.X += m.offset
 				return world.Position{AABB: box}
 			}),
-			kind.Const(world.Velocity{}),
-			kind.Const(collision.Collider{}),
-			kind.Const(collision.Physics{}),
-			kind.Load(func(m mover) board.Cell { return board.Cell{ID: m.cell} }),
-			kind.Load(func(m mover) board.Mover {
+			comp.Const(world.Velocity{}),
+			comp.Const(collision.Collider{}),
+			comp.Const(collision.Physics{}),
+			comp.Load(func(m mover) board.Cell { return board.Cell{ID: m.cell} }),
+			comp.Load(func(m mover) board.Mover {
 				if m.domain == 0 {
 					return board.Mover{Domain: board.Land}
 				}
@@ -111,12 +112,12 @@ func newBodiesWorld(t *testing.T, grid board.Grid, width, height uint32, terrain
 			}),
 		}
 		if u.heading != (geom.Vec{}) {
-			spec = append(spec, kind.Load(func(m mover) world.Steering {
+			spec = append(spec, comp.Load(func(m mover) world.Steering {
 				return world.Steering{Want: m.heading, WantSpeed: 64, MaxSpeed: 64}
 			}))
 		}
 		if u.sight != nil {
-			spec = append(spec, kind.Const(*u.sight))
+			spec = append(spec, comp.Const(*u.sight))
 		}
 		name := string(rune('a' + i))
 		bw.w.Seed(kind.Define[mover](bw.w.Kinds(), name, spec).Entry(u))

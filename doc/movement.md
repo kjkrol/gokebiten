@@ -55,7 +55,7 @@ for that speed at distance `d` from the goal, never below the speed braking leav
 radius, and the unit comes to rest on the goal — a weaker brake means braking earlier, not
 overshooting; the route itself carries no "brake here": every decision is read off the profile
 as it is that tick, so an effect on the profile acts at once. The profile is
-the kind's (`kind.Const(world.Steering{MaxSpeed: 120, Accel: 200, V0: 40, TurnRate: 0.1})`), so
+the kind's (`comp.Const(world.Steering{MaxSpeed: 120, Accel: 200, V0: 40, TurnRate: 0.1})`), so
 unit types differ in how they move without any code.
 
 ## 2. Where to look: the lookahead point

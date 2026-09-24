@@ -19,6 +19,9 @@
 // entity's Cell and Mover when the Stage is set up, fresh or loaded. The [Plugin], built over a
 // board and a world, runs before the world's RunPlan.
 //
+// Navigation requires of every unit a world.Steering, the profile it is steered by, through the
+// world's kind.Roster; a MoveOrder is put on by the MoveTo command, or by the game at spawn.
+//
 // # Commands
 //
 // A [MoveTo] sends every Selected entity to a cell, or with Append queues the cell behind their

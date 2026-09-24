@@ -20,6 +20,7 @@ import (
 	"github.com/kjkrol/gram/plugins/collision/behavior"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/gram/render"
 )
 
@@ -165,11 +166,11 @@ func (s *mainStage) defineKinds() {
 	for ci := range entityColors {
 		for si := range entityShapes {
 			s.kinds[ci][si] = kind.Define[body](kinds, entityKindName(ci, si), kind.Spec{
-				kind.Load(func(b body) world.Position { return b.pos }),
-				kind.Load(func(b body) world.Velocity { return b.vel }),
-				kind.Const(collision.Collider{}),
-				kind.Const(collision.Physics{Restitution: 1}),
-				kind.Const(behavior.HitMark{Duration: hitDuration}),
+				comp.Load(func(b body) world.Position { return b.pos }),
+				comp.Load(func(b body) world.Velocity { return b.vel }),
+				comp.Const(collision.Collider{}),
+				comp.Const(collision.Physics{Restitution: 1}),
+				comp.Const(behavior.HitMark{Duration: hitDuration}),
 			})
 		}
 	}

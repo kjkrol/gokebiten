@@ -11,6 +11,7 @@ import (
 	"github.com/kjkrol/gram/plugins/board"
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/gram/plugins/world"
+	"github.com/kjkrol/gram/plugins/world/kind"
 	"github.com/kjkrol/gram/render"
 )
 
@@ -38,6 +39,7 @@ var _ plugin.Plugin = (*Plugin)(nil)
 // NewPlugin builds a navigation plugin over a board; hand it to the players plugin for its MoveTo
 // command and default bindings. Entities move as their Steering profile says.
 func NewPlugin(boardPlugin *board.Plugin, worldPlugin *world.Plugin, selectionPlugin *selection.Plugin) *Plugin {
+	kind.Require[world.Steering](&worldPlugin.Roster().Unit, "navigation", "the profile it is steered by")
 	return &Plugin{boardPlugin: boardPlugin, worldPlugin: worldPlugin, camera: worldPlugin.Camera(), selected: selectionPlugin.Tags().Selected}
 }
 

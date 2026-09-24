@@ -8,6 +8,7 @@ import (
 	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/uid"
 )
 
@@ -24,9 +25,9 @@ func spawnerTestPos() Position {
 // statSpec is a kind whose rows are an int: the HP its one component spawns with.
 func statSpec() kind.Spec {
 	return kind.Spec{
-		kind.Const(spawnerTestPos()),
-		kind.Const(Velocity{}),
-		kind.Load(func(hp int) spawnerStat { return spawnerStat{HP: hp} }),
+		comp.Const(spawnerTestPos()),
+		comp.Const(Velocity{}),
+		comp.Load(func(hp int) spawnerStat { return spawnerStat{HP: hp} }),
 	}
 }
 
@@ -66,9 +67,9 @@ func TestKinds_Define_AssignsSpriteIDsByOrder(t *testing.T) {
 
 func TestKinds_Define_NeedsOnePositionAndOneVelocity(t *testing.T) {
 	for name, spec := range map[string]kind.Spec{
-		"no Position":   {kind.Const(Velocity{})},
-		"no Velocity":   {kind.Const(spawnerTestPos())},
-		"two Positions": {kind.Const(spawnerTestPos()), kind.Const(spawnerTestPos()), kind.Const(Velocity{})},
+		"no Position":   {comp.Const(Velocity{})},
+		"no Velocity":   {comp.Const(spawnerTestPos())},
+		"two Positions": {comp.Const(spawnerTestPos()), comp.Const(spawnerTestPos()), comp.Const(Velocity{})},
 	} {
 		t.Run(name, func(t *testing.T) {
 			msg := panicsWith(t, func() { kind.Define[int](newKinds(), "unit", spec) })
@@ -89,7 +90,7 @@ func TestKinds_Define_RefusesANameTwice(t *testing.T) {
 func TestPopulate_ConstAndLoadComponents(t *testing.T) {
 	p := testPlugin()
 	p.Kinds().NewSprite()
-	unit := kind.Define[int](p.Kinds(), "unit", append(statSpec(), kind.Const(spawnerTag{})))
+	unit := kind.Define[int](p.Kinds(), "unit", append(statSpec(), comp.Const(spawnerTag{})))
 	p.Seed(unit.Entry(9), unit.Entry(4))
 	if err := p.Populate(); err != nil {
 		t.Fatalf("Populate: %v", err)
@@ -124,9 +125,9 @@ func TestPopulate_WithEffect_RunsAfterWriteWithValueAndID(t *testing.T) {
 	var gotHP, calls int
 	var gotID uid.UID64
 	unit := kind.Define[int](p.Kinds(), "unit", kind.Spec{
-		kind.Const(spawnerTestPos()),
-		kind.Const(Velocity{}),
-		kind.Load(func(hp int) spawnerStat { return spawnerStat{HP: hp} }).
+		comp.Const(spawnerTestPos()),
+		comp.Const(Velocity{}),
+		comp.Load(func(hp int) spawnerStat { return spawnerStat{HP: hp} }).
 			WithEffect(func(v spawnerStat, id uid.UID64) {
 				calls++
 				gotHP, gotID = v.HP, id
@@ -158,11 +159,11 @@ func TestPopulate_KindsWithDifferentRowsAndComponents(t *testing.T) {
 	p := testPlugin()
 	unit := kind.Define[int](p.Kinds(), "unit", statSpec())
 	prop := kind.Define[propData](p.Kinds(), "prop", kind.Spec{
-		kind.Load(func(d propData) Position {
+		comp.Load(func(d propData) Position {
 			return Position{AABB: plane.NewAABB(geom.NewVec(d.x, 0), 10, 10)}
 		}),
-		kind.Const(Velocity{}),
-		kind.Const(spawnerTag{}),
+		comp.Const(Velocity{}),
+		comp.Const(spawnerTag{}),
 	})
 	p.Seed(unit.Entry(5), prop.Entry(propData{x: 40}), unit.Entry(6))
 	if err := p.Populate(); err != nil {
@@ -215,7 +216,7 @@ func TestKinds_LoadComps_ListsWhatItsKindsCarryEachOnce(t *testing.T) {
 	}
 
 	for _, name := range []string{"first", "second"} {
-		kind.Define[int](kinds, name, append(statSpec(), kind.Const(spawnerTag{})))
+		kind.Define[int](kinds, name, append(statSpec(), comp.Const(spawnerTag{})))
 	}
 
 	var got []string

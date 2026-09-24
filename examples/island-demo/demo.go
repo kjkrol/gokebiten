@@ -5,6 +5,7 @@
 package main
 
 import (
+	"github.com/kjkrol/aabbworld/geom"
 	"image/color"
 	"log"
 	"slices"
@@ -22,6 +23,7 @@ import (
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/gram/render"
 )
 
@@ -168,18 +170,11 @@ type unit struct{ start, target board.CellID }
 // defineKinds says what this game's entities are, fresh or restored.
 func (s *mainStage) defineKinds() {
 	brd := s.board.Res.Logic.Board
-	s.unit = kind.Define[unit](s.world.Kinds(), "unit", kind.Spec{
-		kind.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(brd, u.start, EntitySize)} }),
-		kind.Const(world.Velocity{}),
-		kind.Const(world.Steering{MaxSpeed: UnitSpeed, Accel: UnitSpeed * 2, Brake: UnitSpeed * 4, V0: UnitSpeed / 2, TurnRate: 0.15}),
-		kind.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
-		kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }),
-		kind.Tagged(s.selection.Tags().Selectable, s.selection.Tags().Selected),
-		kind.Const(collision.Collider{}),
-		kind.Const(world.Layers(board.Land)),
-		kind.Const(collision.Physics{}),
-		kind.Const(board.Mover{Domain: board.Land}),
-	})
+	units := board.NewUnits[unit](s.board, EntitySize, func(u unit) geom.Vec { return brd.CellCenter(u.start) })
+	s.unit = units.Define("unit", board.Land, world.Steering{MaxSpeed: UnitSpeed, Accel: UnitSpeed * 2, Brake: UnitSpeed * 4, V0: UnitSpeed / 2, TurnRate: 0.15},
+		comp.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
+		comp.Tagged(s.selection.Tags().Selectable, s.selection.Tags().Selected),
+	)
 }
 
 // Spawn lays the island out and puts a unit at every road stop, bound for the opposite one.

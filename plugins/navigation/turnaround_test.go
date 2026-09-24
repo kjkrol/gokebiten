@@ -12,6 +12,7 @@ import (
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/uid"
 )
 
@@ -75,17 +76,17 @@ func newTurnaroundWorld(t *testing.T, collide bool) *turnaroundWorld {
 
 	spec := func(ordered bool) kind.Spec {
 		s := kind.Spec{
-			kind.Load(func(u unitRow) world.Position { return world.Position{AABB: board.CellAABB(tw.grid, u.start, 22)} }),
-			kind.Const(world.Velocity{}),
-			kind.Const(world.Steering{MaxSpeed: 64, Accel: 128, V0: 32, TurnRate: 0.15}),
-			kind.Load(func(u unitRow) board.Cell { return board.Cell{ID: u.start} }).
+			comp.Load(func(u unitRow) world.Position { return world.Position{AABB: board.CellAABB(tw.grid, u.start, 22)} }),
+			comp.Const(world.Velocity{}),
+			comp.Const(world.Steering{MaxSpeed: 64, Accel: 128, V0: 32, TurnRate: 0.15}),
+			comp.Load(func(u unitRow) board.Cell { return board.Cell{ID: u.start} }).
 				WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id, board.Land) }),
-			kind.Const(collision.Collider{}),
-			kind.Const(collision.Physics{}),
+			comp.Const(collision.Collider{}),
+			comp.Const(collision.Physics{}),
 		}
 		if ordered {
-			s = append(s, kind.Tagged(sel.Tags().Selectable, sel.Tags().Selected),
-				kind.Load(func(u unitRow) MoveOrder { return MoveOrder{Target: u.target} }))
+			s = append(s, comp.Tagged(sel.Tags().Selectable, sel.Tags().Selected),
+				comp.Load(func(u unitRow) MoveOrder { return MoveOrder{Target: u.target} }))
 		}
 		return s
 	}

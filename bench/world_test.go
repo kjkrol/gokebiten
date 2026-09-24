@@ -11,6 +11,7 @@ import (
 	"github.com/kjkrol/gram/camera"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/gram/render"
 )
 
@@ -35,10 +36,10 @@ func benchWorldViewed(b *testing.B, ctx *headless, n int, spacing int, view uint
 		Camera:   camera.Config{ViewportWidth: view, ViewportHeight: view},
 	})
 	movers := kind.Define[mover](w.Kinds(), "mover", kind.Spec{
-		kind.Load(func(m mover) world.Position {
+		comp.Load(func(m mover) world.Position {
 			return world.Position{AABB: plane.NewAABB(geom.NewVec(m.x, m.y), 20, 20)}
 		}),
-		kind.Const(world.Velocity{Dir: geom.NewVec(1, 0), Value: 60}),
+		comp.Const(world.Velocity{Dir: geom.NewVec(1, 0), Value: 60}),
 	})
 	side := 1
 	for side*side < n {

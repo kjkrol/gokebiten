@@ -6,7 +6,7 @@ import "github.com/kjkrol/gram/plugin"
 type Family struct{}
 
 // Tags is selection's tags: Selectable marks an entity the player may select, Selected one
-// the player has. A kind gives Selectable with kind.Tagged; the plugin flips Selected.
+// the player has. A kind gives Selectable with comp.Tagged; the plugin flips Selected.
 type Tags struct {
 	Selectable, Selected plugin.Tag[Family]
 }

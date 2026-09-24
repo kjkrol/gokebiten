@@ -13,6 +13,7 @@ import (
 	"github.com/kjkrol/gram/plugins/collision/behavior"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/gram/render"
 	"github.com/kjkrol/uid"
 )
@@ -80,10 +81,10 @@ func TestSaveLoadCycle(t *testing.T) {
 		var entries []kind.Entry
 		for i := range count {
 			of := kind.Define[body](wp.Kinds(), fmt.Sprintf("k%d", i), kind.Spec{
-				kind.Load(func(b body) world.Position { return b.pos }),
-				kind.Load(func(b body) world.Velocity { return b.vel }),
-				kind.Const(collision.Collider{}),
-				kind.Const(behavior.HitMark{Duration: hitDuration}),
+				comp.Load(func(b body) world.Position { return b.pos }),
+				comp.Load(func(b body) world.Velocity { return b.vel }),
+				comp.Const(collision.Collider{}),
+				comp.Const(behavior.HitMark{Duration: hitDuration}),
 			})
 			entries = append(entries, of.Entry(body{pos: placement.Place(i, count), vel: motion.initialVelocity(i)}))
 		}

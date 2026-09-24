@@ -11,6 +11,7 @@ import (
 	"github.com/kjkrol/gram/plugins/vision"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/uid"
 )
 
@@ -75,19 +76,19 @@ func scene(t *testing.T, spawns ...spawn) ([]uid.UID64, []vision.Sighted, []visi
 
 	for i, s := range spawns {
 		spec := kind.Spec{
-			kind.Load(at),
-			kind.Const(world.Velocity{}),
+			comp.Load(at),
+			comp.Const(world.Velocity{}),
 		}
 		if s.tau > 0 {
-			spec = append(spec, kind.Const(vision.Transparency{Value: s.tau}))
+			spec = append(spec, comp.Const(vision.Transparency{Value: s.tau}))
 		}
 		if s.layers != 0 {
-			spec = append(spec, kind.Const(s.layers))
+			spec = append(spec, comp.Const(s.layers))
 		}
 		if s.sight != nil {
-			spec = append(spec, kind.Const(*s.sight))
+			spec = append(spec, comp.Const(*s.sight))
 			if s.outline {
-				spec = append(spec, kind.Const(vision.SightOutline{}))
+				spec = append(spec, comp.Const(vision.SightOutline{}))
 			}
 		}
 		w.Seed(kind.Define[spawn](w.Kinds(), kindName(i), spec).Entry(s))

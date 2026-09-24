@@ -23,6 +23,7 @@ import (
 	"github.com/kjkrol/gram/plugins/vision"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/gram/render"
 	"github.com/kjkrol/uid"
 )
@@ -180,47 +181,23 @@ var hawkColor = color.RGBA{R: 120, G: 130, B: 60, A: 255}
 // defineKinds says what this game's entities are: one kind per colour, all scouts, and a hawk.
 func (s *mainStage) defineKinds() {
 	brd := s.board.Res.Logic.Board
-	spec := kind.Spec{
-		kind.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(brd, u.start, EntitySize)} }),
-		kind.Const(world.Velocity{}),
-		kind.Const(world.Steering{MaxSpeed: UnitSpeed, Accel: UnitSpeed * 2, Brake: UnitSpeed * 4, V0: UnitSpeed / 2, TurnRate: 0.15}),
-		kind.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
-		kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }),
-		kind.Tagged(s.selection.Tags().Selectable, s.selection.Tags().Selected),
-		kind.Const(collision.Collider{}),
-		kind.Const(world.Layers(board.Land)),
-		kind.Const(collision.Physics{}),
-		kind.Const(board.Mover{Domain: board.Land}),
-		kind.Const(vision.Sight{Facing: geom.NewVec(1, 0), HalfAngle: sightHalf, Radius: sightRadius, Blockers: world.Layers(board.Land)}),
-		kind.Const(vision.SightOutline{}),
-		kind.Tagged(s.unitTag),
+	units := board.NewUnits[unit](s.board, EntitySize, func(u unit) geom.Vec { return brd.CellCenter(u.start) })
+	order := comp.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} })
+	sight := func(blockers board.Domain) comp.Comp {
+		return comp.Const(vision.Sight{Facing: geom.NewVec(1, 0), HalfAngle: sightHalf, Radius: sightRadius, Blockers: world.Layers(blockers)})
 	}
-	names := []string{"red", "blue", "yellow"}
-	for _, name := range names {
-		s.kinds = append(s.kinds, kind.Define[unit](s.world.Kinds(), name, spec))
+	scout := world.Steering{MaxSpeed: UnitSpeed, Accel: UnitSpeed * 2, Brake: UnitSpeed * 4, V0: UnitSpeed / 2, TurnRate: 0.15}
+	for _, name := range []string{"red", "blue", "yellow"} {
+		s.kinds = append(s.kinds, units.Define(name, board.Land, scout, order,
+			comp.Tagged(s.selection.Tags().Selectable, s.selection.Tags().Selected),
+			sight(board.Land), comp.Const(vision.SightOutline{}), comp.Tagged(s.unitTag)))
 	}
-	s.hawk = kind.Define[unit](s.world.Kinds(), "hawk", s.hawkSpec())
-}
-
-// hawkSpec is a flyer: it moves in Air and is on the Air layer alone, so walls and walkers pass
-// under it and cut none of its sight, while other flyers push it and block it.
-func (s *mainStage) hawkSpec() kind.Spec {
-	brd := s.board.Res.Logic.Board
-	return kind.Spec{
-		kind.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(brd, u.start, EntitySize)} }),
-		kind.Const(world.Velocity{}),
-		kind.Const(world.Steering{MaxSpeed: UnitSpeed * 1.5, Accel: UnitSpeed * 2, Brake: UnitSpeed * 4, V0: UnitSpeed / 2, TurnRate: 0.1}),
-		kind.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
-		kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }),
-		kind.Tagged(s.selection.Tags().Selectable),
-		kind.Const(collision.Collider{}),
-		kind.Const(world.Layers(board.Air)),
-		kind.Const(collision.Physics{}),
-		kind.Const(board.Mover{Domain: board.Air}),
-		kind.Const(vision.Sight{Facing: geom.NewVec(1, 0), HalfAngle: sightHalf, Radius: sightRadius, Blockers: world.Layers(board.Air)}),
-		kind.Const(vision.SightOutline{}),
-		kind.Tagged(s.unitTag),
-	}
+	// The hawk flies: on the Air plane alone, so walls and walkers pass under it and cut none of
+	// its sight, while other flyers push it and block it.
+	flyer := world.Steering{MaxSpeed: UnitSpeed * 1.5, Accel: UnitSpeed * 2, Brake: UnitSpeed * 4, V0: UnitSpeed / 2, TurnRate: 0.1}
+	s.hawk = units.Define("hawk", board.Air, flyer, order,
+		comp.Tagged(s.selection.Tags().Selectable),
+		sight(board.Air), comp.Const(vision.SightOutline{}), comp.Tagged(s.unitTag))
 }
 
 // Spawn says who is there when the game starts fresh.

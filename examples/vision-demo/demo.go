@@ -23,6 +23,7 @@ import (
 	vbehavior "github.com/kjkrol/gram/plugins/vision/behavior"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/gram/render"
 )
 
@@ -144,26 +145,26 @@ func (s *mainStage) Restore(game.Persistence) (bool, error) { return false, nil 
 func (s *mainStage) defineKinds() {
 	kinds := s.world.Kinds()
 	s.prey = kind.Define[body](kinds, "prey", append(sees(),
-		kind.Const(world.Steering{Reflex: 3, TurnRate: 0.12}),
-		kind.Tagged(s.tags.Skittish, s.tags.Prey),
-		kind.Const(collision.Physics{Restitution: 1}),
+		comp.Const(world.Steering{Reflex: 3, TurnRate: 0.12}),
+		comp.Tagged(s.tags.Skittish, s.tags.Prey),
+		comp.Const(collision.Physics{Restitution: 1}),
 	))
 	s.hunter = kind.Define[body](kinds, "hunter", append(sees(),
-		kind.Const(world.Steering{Reflex: 1, TurnRate: 0.30}),
-		kind.Tagged(s.tags.Predator, s.tags.Threat),
+		comp.Const(world.Steering{Reflex: 1, TurnRate: 0.30}),
+		comp.Tagged(s.tags.Predator, s.tags.Threat),
 	))
 }
 
 // sees is what every kind here shares: a place, a heading, a cone looking that way, a collider.
 func sees() kind.Spec {
 	return kind.Spec{
-		kind.Load(func(b body) world.Position { return b.pos }),
-		kind.Load(func(b body) world.Velocity { return b.vel }),
-		kind.Load(func(b body) vision.Sight {
+		comp.Load(func(b body) world.Position { return b.pos }),
+		comp.Load(func(b body) world.Velocity { return b.vel }),
+		comp.Load(func(b body) vision.Sight {
 			return vision.Sight{Facing: b.vel.Dir, HalfAngle: sightHalf, Radius: sightRadius}
 		}),
-		kind.Const(vision.SightOutline{}),
-		kind.Const(collision.Collider{}),
+		comp.Const(vision.SightOutline{}),
+		comp.Const(collision.Collider{}),
 	}
 }
 
