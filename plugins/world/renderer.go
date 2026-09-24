@@ -16,26 +16,32 @@ var _ render.Renderer = (*Renderer)(nil)
 
 // Renderer draws the Position+Appearance entities in the world's View — what the camera sees
 // this tick — running the Each behaviors of a Drawing over each chunk to settle their layers. A
-// Stage that has not ticked yet sees everything.
+// Stage that has not ticked yet sees everything. Handed to render.NewSorted, it submits each
+// entity's box at its Z.Altitude instead, at the depth of its centre.
 type Renderer struct {
 	renderQuery *goke.Query
 	base        goke.Comp[Base]
 	appearance  goke.Comp[Appearance]
+	z           goke.OptComp[Z]
 	host        *host.EachHost[Drawing]
 	layers      [][]Appearance // one per entity of the chunk being drawn
 	batch       spriteBatch
+	camera      camera.Camera
+	atlas       render.AtlasSource
 	view        *View
 
 	ids   []uid.UID64
 	bases []Base
 }
 
+var _ render.Submitter = (*Renderer)(nil)
+
 func newRenderer(cam camera.Camera, atlas render.AtlasSource, view *View, host *host.EachHost[Drawing], worldW, worldH uint32) *Renderer {
-	return &Renderer{batch: newSpriteBatch(cam, atlas, worldW, worldH), view: view, host: host}
+	return &Renderer{batch: newSpriteBatch(cam, atlas, worldW, worldH), camera: cam, atlas: atlas, view: view, host: host}
 }
 
 func (s *Renderer) Init(si *goke.SysInit) {
-	qb := si.NewQueryBuilder(&s.base, &s.appearance)
+	qb := si.NewQueryBuilder(&s.base, &s.appearance).Optional(&s.z)
 	s.host.Bind(qb)
 	s.renderQuery = qb.Build()
 }
@@ -43,13 +49,38 @@ func (s *Renderer) Init(si *goke.SysInit) {
 // Draw draws this frame; a nil screen gathers the quads and draws nothing, for measuring.
 func (s *Renderer) Draw(screen *ebiten.Image) {
 	s.batch.reset()
-	tick := plugin.Tick{Now: time.Now()}
+	s.each(func(i int, _ float32, sprite render.SpriteID) { s.batch.drawQuad(s.bases[i].Pos, sprite) })
+	s.batch.flush(screen)
+}
 
+// Submit hands every drawn entity to sink: its box lifted to its altitude, at the depth of its
+// centre, a hair past the ground it stands on.
+func (s *Renderer) Submit(sink *render.Sink) {
+	s.each(func(i int, alt float32, sprite render.SpriteID) {
+		box := s.bases[i].Pos.AABB
+		if !s.camera.Visible(box.AABB) {
+			return
+		}
+		x0, y0 := float32(box.TopLeft.X), float32(box.TopLeft.Y)
+		x1, y1 := float32(box.BottomRight.X), float32(box.BottomRight.Y)
+		var dst render.Corners
+		for k, p := range [4][2]float32{{x0, y0}, {x1, y0}, {x0, y1}, {x1, y1}} {
+			dst[k][0], dst[k][1] = s.camera.Project(p[0], p[1], alt)
+		}
+		sink.Quad(s.camera.Depth((x0+x1)/2, (y0+y1)/2, alt), s.atlas, sprite, dst)
+	})
+}
+
+// each walks the drawn entities of the View, their Drawing behaviors run, calling draw once per
+// layer with the entity's index in the chunk and its altitude.
+func (s *Renderer) each(draw func(i int, alt float32, sprite render.SpriteID)) {
+	tick := plugin.Tick{Now: time.Now()}
 	s.renderQuery.All()
 	for s.renderQuery.Next() {
 		cursor := s.renderQuery.Cursor()
 		s.ids, s.bases = cursor.IDs, s.base.Slice(cursor)
 		appearances := s.appearance.Slice(cursor)
+		zs := s.z.Slice(cursor)
 
 		for len(s.layers) < len(s.ids) {
 			s.layers = append(s.layers, nil)
@@ -64,13 +95,15 @@ func (s *Renderer) Draw(screen *ebiten.Image) {
 			if !s.view.Contains(id) {
 				continue
 			}
+			alt := float32(0)
+			if zs != nil {
+				alt = float32(zs[i].Altitude)
+			}
 			for _, l := range s.layers[i] {
-				s.batch.drawQuad(s.bases[i].Pos, l.SpriteID)
+				draw(i, alt, l.SpriteID)
 			}
 		}
 	}
-
-	s.batch.flush(screen)
 }
 
 // at describes the i-th entity of the chunk being drawn.

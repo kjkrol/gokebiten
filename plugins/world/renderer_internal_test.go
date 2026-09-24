@@ -73,3 +73,46 @@ func TestRenderer_Draw_DrawsOnlyWhatTheViewContains(t *testing.T) {
 		t.Errorf("the zero View drew %d entities, want all 4", drawn)
 	}
 }
+
+// submitThrough is drawThrough through a Sink: how many quads were submitted and their depths.
+func submitThrough(t *testing.T, at ...geom.Vec) (int, []float32) {
+	t.Helper()
+	view := &View{}
+	cam := camera.NewFromSpace(1000, 1000, 0)
+	r := newRenderer(cam, flatAtlas{}, view, &host.EachHost[Drawing]{}, 1000, 1000)
+	var base goke.Comp[Base]
+	var appearance goke.Comp[Appearance]
+	var z goke.Comp[Z]
+	ecs := goke.New()
+	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		f := si.NewFactory(&base, &appearance, &z)
+		f.Create(len(at))
+		i := 0
+		for f.Next() {
+			bases, zs := base.Slice(&f.Cursor), z.Slice(&f.Cursor)
+			for j := range f.Cursor.IDs {
+				bases[j].Pos = Position{AABB: plane.NewAABB(at[i], 10, 10)}
+				zs[j] = Z{Altitude: float64(i)}
+				i++
+			}
+		}
+		r.Init(si)
+	}})
+	sorted := render.NewSorted(r)
+	sorted.Draw(nil)
+	var depths []float32
+	for _, p := range at {
+		depths = append(depths, cam.Depth(float32(p.X)+5, float32(p.Y)+5, 0))
+	}
+	return sorted.Gathered(), depths
+}
+
+func TestRenderer_Submit_HandsEveryEntityToTheSinkAtItsDepth(t *testing.T) {
+	n, depths := submitThrough(t, geom.NewVec(100, 100), geom.NewVec(700, 100), geom.NewVec(100, 700))
+	if n != 3 {
+		t.Errorf("submitted %d quads, want 3", n)
+	}
+	if depths[0] != 105 || depths[2] != 705 {
+		t.Errorf("top-down depths %v, want the centres' y", depths)
+	}
+}

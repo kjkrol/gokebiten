@@ -35,6 +35,9 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
   diamonds, heights lifting a point); `Camera.Project/Unproject/Depth` and `Projection()`,
   `camera.Config.Projection`. An isometric camera keeps a screen window over the projected world
   and refuses a wrapping one.
+- `render.Sorted` draws several `render.Submitter`s back to front by depth as one picture; the
+  board's and the world's renderers submit their quads (cells at their altitude, entities at their
+  `Z.Altitude`) besides drawing them as before.
 
 **Heights**
 - `world.Config{Quasi3D: true}` gives a world heights; the default is flat and no plugin guesses

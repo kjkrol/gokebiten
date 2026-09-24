@@ -1,0 +1,37 @@
+package board
+
+import (
+	"testing"
+
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/kjkrol/gram/camera"
+	"github.com/kjkrol/gram/render"
+)
+
+type flatAtlas struct{}
+
+func (flatAtlas) Atlas() *ebiten.Image                            { return nil }
+func (flatAtlas) UV(render.SpriteID) (sx0, sy0, sx1, sy1 float32) { return 0, 0, 1, 1 }
+
+func TestRenderer_Submit_OneQuadPerVisibleCellAtItsAltitude(t *testing.T) {
+	grid := DefaultGrids{}.Square(4, 4, 32)
+	brd := NewBoard(grid, NewTerrainMap())
+	brd.SetAll(CellKind{Cost: 1, Allows: Land})
+	c, _ := grid.CellIndex(1, 1)
+	brd.Set(c, CellKind{Cost: 1, Allows: Land, Altitude: 10})
+	cam := camera.NewFromSpaceWithConfig(128, 128, 0, camera.Config{Projection: camera.Isometric{Cell: 32, HeightUnit: 1}})
+	r := newRenderer(cam, brd, flatAtlas{}, &RenderState{})
+
+	var sink render.Sink
+	r.Submit(&sink)
+	if sink.Len() != 16 {
+		t.Errorf("submitted %d quads, want the 16 cells", sink.Len())
+	}
+
+	// The hill's quad sits HeightUnit·10 above where its flat neighbour would be drawn.
+	flatX, flatY := cam.Project(48, 48, 0)
+	hillX, hillY := cam.Project(48, 48, 10)
+	if hillX != flatX || hillY != flatY-10 {
+		t.Errorf("the hill's centre is drawn at (%v, %v), the ground under it at (%v, %v); want 10 higher", hillX, hillY, flatX, flatY)
+	}
+}
