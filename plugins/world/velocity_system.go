@@ -1,6 +1,7 @@
 package world
 
 import (
+	"github.com/kjkrol/gram/plugin/host"
 	"time"
 
 	"github.com/kjkrol/goke/v3"
@@ -13,7 +14,7 @@ var _ goke.System = (*VelocitySystem)(nil)
 // VelocitySystem runs the Each behaviors of a Moving over every entity, after Steering wrote the
 // base speed and before movement, so each may scale Velocity.Value.
 type VelocitySystem struct {
-	host  *plugin.EachHost[Moving]
+	host  *host.EachHost[Moving]
 	query *goke.Query
 	base  goke.Comp[Base]
 
@@ -21,7 +22,7 @@ type VelocitySystem struct {
 	bases []Base
 }
 
-func NewVelocitySystem(host *plugin.EachHost[Moving]) *VelocitySystem {
+func NewVelocitySystem(host *host.EachHost[Moving]) *VelocitySystem {
 	return &VelocitySystem{host: host}
 }
 

@@ -1,6 +1,7 @@
 package board
 
 import (
+	"github.com/kjkrol/gram/plugin/host"
 	"testing"
 
 	"github.com/kjkrol/goke/v3"
@@ -12,7 +13,7 @@ import (
 // speed after, keyed by its box's left edge.
 func speeds(t *testing.T, grid Grid, terrain Terrain, place func(si *goke.SysInit, base *goke.Comp[world.Base])) map[float64]float64 {
 	t.Helper()
-	host := &plugin.EachHost[world.Moving]{}
+	host := &host.EachHost[world.Moving]{}
 	if err := host.Add(terrainSpeed(grid, terrain)); err != nil {
 		t.Fatal(err)
 	}

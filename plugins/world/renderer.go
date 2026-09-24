@@ -1,6 +1,7 @@
 package world
 
 import (
+	"github.com/kjkrol/gram/plugin/host"
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -20,7 +21,7 @@ type Renderer struct {
 	renderQuery *goke.Query
 	base        goke.Comp[Base]
 	appearance  goke.Comp[Appearance]
-	host        *plugin.EachHost[Drawing]
+	host        *host.EachHost[Drawing]
 	layers      [][]Appearance // one per entity of the chunk being drawn
 	batch       spriteBatch
 	view        *View
@@ -29,7 +30,7 @@ type Renderer struct {
 	bases []Base
 }
 
-func newRenderer(cam camera.Camera, atlas render.AtlasSource, view *View, host *plugin.EachHost[Drawing], worldW, worldH uint32) *Renderer {
+func newRenderer(cam camera.Camera, atlas render.AtlasSource, view *View, host *host.EachHost[Drawing], worldW, worldH uint32) *Renderer {
 	return &Renderer{batch: newSpriteBatch(cam, atlas, worldW, worldH), view: view, host: host}
 }
 

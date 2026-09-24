@@ -38,7 +38,7 @@ func search(t *testing.T, lookEvery time.Duration, hunter huntBody, prey []huntB
 	})
 	v := vision.NewPlugin(w)
 	tags := behavior.DefineTags(w.Kinds())
-	if err := v.RegisterBehavior(plugin.Between(tags.Predator, tags.Prey, behavior.Chase(lookEvery))); err != nil {
+	if err := v.RegisterBehavior(vision.Between(tags.Predator, tags.Prey, behavior.Chase(lookEvery))); err != nil {
 		t.Fatalf("RegisterBehavior: %v", err)
 	}
 

@@ -69,7 +69,7 @@ and a few system libraries; Ebitengine uses cgo on most platforms).
 | Capability | Package | What you get |
 |:---|:---|:---|
 | **Stages and Scenes** | `game` | Named Stages with their own ECS and lifecycle (`Init`/`Restore`/`Spawn`/`Update`); Scenes with layered renderers and input; a live Composition of what is shown and which Scene is active |
-| **Plugins and behaviors** | `plugin` | The one extension contract; `Between` and `Each` behaviors hosted in a plugin's own pass |
+| **Plugins and behaviors** | `plugin` | The one extension contract; behaviors built by the hosting plugin (`Between`, `Each`, `Every`) and run in its own pass |
 | **World** | `plugins/world` | Every entity's `Base` (position, velocity, kind, capabilities); movement under stop, wrap or open edges; the shared spatial index and camera; spawning from kinds |
 | **Kinds** | `plugins/world/kind` | `Define` a kind from a `Spec` of `Const` and `Load` components; `Entry` rows onto the roster |
 | **Collisions** | `plugins/collision` | A `CollisionSystem` over the world's space: `Collider` to take part, `Physics` to bounce and be pushed apart, a `ShapeTest` to refine, `Meeting`/`Struck` for behaviors |
@@ -161,7 +161,7 @@ func (a *arena) Init(ctx game.Initializer) error {
 
 	a.collision = collision.NewPlugin(a.world)
 	if err := a.collision.RegisterBehavior(
-		plugin.Between(plugin.Any, plugin.Any, behavior.CountContacts(&a.stats)),
+		collision.Between(plugin.Any, plugin.Any, behavior.CountContacts(&a.stats)),
 	); err != nil {
 		return err
 	}
@@ -296,9 +296,10 @@ Stage and every Scene alike.
 
 A plugin's `Install` only queues ECS wiring; the engine flushes it all in one `ecs.Setup` after
 the Stage's `Init`, which is what lets `Restore` decide fresh-spawn or restore before the ECS
-commits to either. Game logic that reacts to what a plugin finds is a *behavior*:
-`plugin.Between(a, b, fn)` for every pair the plugin meets where one entity carries tag `a` and the
-other `b` (`plugin.Any` as the wildcard), `plugin.Each[T](fn)` for every entity carrying `T`. A tag
+commits to either. Game logic that reacts to what a plugin finds is a *behavior*, built with the
+plugin's own constructors: `collision.Between(a, b, fn)` for every pair it meets where one entity
+carries tag `a` and the other `b` (`plugin.Any` as the wildcard), `board.Each[T](fn)` for every
+entity carrying `T`, `world.Every(fn)` for every entity the payload's host visits. A tag
 is a bit of a family — one `plugin.Tags[F]` component per family, named through `Kinds.DefineTag`,
 given to a kind with `kind.Tagged` — so markers cost no component types of their own. Ready-made
 behaviors live in `plugins/collision/behavior` and `plugins/vision/behavior`; which tags they run
@@ -328,7 +329,8 @@ effects, [`views.md`](doc/views.md) where players and networking are headed.
 | [`camera`](camera/doc.go) | The view onto a world: screen conversion, culling, move and zoom; wrap-aware |
 | [`control`](control/doc.go) | The input vocabulary: `InputEvents`, `KeyEvent`, `ClickEvent`, `EventHandler` |
 | [`render`](render/doc.go) | Drawing primitives: `Renderer`, `Atlas` baked at `Close`, `QuadBatch`, sprite drawers, cached and telemetry renderers |
-| [`plugin`](plugin/doc.go) | The extension contract: `Plugin`, `Installer`, `Tick`, `Between`/`Each` behaviors and the hosts that run them, `Serializable`, `PostLoader`, `Populator` |
+| [`plugin`](plugin/doc.go) | The extension contract: `Plugin`, `Installer`, `Tick`, `Behavior`, `Tag`/`Tags`/`Any`, `Marks`, `Serializable`, `PostLoader`, `Populator` |
+| [`plugin/host`](plugin/host/doc.go) | A plugin author's package: `Pair`/`Each`/`Every` behind a plugin's typed constructors, `PairHost` and `EachHost` that run them |
 | [`plugins/world/kind`](plugins/world/kind/doc.go) | What an entity is: `Spec`, `Const`/`Load`, `Define`, `Of`, `Registry` |
 | [`plugins/world`](plugins/world/doc.go) | The foundation: `Base`, the shared `Space` and camera, movement under the edge rules, kinds, `Seed`/`Populate`, `Attach`/`Detach`, the entity renderer |
 | [`game`](game/doc.go) | What a game implements and receives: `Game`, `Stage`, `Scene`, `Scenes`, `Composition`, `Initializer`, `Runtime`, `Persistence` |

@@ -1,7 +1,7 @@
 // Package collision detects overlaps between world entities each tick and records what each
 // struck on its Collider. An entity takes part while it carries Collider; one also carrying
-// Physics is pushed apart and bounces. Reactions are behaviors: plugin.Between of a Meeting,
-// plugin.Each of a Struck, registered with Plugin.RegisterBehavior.
+// Physics is pushed apart and bounces. Reactions are behaviors: Between of a Meeting, Each or
+// Every of a Struck, registered with Plugin.RegisterBehavior.
 //
 // # Plugin and CollisionSystem
 //
@@ -33,9 +33,9 @@
 //
 // # Meeting and Struck
 //
-// A plugin.Between behavior is handed a [Meeting] per confirmed contact between its two tags,
+// A [Between] behavior is handed a [Meeting] per confirmed contact between its two tags,
 // seen from Self: who it met, the impulse exchanged (zero when only detected) and the way Self
-// left Other. A plugin.Each behavior is handed a [Struck] per entity per tick: which it is and what
+// left Other. An [Each] behavior is handed a [Struck] per entity per tick: which it is and what
 // it struck the tick before. Ready-made ones are in plugins/collision/behavior; this package
 // never imports it.
 package collision

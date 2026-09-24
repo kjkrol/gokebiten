@@ -1,6 +1,7 @@
 package collision
 
 import (
+	"github.com/kjkrol/gram/plugin/host"
 	"time"
 
 	"github.com/kjkrol/aabbworld"
@@ -30,7 +31,7 @@ type CollisionSystem struct {
 	base     goke.Comp[world.Base]
 	collider goke.Comp[Collider]
 	physics  goke.OptComp[Physics]
-	each     *plugin.EachHost[Struck]
+	each     *host.EachHost[Struck]
 	walking  struct {
 		ids       []uid.UID64
 		colliders []Collider
@@ -52,7 +53,7 @@ type CollisionSystem struct {
 	// pair is the contact being settled; contacts is what this tick confirmed.
 	pair     pairSides
 	contacts []pairSides
-	between  *plugin.PairHost[Meeting]
+	between  *host.PairHost[Meeting]
 	outside  goke.CompID // world.Outside, for whoever the solver pushes out by an open edge
 	shapes   ShapeTest
 
@@ -74,10 +75,10 @@ const sought = 0
 
 // NewCollisionSystem builds the collision system over space.
 func NewCollisionSystem(space *aabbworld.Space) *CollisionSystem {
-	return newCollisionSystem(space, &plugin.PairHost[Meeting]{}, &plugin.EachHost[Struck]{}, nil)
+	return newCollisionSystem(space, &host.PairHost[Meeting]{}, &host.EachHost[Struck]{}, nil)
 }
 
-func newCollisionSystem(space *aabbworld.Space, between *plugin.PairHost[Meeting], each *plugin.EachHost[Struck], shapes ShapeTest) *CollisionSystem {
+func newCollisionSystem(space *aabbworld.Space, between *host.PairHost[Meeting], each *host.EachHost[Struck], shapes ShapeTest) *CollisionSystem {
 	d := &CollisionSystem{space: space, between: between, each: each, shapes: shapes}
 	d.engine = space.CollideEngine((*handler)(d), collide.Config{Reach: world.StepReach, Iterations: solverIterations})
 	d.struckAt = d.struck

@@ -2,6 +2,7 @@ package effects
 
 import (
 	"fmt"
+	"github.com/kjkrol/gram/plugin/host"
 	"time"
 
 	"github.com/kjkrol/goke/v3"
@@ -18,7 +19,7 @@ type Plugin struct {
 	worldPlugin *world.Plugin
 	defs        []def
 	originals   *originals
-	idlers      plugin.EachHost[Idling]
+	idlers      host.EachHost[Idling]
 	system      *effectSystem
 	module      *module
 }
@@ -103,7 +104,7 @@ func (p *Plugin) Serializable() plugin.Serializable { return p }
 // Persisted returns the saved originals for Persistence.Save and Load.
 func (p *Plugin) Persisted() []any { return []any{&p.originals.byEntity} }
 
-// RegisterBehavior hosts a plugin.Each of Idling, run once for an entity whose last effect ended;
+// RegisterBehavior hosts an Each or Every of Idling, run once for an entity whose last effect ended;
 // call before Use.
 func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
 	for _, b := range behaviors {

@@ -1,6 +1,7 @@
 package vision
 
 import (
+	"github.com/kjkrol/gram/plugin/host"
 	"math"
 	"time"
 
@@ -35,7 +36,7 @@ type ScanSystem struct {
 	lookupHot  bool
 
 	// host runs the Between behaviors registered with the plugin, inside this pass.
-	host *plugin.PairHost[Sighting]
+	host *host.PairHost[Sighting]
 
 	// What the host is being run over: the observer in hand, everyone it sees, and their tags.
 	observer   Sighting
@@ -52,10 +53,10 @@ const (
 )
 
 func NewScanSystem(space *aabbworld.Space) *ScanSystem {
-	return newScanSystem(space, &plugin.PairHost[Sighting]{})
+	return newScanSystem(space, &host.PairHost[Sighting]{})
 }
 
-func newScanSystem(space *aabbworld.Space, host *plugin.PairHost[Sighting]) *ScanSystem {
+func newScanSystem(space *aabbworld.Space, host *host.PairHost[Sighting]) *ScanSystem {
 	s := &ScanSystem{space: space, host: host}
 	s.sightingOf = s.sighting
 	s.veiled = s.transparency

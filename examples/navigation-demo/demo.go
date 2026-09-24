@@ -96,7 +96,7 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	s.board = board.NewPlugin(grid, &board.SingleOccupancy{}, s.world).WithCollision(s.collision)
 	s.registerCellKinds()
 	s.under = map[uid.UID64]board.CellID{}
-	if err := s.board.RegisterBehavior(plugin.Each[board.Mover](s.standing)); err != nil {
+	if err := s.board.RegisterBehavior(board.Each[board.Mover](s.standing)); err != nil {
 		return err
 	}
 	if err := ctx.Use(s.board); err != nil {

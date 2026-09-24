@@ -1,6 +1,7 @@
 package behavior
 
 import (
+	"github.com/kjkrol/gram/plugin/host"
 	"time"
 
 	"github.com/kjkrol/gram/plugin"
@@ -42,7 +43,7 @@ func (m HitMark) lasting(fallback time.Duration) time.Duration {
 // HitOverlay is a Drawing behavior for the world plugin: with is drawn on top of an entity while
 // its HitMark is active.
 func HitOverlay(with world.Appearance) plugin.Behavior {
-	return plugin.Each[HitMark](func(_ plugin.Tick, m *HitMark, d world.Drawing) {
+	return host.Each[HitMark](func(_ plugin.Tick, m *HitMark, d world.Drawing) {
 		if m.Active() {
 			d.Overlay(with)
 		}

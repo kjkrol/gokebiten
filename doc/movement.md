@@ -134,7 +134,7 @@ decision (`board.CellKind`). Walls, holes and water are done; sight through terr
   hole are forbidden ground for a land unit and open water for a boat. Neither is a body — a body
   would occlude sight and push — so a collision can shove a land unit into either. Every tick,
   after collisions, the board reports `Standing{ID, Cell, Kind}` (the cell under the unit's
-  **centre**) to `plugin.Each` behaviors — `Each[board.Mover]`, so the reaction holds the unit's
+  **centre**) to `board.Each` behaviors — `board.Each[board.Mover]`, so the reaction holds the unit's
   domain — and `Standing.Fell(domain)` says the unit stands where its domain may not. It is a state, not an event, because `Each` runs for every entity the host
   walks — as `Struck` does in collision. The reaction is the game's: despawn, teleport, damage.
 - **A forest.** `CellKind.Veil` makes a passable cell a body without a `Collider`: it dims sight

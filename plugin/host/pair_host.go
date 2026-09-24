@@ -1,41 +1,44 @@
-package plugin
+package host
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gram/plugin"
 )
 
-// Pair is a Between behavior with its tags erased: what a host finds in RegisterBehavior.
-type Pair[P any] struct {
+// pair is a Pair behavior with its tags erased: what a host finds in RegisterBehavior.
+type pair[P any] struct {
 	a, b  tagged
 	same  bool
-	react func(Tick, P)
+	react func(plugin.Tick, P)
 
 	// fa and fb are the host's family indices of a and b; -1 for Any.
 	fa, fb int
 }
 
-// PairHost runs the Between behaviors made for payload P inside a host's own pass. It reads
-// every family its behaviors name off the entities it is shown and matches pairs by tag bits.
+// PairHost runs the Pair behaviors made for payload P inside a host's own pass. It reads every
+// family its behaviors name off the entities it is shown and matches pairs by tag bits.
 type PairHost[P any] struct {
 	families []tagProbe
-	pairs    []*Pair[P]
+	kinds    []reflect.Type // the families' types, in the same order, for Marks
+	pairs    []*pair[P]
 	bound    bool
 	matched  []int // DispatchGrouped's scratch
 }
 
-// Add takes a Between behavior for P; ErrUnhostedBehavior for another, ErrHostBuilt after Bind.
-func (h *PairHost[P]) Add(b Behavior) error {
-	pair, ok := b.(*Pair[P])
+// Add takes a Pair behavior for P; ErrUnhostedBehavior for another, ErrHostBuilt after Bind.
+func (h *PairHost[P]) Add(b plugin.Behavior) error {
+	p, ok := b.(*pair[P])
 	if !ok {
-		return fmt.Errorf("%w: %T", ErrUnhostedBehavior, b)
+		return fmt.Errorf("%w: %T", plugin.ErrUnhostedBehavior, b)
 	}
 	if h.bound {
-		return fmt.Errorf("%w: %T", ErrHostBuilt, b)
+		return fmt.Errorf("%w: %T", plugin.ErrHostBuilt, b)
 	}
-	pair.fa, pair.fb = h.familyOf(pair.a), h.familyOf(pair.b)
-	h.pairs = append(h.pairs, pair)
+	p.fa, p.fb = h.familyOf(p.a), h.familyOf(p.b)
+	h.pairs = append(h.pairs, p)
 	return nil
 }
 
@@ -52,10 +55,11 @@ func (h *PairHost[P]) familyOf(t tagged) int {
 			return i
 		}
 	}
-	if len(h.families) == MaxFamilies {
-		panic(fmt.Sprintf("plugin: pair behaviors name more than %d tag families", MaxFamilies))
+	if len(h.families) == plugin.MaxFamilies {
+		panic(fmt.Sprintf("host: pair behaviors name more than %d tag families", plugin.MaxFamilies))
 	}
 	h.families = append(h.families, t.make())
+	h.kinds = append(h.kinds, t.family)
 	return len(h.families) - 1
 }
 
@@ -68,30 +72,30 @@ func (h *PairHost[P]) Bind(queries ...*goke.QueryBuilder) {
 }
 
 // InChunk is what the i-th entity of the chunk being walked on query carries.
-func (h *PairHost[P]) InChunk(query int, cursor *goke.Cursor, i int) Marks {
-	m := Marks{families: &h.families}
+func (h *PairHost[P]) InChunk(query int, cursor *goke.Cursor, i int) plugin.Marks {
+	var words [plugin.MaxFamilies]uint64
 	for k, f := range h.families {
-		m.words[k] = f.inChunk(query, cursor, i)
+		words[k] = f.inChunk(query, cursor, i)
 	}
-	return m
+	return plugin.MarksOf(words, &h.kinds)
 }
 
 // At is what the entity just sought on query carries.
-func (h *PairHost[P]) At(query int, cursor *goke.Cursor) Marks {
-	m := Marks{families: &h.families}
+func (h *PairHost[P]) At(query int, cursor *goke.Cursor) plugin.Marks {
+	var words [plugin.MaxFamilies]uint64
 	for k, f := range h.families {
-		m.words[k] = f.at(query, cursor)
+		words[k] = f.at(query, cursor)
 	}
-	return m
+	return plugin.MarksOf(words, &h.kinds)
 }
 
 // fits reports whether an entity carrying m satisfies side t of a pair, family index f.
-func fits(m Marks, f int, t tagged) bool {
-	return f < 0 || m.words[f]&(1<<t.bit) != 0
+func fits(m plugin.Marks, f int, t tagged) bool {
+	return f < 0 || m.Word(f)&(1<<t.bit) != 0
 }
 
 // Dispatch runs every behavior whose first tag self carries and second tag other carries.
-func (h *PairHost[P]) Dispatch(t Tick, self, other Marks, pair P) {
+func (h *PairHost[P]) Dispatch(t plugin.Tick, self, other plugin.Marks, pair P) {
 	for _, b := range h.pairs {
 		if fits(self, b.fa, b.a) && fits(other, b.fb, b.b) {
 			b.react(t, pair)
@@ -100,7 +104,7 @@ func (h *PairHost[P]) Dispatch(t Tick, self, other Marks, pair P) {
 }
 
 // DispatchGrouped is Dispatch for one Self against many Others, run even when none match.
-func (h *PairHost[P]) DispatchGrouped(t Tick, self Marks, others []Marks, build func(matched []int) P) {
+func (h *PairHost[P]) DispatchGrouped(t plugin.Tick, self plugin.Marks, others []plugin.Marks, build func(matched []int) P) {
 	for _, b := range h.pairs {
 		if !fits(self, b.fa, b.a) {
 			continue
@@ -116,7 +120,7 @@ func (h *PairHost[P]) DispatchGrouped(t Tick, self Marks, others []Marks, build 
 }
 
 // DispatchEitherWay is Dispatch for a pair with no direction, run whichever way the tags fit.
-func (h *PairHost[P]) DispatchEitherWay(t Tick, a, b Marks, forward, backward P) {
+func (h *PairHost[P]) DispatchEitherWay(t plugin.Tick, a, b plugin.Marks, forward, backward P) {
 	for _, p := range h.pairs {
 		if fits(a, p.fa, p.a) && fits(b, p.fb, p.b) {
 			p.react(t, forward)

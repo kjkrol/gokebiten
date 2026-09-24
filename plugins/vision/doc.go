@@ -1,6 +1,6 @@
 // Package vision gives entities a narrowed view of the world: a Sight cone sees what falls
 // inside it, within range and not hidden behind something nearer. Each tick fills Sight.Seen
-// and runs plugin.Between behaviors of a Sighting; SightOutline gets the view drawn.
+// and runs Between behaviors of a Sighting; SightOutline gets the view drawn.
 //
 // # Sight and Seen
 //
@@ -20,7 +20,7 @@
 //
 // # Sighting
 //
-// A plugin.Between behavior registered here is run once a tick per observer carrying tag a,
+// A [Between] behavior registered here is run once a tick per observer carrying tag a,
 // with a [Sighting]: the observer, its Base, Sight and Steering (nil for one that cannot be
 // steered), and everything in view carrying b as [Seen] values nearest first — a directed pair,
 // grouped by observer, run even when nothing is in view. A behavior tells its seen entities

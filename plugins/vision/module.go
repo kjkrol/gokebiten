@@ -1,11 +1,11 @@
 package vision
 
 import (
+	"github.com/kjkrol/gram/plugin/host"
 	"time"
 
 	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gram/plugin"
 )
 
 var _ goke.Module = (*module)(nil)
@@ -16,7 +16,7 @@ type module struct {
 	runnable goke.Runnable
 }
 
-func newModule(space *aabbworld.Space, host *plugin.PairHost[Sighting]) *module {
+func newModule(space *aabbworld.Space, host *host.PairHost[Sighting]) *module {
 	return &module{sys: newScanSystem(space, host)}
 }
 

@@ -1,6 +1,7 @@
 package world
 
 import (
+	"github.com/kjkrol/gram/plugin/host"
 	"testing"
 
 	"github.com/kjkrol/goke/v3"
@@ -11,7 +12,7 @@ import (
 // drawThroughHost runs the Drawing behaviors over one entity moving with vel and returns its layers.
 func drawThroughHost(t *testing.T, vel Velocity, behaviors ...plugin.Behavior) []Appearance {
 	t.Helper()
-	host := &plugin.EachHost[Drawing]{}
+	host := &host.EachHost[Drawing]{}
 	for _, b := range behaviors {
 		if err := host.Add(b); err != nil {
 			t.Fatal(err)

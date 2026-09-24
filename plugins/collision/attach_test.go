@@ -29,7 +29,7 @@ func TestCollider_AttachedAndDetachedMidGame(t *testing.T) {
 	}
 
 	contacts := 0
-	if err := c.RegisterBehavior(plugin.Between(plugin.Any, plugin.Any,
+	if err := c.RegisterBehavior(collision.Between(plugin.Any, plugin.Any,
 		func(plugin.Tick, collision.Meeting) { contacts++ },
 	)); err != nil {
 		t.Fatalf("RegisterBehavior: %v", err)

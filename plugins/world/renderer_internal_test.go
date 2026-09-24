@@ -1,6 +1,7 @@
 package world
 
 import (
+	"github.com/kjkrol/gram/plugin/host"
 	"testing"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -26,8 +27,8 @@ func drawThrough(t *testing.T, pick func(ids []uid.UID64, v *View), at ...geom.V
 	t.Helper()
 	view := &View{}
 	cam := camera.NewFromSpace(1000, 1000, 0)
-	host := &plugin.EachHost[Drawing]{}
-	if err := host.Add(plugin.Every(func(plugin.Tick, Drawing) { visited++ })); err != nil {
+	host := &host.EachHost[Drawing]{}
+	if err := host.Add(Every(func(plugin.Tick, Drawing) { visited++ })); err != nil {
 		t.Fatal(err)
 	}
 	r := newRenderer(cam, flatAtlas{}, view, host, 1000, 1000)

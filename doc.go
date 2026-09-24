@@ -30,9 +30,9 @@
 // dependency order; there is no registry, no lookup by name and no install-order retry.
 //
 // Game logic that reacts to what a plugin finds is a behavior, registered on the plugin it
-// concerns and run inside that plugin's own pass: [plugin.Between] of a payload for every pair of
-// entities the plugin meets, one carrying tag A and the other B; [plugin.Each] of a payload for
-// every entity carrying T. The payload type says whose the behavior is — a Meeting is collision's,
+// concerns and run inside that plugin's own pass, built with that plugin's constructors:
+// collision.Between of a Meeting for every pair of entities it meets, one carrying tag A and the
+// other B; board.Each of a Standing for every entity carrying T. The payload type says whose the behavior is — a Meeting is collision's,
 // a Sighting is vision's — and a plugin refuses one made for another, so registering in the wrong
 // place is an error, never a silent no-op.
 //

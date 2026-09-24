@@ -20,7 +20,7 @@
 // # Idle
 //
 // An entity whose last effect ended loses its Active and carries [Idle] for one tick: the board
-// drops a cell entity it finds so, and a plugin.Each of an [Idling] registered with
+// drops a cell entity it finds so, and an [Each] of an [Idling] registered with
 // [Plugin.RegisterBehavior] hears of it once — a life lost when the shield ends. Effects host
 // nothing else: they are what behaviors cast. Call [Plugin.RunPlan] after world's.
 package effects

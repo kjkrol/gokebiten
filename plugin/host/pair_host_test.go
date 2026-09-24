@@ -1,4 +1,4 @@
-package plugin_test
+package host_test
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugin/host"
 	"github.com/kjkrol/uid"
 )
 
@@ -23,9 +24,9 @@ type body struct{ N int }
 type sighting struct{ from, to uid.UID64 }
 
 // hostOf builds a host with behaviors registered, a hunter, a hunted, and what each carries.
-func hostOf(t *testing.T, behaviors ...plugin.Behavior) (h *plugin.PairHost[sighting], hunterMarks, huntedMarks plugin.Marks, pair sighting) {
+func hostOf(t *testing.T, behaviors ...plugin.Behavior) (h *host.PairHost[sighting], hunterMarks, huntedMarks plugin.Marks, pair sighting) {
 	t.Helper()
-	h = &plugin.PairHost[sighting]{}
+	h = &host.PairHost[sighting]{}
 	for _, b := range behaviors {
 		if err := h.Add(b); err != nil {
 			t.Fatalf("Add: %v", err)
@@ -63,7 +64,7 @@ func hostOf(t *testing.T, behaviors ...plugin.Behavior) (h *plugin.PairHost[sigh
 }
 
 func recording(into *[]sighting) plugin.Behavior {
-	return plugin.Between(hunter, hunted, func(_ plugin.Tick, s sighting) { *into = append(*into, s) })
+	return host.Pair(hunter, hunted, func(_ plugin.Tick, s sighting) { *into = append(*into, s) })
 }
 
 func TestPairHost_Dispatch_KeepsTheDirection(t *testing.T) {
@@ -94,7 +95,7 @@ func TestPairHost_DispatchEitherWay_FindsTheFit(t *testing.T) {
 // The same tag on both sides matches either way round, and runs once.
 func TestPairHost_DispatchEitherWay_SameTagRunsOnce(t *testing.T) {
 	var got []sighting
-	h, hunterMarks, _, pair := hostOf(t, plugin.Between(hunter, hunter, func(_ plugin.Tick, s sighting) { got = append(got, s) }))
+	h, hunterMarks, _, pair := hostOf(t, host.Pair(hunter, hunter, func(_ plugin.Tick, s sighting) { got = append(got, s) }))
 
 	h.DispatchEitherWay(plugin.Tick{}, hunterMarks, hunterMarks, pair, sighting{from: pair.to, to: pair.from})
 
@@ -105,7 +106,7 @@ func TestPairHost_DispatchEitherWay_SameTagRunsOnce(t *testing.T) {
 
 func TestPairHost_Any_TakesWhateverIsThere(t *testing.T) {
 	var got []sighting
-	h, hunterMarks, _, pair := hostOf(t, plugin.Between(plugin.Any, hunter, func(_ plugin.Tick, s sighting) { got = append(got, s) }))
+	h, hunterMarks, _, pair := hostOf(t, host.Pair(plugin.Any, hunter, func(_ plugin.Tick, s sighting) { got = append(got, s) }))
 
 	h.Dispatch(plugin.Tick{}, plugin.Marks{}, hunterMarks, pair)
 	h.Dispatch(plugin.Tick{}, hunterMarks, plugin.Marks{}, pair)
@@ -116,8 +117,8 @@ func TestPairHost_Any_TakesWhateverIsThere(t *testing.T) {
 }
 
 func TestPairHost_Add_RefusesABehaviorMadeForAnotherHost(t *testing.T) {
-	var h plugin.PairHost[sighting]
-	stranger := plugin.Between(hunter, hunted, func(plugin.Tick, string) {})
+	var h host.PairHost[sighting]
+	stranger := host.Pair(hunter, hunted, func(plugin.Tick, string) {})
 
 	if err := h.Add(stranger); !errors.Is(err, plugin.ErrUnhostedBehavior) {
 		t.Errorf("Add = %v, want ErrUnhostedBehavior", err)
@@ -140,8 +141,8 @@ type group struct{ others []int }
 func TestPairHost_DispatchGrouped_HandsOverTheOthersThatFit(t *testing.T) {
 	_, hunterMarks, huntedMarks, _ := hostOf(t, recording(new([]sighting)))
 	var got []group
-	var h plugin.PairHost[group]
-	if err := h.Add(plugin.Between(hunter, hunted, func(_ plugin.Tick, g group) {
+	var h host.PairHost[group]
+	if err := h.Add(host.Pair(hunter, hunted, func(_ plugin.Tick, g group) {
 		got = append(got, group{others: append([]int(nil), g.others...)})
 	})); err != nil {
 		t.Fatalf("Add: %v", err)
@@ -165,7 +166,7 @@ func TestPairHost_DispatchGrouped_HandsOverTheOthersThatFit(t *testing.T) {
 
 // The host reads every family its behaviors name, so a payload can ask about any of their tags.
 func TestCarries_AnswersForTheFamiliesTheHostNames(t *testing.T) {
-	h, hunterMarks, huntedMarks, _ := hostOf(t, plugin.Between(hunter, plugin.Any, func(plugin.Tick, sighting) {}))
+	h, hunterMarks, huntedMarks, _ := hostOf(t, host.Pair(hunter, plugin.Any, func(plugin.Tick, sighting) {}))
 
 	if !huntedMarks.Carries(hunted) || hunterMarks.Carries(hunted) {
 		t.Errorf("Carries(hunted) = %v for the hunted and %v for the hunter, want true and false",

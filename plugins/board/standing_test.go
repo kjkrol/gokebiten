@@ -84,7 +84,7 @@ func TestStanding_ALandUnitDrivenIntoAHoleFellAndKeepsFalling(t *testing.T) {
 	start, _ := grid.CellIndex(1, 7)
 	f := newFooting()
 	bw := newBodiesWorld(t, grid, 6*cellSize, 16*cellSize, pitBoard(grid, board.CellKind{Name: board.Named("hole"), Cost: 1}),
-		[]mover{{cell: start, heading: east}}, plugin.Each[board.Mover](f.react))
+		[]mover{{cell: start, heading: east}}, board.Each[board.Mover](f.react))
 	if bodies, _ := bw.snapshot(); len(bodies) != 0 {
 		t.Fatalf("%d bodies, want none: a hole is not solid", len(bodies))
 	}
@@ -118,7 +118,7 @@ func TestStanding_ABoatOnWaterHasNotFallen(t *testing.T) {
 	start, _ := grid.CellIndex(3, 7)
 	f := newFooting()
 	bw := newBodiesWorld(t, grid, 6*cellSize, 16*cellSize, pitBoard(grid, board.CellKind{Name: board.Named("water"), Cost: 1, Allows: board.Water}),
-		[]mover{{cell: start, domain: board.Water}}, plugin.Each[board.Mover](f.react))
+		[]mover{{cell: start, domain: board.Water}}, board.Each[board.Mover](f.react))
 	bw.tick()
 	id := onlyID(f)
 	if f.last[id].Kind.Name.String() != "water" || f.fell[id] {
@@ -128,7 +128,7 @@ func TestStanding_ABoatOnWaterHasNotFallen(t *testing.T) {
 
 func TestStanding_ReportsEveryUnitOnTheBoardAndNoBody(t *testing.T) {
 	f := newFooting()
-	bw, _ := squareWorldWith(t, plugin.Each[board.Mover](f.react), mover{})
+	bw, _ := squareWorldWith(t, board.Each[board.Mover](f.react), mover{})
 	bw.tick()
 	bodies, units := bw.snapshot()
 	if len(f.last) != len(units) || len(bodies) == 0 {
@@ -153,13 +153,13 @@ func TestStanding_WorksWithoutCollision(t *testing.T) {
 	brd := board.NewPlugin(grid, &board.MultipleOccupancy{}, w)
 	brd.Res.Logic.Board.SetAll(board.CellKind{Name: board.Named("hole"), Cost: 1})
 	f := newFooting()
-	if err := brd.RegisterBehavior(plugin.Each[board.Mover](f.react)); err != nil {
+	if err := brd.RegisterBehavior(board.Each[board.Mover](f.react)); err != nil {
 		t.Fatal(err)
 	}
-	if err := brd.RegisterBehavior(plugin.Between(plugin.Any, plugin.Any, func(plugin.Tick, board.Standing) {})); !errors.Is(err, plugin.ErrUnhostedBehavior) {
+	if err := brd.RegisterBehavior(collision.Between(plugin.Any, plugin.Any, func(plugin.Tick, collision.Meeting) {})); !errors.Is(err, plugin.ErrUnhostedBehavior) {
 		t.Errorf("Between on board: %v, want ErrUnhostedBehavior", err)
 	}
-	if err := brd.RegisterBehavior(plugin.Each[board.Mover](func(plugin.Tick, *board.Mover, collision.Struck) {})); !errors.Is(err, plugin.ErrUnhostedBehavior) {
+	if err := brd.RegisterBehavior(collision.Each[board.Mover](func(plugin.Tick, *board.Mover, collision.Struck) {})); !errors.Is(err, plugin.ErrUnhostedBehavior) {
 		t.Errorf("Each of Struck on board: %v, want ErrUnhostedBehavior", err)
 	}
 	ecs := installWorldAndBoard(t, w, brd, grid)
@@ -172,7 +172,7 @@ func TestStanding_WorksWithoutCollision(t *testing.T) {
 			t.Error("a land unit spawned over a hole did not fall")
 		}
 	}
-	if err := brd.RegisterBehavior(plugin.Each[board.Mover](f.react)); !errors.Is(err, plugin.ErrHostBuilt) {
+	if err := brd.RegisterBehavior(board.Each[board.Mover](f.react)); !errors.Is(err, plugin.ErrHostBuilt) {
 		t.Errorf("registering after Setup: %v, want ErrHostBuilt", err)
 	}
 }
@@ -195,7 +195,7 @@ func TestStanding_BoxNamesEveryCellTheEntityTouches(t *testing.T) {
 	start, _ := grid.CellIndex(1, 7)
 	var box geom.AABB
 	record := func(_ plugin.Tick, _ *board.Mover, st board.Standing) { box = st.Box }
-	bw, _ := squareWorldWith(t, plugin.Each[board.Mover](record), mover{cell: start, offset: cellSize / 2})
+	bw, _ := squareWorldWith(t, board.Each[board.Mover](record), mover{cell: start, offset: cellSize / 2})
 	bw.tick()
 	var under []board.CellID
 	grid.CellsUnder(box, func(c board.CellID) { under = append(under, c) })
@@ -254,7 +254,7 @@ func TestDropCellEntity_WritesItsGroundBeforeLettingGo(t *testing.T) {
 			dropping = 0
 		}
 	}
-	bw, _ = squareWorldWith(t, plugin.Each[board.Mover](drop), mover{})
+	bw, _ = squareWorldWith(t, board.Each[board.Mover](drop), mover{})
 	bw.tick()
 
 	id := bw.brd.CellEntity(target)

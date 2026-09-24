@@ -46,7 +46,7 @@ func fleeRunWith(t *testing.T, tune func(*behavior.Flee), runner fleeBody, facin
 	if tune != nil {
 		tune(avoid)
 	}
-	if err := v.RegisterBehavior(plugin.Between(tags.Skittish, plugin.Any, avoid.Steer)); err != nil {
+	if err := v.RegisterBehavior(vision.Between(tags.Skittish, plugin.Any, avoid.Steer)); err != nil {
 		t.Fatalf("RegisterBehavior: %v", err)
 	}
 

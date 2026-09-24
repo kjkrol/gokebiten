@@ -18,22 +18,20 @@
 //
 // # Behaviors
 //
-// A [Behavior] is game logic a plugin runs inside its own pass, built with [Between] — react to
-// every pair the host meets where one entity carries tag a and the other b, [Any] standing for
-// either side — or [Each] — react on every entity the host visits that carries T ([Every] for all
-// of them). The payload
-// type P is what says which plugin hosts it; a host refuses another's with [ErrUnhostedBehavior],
-// and one registered after the host's queries were built with [ErrHostBuilt]. Register before Use.
+// A [Behavior] is game logic a plugin runs inside its own pass, built with that plugin's own
+// constructors and registered with its RegisterBehavior: vision.Between(a, b, fn) reacts to every
+// observer carrying tag a and what it sees carrying b, [Any] standing for either side;
+// board.Each[T](fn) reacts on every entity on the board carrying T, world.Every(fn) on every
+// entity the payload's host visits. The payload type — a Sighting, a Standing, a Moving — is what
+// says which plugin hosts it; a host refuses another's with [ErrUnhostedBehavior], and one
+// registered after the host's queries were built with [ErrHostBuilt]. Register before Use. The
+// generic constructors and the hosts behind them are in plugin/host, a plugin author's package.
 //
 // A [Tag] is a bit of a family: [Tags] is the family's component, holding up to
 // [MaxTagsPerFamily] of them, and an empty type of the plugin's or the game's names the family.
 // The families a host's behaviors name join its queries as optional components, so a behavior
 // costs no query of its own, and a host reads what an entity carries as [Marks] — what a payload
-// passes on for [Carries]. One PairHost's behaviors may name at most [MaxFamilies] families.
-//
-// A plugin hosts behaviors with [PairHost] (Bind its families to the host's queries once, then
-// Dispatch, DispatchEitherWay or DispatchGrouped per pair or per observer) and [EachHost] (Bind,
-// then Run over each chunk walked).
+// passes on for [Marks.Carries]. One host's behaviors may name at most [MaxFamilies] families.
 //
 // # Tick
 //

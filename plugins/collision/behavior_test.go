@@ -2,6 +2,7 @@ package collision_test
 
 import (
 	"errors"
+	"github.com/kjkrol/gram/plugin/host"
 	"testing"
 	"time"
 
@@ -85,7 +86,7 @@ func meetWith(t *testing.T, register func(engine registrar), boxes ...*tagged) {
 }
 
 func bulletsAgainstTargets(record func(collision.Meeting)) []plugin.Behavior {
-	return []plugin.Behavior{plugin.Between(bullet, target, func(_ plugin.Tick, m collision.Meeting) { record(m) })}
+	return []plugin.Behavior{collision.Between(bullet, target, func(_ plugin.Tick, m collision.Meeting) { record(m) })}
 }
 
 func TestBetween_HandsOverThePairWithSelfOnTheFirstTag(t *testing.T) {
@@ -124,7 +125,7 @@ func TestBetween_IgnoresPairsThatDoNotCarryBothTags(t *testing.T) {
 // A pair of the same tag would match either way round, and is still one contact.
 func TestBetween_SameTagOnBothSides_RunsOncePerContact(t *testing.T) {
 	met := meet(t, func(record func(collision.Meeting)) []plugin.Behavior {
-		return []plugin.Behavior{plugin.Between(bullet, bullet, func(_ plugin.Tick, m collision.Meeting) { record(m) })}
+		return []plugin.Behavior{collision.Between(bullet, bullet, func(_ plugin.Tick, m collision.Meeting) { record(m) })}
 	}, &tagged{x: 100, bullet: true}, &tagged{x: 105, bullet: true})
 
 	if len(met) != 1 {
@@ -137,7 +138,7 @@ func TestBetween_Anything_MatchesWhateverIsThere(t *testing.T) {
 	shot, wall := &tagged{x: 100, bullet: true}, &tagged{x: 105}
 
 	met := meet(t, func(record func(collision.Meeting)) []plugin.Behavior {
-		return []plugin.Behavior{plugin.Between(bullet, plugin.Any, func(_ plugin.Tick, m collision.Meeting) { record(m) })}
+		return []plugin.Behavior{collision.Between(bullet, plugin.Any, func(_ plugin.Tick, m collision.Meeting) { record(m) })}
 	}, shot, wall)
 
 	if len(met) != 1 || met[0].Self != shot.id || met[0].Other != wall.id {
@@ -149,8 +150,8 @@ func TestBetween_BehaviorsSharingATag_BothRun(t *testing.T) {
 	var first, second int
 	met := meet(t, func(func(collision.Meeting)) []plugin.Behavior {
 		return []plugin.Behavior{
-			plugin.Between(bullet, target, func(plugin.Tick, collision.Meeting) { first++ }),
-			plugin.Between(bullet, plugin.Any, func(plugin.Tick, collision.Meeting) { second++ }),
+			collision.Between(bullet, target, func(plugin.Tick, collision.Meeting) { first++ }),
+			collision.Between(bullet, plugin.Any, func(plugin.Tick, collision.Meeting) { second++ }),
 		}
 	}, &tagged{x: 100, bullet: true}, &tagged{x: 105, target: true})
 
@@ -164,8 +165,8 @@ func TestRegisterBehavior_RefusesWhatItCannotHost(t *testing.T) {
 
 	for name, b := range map[string]plugin.Behavior{
 		"not a behavior at all":          "just a string",
-		"a pair made for another host":   plugin.Between(bullet, target, func(plugin.Tick, string) {}),
-		"an entity made for another one": plugin.Each(func(plugin.Tick, *tagged, string) {}),
+		"a pair made for another host":   host.Pair(bullet, target, func(plugin.Tick, string) {}),
+		"an entity made for another one": host.Each(func(plugin.Tick, *tagged, string) {}),
 	} {
 		if err := engine.RegisterBehavior(b); !errors.Is(err, plugin.ErrUnhostedBehavior) {
 			t.Errorf("%s: RegisterBehavior = %v, want ErrUnhostedBehavior", name, err)
@@ -190,9 +191,9 @@ func TestRegisterBehavior_StopsAtTheFirstItCannotHost(t *testing.T) {
 
 	meetWith(t, func(engine registrar) {
 		refused = engine.RegisterBehavior(
-			plugin.Between(bullet, target, func(plugin.Tick, collision.Meeting) { before++ }),
+			collision.Between(bullet, target, func(plugin.Tick, collision.Meeting) { before++ }),
 			"not a behavior at all",
-			plugin.Between(bullet, target, func(plugin.Tick, collision.Meeting) { after++ }),
+			collision.Between(bullet, target, func(plugin.Tick, collision.Meeting) { after++ }),
 		)
 	}, &tagged{x: 100, bullet: true}, &tagged{x: 105, target: true})
 

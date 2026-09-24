@@ -1,6 +1,7 @@
 package world
 
 import (
+	"github.com/kjkrol/gram/plugin/host"
 	"time"
 
 	"github.com/kjkrol/aabbworld"
@@ -26,7 +27,7 @@ var _ goke.System = (*exitSystem)(nil)
 // despawned when there are none; one that is back inside loses the mark.
 type exitSystem struct {
 	w    *module
-	host *plugin.EachHost[Leaving]
+	host *host.EachHost[Leaving]
 
 	query   *goke.Query
 	base    goke.Comp[Base]
@@ -36,7 +37,7 @@ type exitSystem struct {
 	bases []Base
 }
 
-func newExitSystem(w *module, host *plugin.EachHost[Leaving]) *exitSystem {
+func newExitSystem(w *module, host *host.EachHost[Leaving]) *exitSystem {
 	return &exitSystem{w: w, host: host}
 }
 

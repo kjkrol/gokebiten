@@ -240,7 +240,7 @@ func speedTicks(t *testing.T, st Steering, vel Velocity, moving []plugin.Behavio
 }
 
 // halving is a Moving behavior that halves every entity's speed.
-var halving = plugin.Every(func(_ plugin.Tick, m Moving) { m.Base.Vel.Value *= 0.5 })
+var halving = Every(func(_ plugin.Tick, m Moving) { m.Base.Vel.Value *= 0.5 })
 
 func TestSteering_NoProfileLeavesSpeedAlone(t *testing.T) {
 	_, values := speedTicks(t, Steering{TurnRate: 0.5}, Velocity{Dir: east, Value: 60}, nil, 3)

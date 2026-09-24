@@ -3,6 +3,7 @@ package collision
 import (
 	"errors"
 	"fmt"
+	"github.com/kjkrol/gram/plugin/host"
 	"time"
 
 	"github.com/kjkrol/aabbworld"
@@ -17,8 +18,8 @@ type module struct {
 	space *aabbworld.Space
 	ecs   *goke.ECS
 
-	pairs    *plugin.PairHost[Meeting]
-	entities *plugin.EachHost[Struck]
+	pairs    *host.PairHost[Meeting]
+	entities *host.EachHost[Struck]
 
 	system goke.Runnable
 	shapes ShapeTest
@@ -27,10 +28,10 @@ type module struct {
 
 // New builds the collision engine over space.
 func New(space *aabbworld.Space, ecs *goke.ECS) *module {
-	return newModule(space, ecs, &plugin.PairHost[Meeting]{}, &plugin.EachHost[Struck]{})
+	return newModule(space, ecs, &host.PairHost[Meeting]{}, &host.EachHost[Struck]{})
 }
 
-func newModule(space *aabbworld.Space, ecs *goke.ECS, pairs *plugin.PairHost[Meeting], entities *plugin.EachHost[Struck]) *module {
+func newModule(space *aabbworld.Space, ecs *goke.ECS, pairs *host.PairHost[Meeting], entities *host.EachHost[Struck]) *module {
 	return &module{space: space, ecs: ecs, pairs: pairs, entities: entities}
 }
 
@@ -65,13 +66,13 @@ func (m *module) LoadComps() []goke.CompToken {
 // collision-specific
 // =================================================================
 
-// RegisterBehavior hosts a plugin.Between of Meeting or a plugin.Each of Struck.
+// RegisterBehavior hosts a Between of Meeting or an Each/Every of Struck.
 func (m *module) RegisterBehavior(behaviors ...plugin.Behavior) error {
-	return host(m.pairs, m.entities, behaviors)
+	return hostAll(m.pairs, m.entities, behaviors)
 }
 
-// host hands each behavior to whichever host takes it, stopping at the first neither does.
-func host(pairs *plugin.PairHost[Meeting], entities *plugin.EachHost[Struck], behaviors []plugin.Behavior) error {
+// hostAll hands each behavior to whichever host takes it, stopping at the first neither does.
+func hostAll(pairs *host.PairHost[Meeting], entities *host.EachHost[Struck], behaviors []plugin.Behavior) error {
 	for _, b := range behaviors {
 		err := pairs.Add(b)
 		if errors.Is(err, plugin.ErrUnhostedBehavior) {

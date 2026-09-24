@@ -60,13 +60,15 @@ on Go 1.27.0.
 `plugin.Plugin` — `Name`, `Install(ctx plugin.Installer) error`, `RunPlan`,
 `WithRenderer`, `Renderer`, `EventHandler`, `Serializable`,
 `RegisterBehavior` — is the one extension point. A behavior is registered on
-the plugin it concerns and run inside that plugin's own pass. `plugin.Between(a, b, fn)`
-(a pair of tags) and `plugin.Each[T]` (one entity) build them; the tag families join
-the host's queries as optional components, so a behavior costs no query. The
-func's payload type — `collision.Meeting`, `collision.Struck`,
+the plugin it concerns and run inside that plugin's own pass. The hosting plugin's own
+constructors build them — `vision.Between(a, b, fn)` (a pair of tags), `board.Each[T](fn)`
+(one entity carrying `T`), `world.Every(fn)` (every entity) — so a game never imports
+`plugin/host`; the tag families join the host's queries as optional components, so a
+behavior costs no query. The func's payload type — `collision.Meeting`, `collision.Struck`,
 `vision.Sighting` — is what says whose it is: a host refuses one made for another (`ErrUnhostedBehavior`), so
-registering in the wrong place is an error, never a silent no-op. A plugin
-hosts them with `plugin.PairHost[P]`/`plugin.EachHost[P]`. Tags are bits of a family, not component types: `plugin.Tags[F]` is one component
+registering in the wrong place is an error, never a silent no-op. A plugin author wraps
+`host.Pair`/`host.Each`/`host.Every` from `plugin/host` in typed constructors and runs them
+with `host.PairHost[P]`/`host.EachHost[P]`. Tags are bits of a family, not component types: `plugin.Tags[F]` is one component
 holding up to 64 tags of family `F` (an empty type a plugin or a game names the family by:
 `selection.Family`, `behavior.Family` in vision, `board.Family`), `kinds.DefineTag[F](name)`
 hands out the bits by name through `world.Kinds` (saved by name, remapped on load like `TypeID`),
@@ -168,7 +170,7 @@ shows how much of it is boilerplate vs. real behavior.
   axis by default: a box stops whole at a closed edge, wraps at a wrapping one,
   and may leave by an open one. An entity wholly past an open edge carries
   `world.Outside`, put on by whoever moved it there (`MoveSystem`, collision's
-  solver); every tick it does, `plugin.Each` behaviors of a `world.Leaving`
+  solver); every tick it does, `world.Each` behaviors of a `world.Leaving`
   registered on the world hear of it, and with none it is despawned; back inside
   it loses the mark.
   `Base` — the one component every entity carries, holding its `Position`,
@@ -183,7 +185,7 @@ shows how much of it is boilerplate vs. real behavior.
   sizes share a world without the smallest slowing the rest — and the shared `camera.Camera` (a
   root package, not a plugin of its own; it keeps its own window arithmetic —
   wrapping on a wrapping axis, held inside the world on any other) exposed via
-  `world.Plugin.Camera()`. World hosts three `plugin.Each`/`Every` behaviors, all through
+  `world.Plugin.Camera()`. World hosts three payloads for `world.Each[T]`/`world.Every`, all through
   `RegisterBehavior`: a `Moving` (every entity before it moves, to scale `Base.Vel.Value`;
   board's terrain speed is one), a `Leaving` (every tick an entity is `Outside`) and a
   `Drawing` (every entity about to be drawn; `world.Draw.Overlay[T]`, `Draw.As[T]`,
@@ -209,7 +211,7 @@ shows how much of it is boilerplate vs. real behavior.
   registers on the world (only entities carrying `Mover` are slowed); a unit's
   `Mover` says which domains it moves in (none: `Land`). Every tick, after
   collision's `RunPlan`, `board.RunPlan` reports a `Standing` (cell under the centre and its kind) to
-  `plugin.Each` behaviors registered on the board, naturally `Each[board.Mover]`;
+  `board.Each` behaviors registered on the board, naturally `board.Each[board.Mover]`;
   `Standing.Fell(domain)` is a land unit in water or in a hole, and the reaction is the game's.
   A `board.Effect` (`Tick(brd, d) alive`) is what the board does to itself over time by writing
   terrain — `Plugin.Cast`/`Dispel`, ticked first each tick; `board/effect` ships `Timed` (terrain
@@ -242,12 +244,12 @@ shows how much of it is boilerplate vs. real behavior.
   `Physics` is only ever detected (a town, a trigger). Separation is always an even
   split.
   Reactions are behaviors hosted inside the `CollisionSystem`'s own pass:
-  `plugin.Between(a, b, fn)` of a `Meeting` per confirmed contact between two tags
-  (`plugin.Any` as the wildcard), `plugin.Each[T]` of a `Struck` per entity per
+  `collision.Between(a, b, fn)` of a `Meeting` per confirmed contact between two tags
+  (`plugin.Any` as the wildcard), `collision.Each[T]` of a `Struck` per entity per
   tick, with what it struck the tick before. A strategy exports a plain function of
   the flat `collision/behavior` package (`CountContacts`, `LogContacts`, `ShowHits`) —
   the tags it runs between are named where it is registered,
-  `RegisterBehavior(plugin.Between(a, b, fn), ...)`. `Collider` is the plugin's one
+  `RegisterBehavior(collision.Between(a, b, fn), ...)`. `Collider` is the plugin's one
   aggregate: what the entity struck (`Collider.Contacts()`). Depends on `world`.
 - **`navigation`** — pathfinding/movement toward a `MoveOrder` across a
   `board`. A navigated unit carries a `world.Steering` profile: navigation only asks it for a
@@ -259,7 +261,7 @@ shows how much of it is boilerplate vs. real behavior.
   Spec{Lasts, Stacking, Grant(tags...), Alter(func(*T))})`, `p.Cast`/`CastFor`/`Dispel`/`Has` by
   entity id, `Active` slots saved with the entity, originals of altered components kept by the
   plugin and saved with the game. An entity whose last effect ended carries `effects.Idle`
-  for one tick, and `plugin.Each` behaviors of an `effects.Idling` registered on the plugin
+  for one tick, and `effects.Each` behaviors of an `effects.Idling` registered on the plugin
   hear of it once. A cast before the plugin's pass lands the same tick.
   `board.Plugin.CellEntity(c)` gives a cell an entity with `Ground`, whose Kind the board
   copies into the terrain each tick — so an `Alter[board.Ground]` is a temporary change of
@@ -274,7 +276,7 @@ shows how much of it is boilerplate vs. real behavior.
   `Transparency` dims sight instead of cutting it (board gives its veiled bodies 1 - `Veil`), a
   ray spending its radius as a budget through it; `Sight.Clear` looks over the veils (a flyer)
   and is still cut by what cuts. It
-  hosts `plugin.Between(a, b, fn)` of a `Sighting` inside the scan's own pass: once
+  hosts `vision.Between(a, b, fn)` of a `Sighting` inside the scan's own pass: once
   a tick per observer carrying `a`, with everything in view carrying `b` — a
   directed pair, grouped by observer, empty included. A behavior tells its seen
   entities apart with `seen.Carries(tag)`, and steers only

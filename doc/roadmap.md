@@ -17,7 +17,9 @@ behind each item lives in [movement.md](movement.md) and [views.md](views.md).
 - Sight through terrain: a `Veil` per kind on a body carrying `vision.Transparency`, aabbworld's
   raycast spending its radius as a budget, `Sight.Clear` for flyers over the veils; flying as a
   convention (`Mover{Air}`, a sensor collider, `Costing(Air, 1)`) — [movement §12](movement.md).
-- Tags as bits of families, one component per family; `Between(a, b, fn)` by value;
+- Tags as bits of families, one component per family; `Between(a, b, fn)` by value; behaviors
+  built by the hosting plugin (`vision.Between`, `board.Each`, `world.Every`), `plugin/host` for
+  plugin authors;
   `Selectable`/`Selected`, the vision behaviors' tags and terrain bodies on bits.
 - Effects: `Grant` and `Alter` in a `Spec`, cast by entity id, saved with the entity; cell
   entities with `Ground` so an effect can change terrain for a while — [movement §13](movement.md).

@@ -106,16 +106,16 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 
 	s.vision = vision.NewPlugin(s.world)
 	if err := s.vision.RegisterBehavior(
-		plugin.Between(s.tags.Skittish, plugin.Any, s.avoidance.Steer),
-		plugin.Between(s.tags.Predator, s.tags.Prey, vbehavior.Chase(hunterLooksEvery)),
-		plugin.Between(plugin.Any, plugin.Any, faceTravel),
+		vision.Between(s.tags.Skittish, plugin.Any, s.avoidance.Steer),
+		vision.Between(s.tags.Predator, s.tags.Prey, vbehavior.Chase(hunterLooksEvery)),
+		vision.Between(plugin.Any, plugin.Any, faceTravel),
 	); err != nil {
 		return err
 	}
 	s.collision = collision.NewPlugin(s.world)
 	if err := s.collision.RegisterBehavior(
-		plugin.Between(plugin.Any, plugin.Any, cbehavior.CountContacts(&s.hits)),
-		plugin.Between(s.tags.Predator, s.tags.Prey, s.caught),
+		collision.Between(plugin.Any, plugin.Any, cbehavior.CountContacts(&s.hits)),
+		collision.Between(s.tags.Predator, s.tags.Prey, s.caught),
 	); err != nil {
 		return err
 	}

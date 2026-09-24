@@ -1,5 +1,5 @@
 // Package behavior holds ready-made reactions to contacts, each a plain function handed to
-// plugin.Between or plugin.Each: CountContacts for telemetry, ShowHits with HitOverlay to
+// collision.Between or collision.Each: CountContacts for telemetry, ShowHits with HitOverlay to
 // keep a hit visible, LogContacts to write a line per contact.
 //
 // # CountContacts
@@ -9,7 +9,7 @@
 //
 // # ShowHits and HitOverlay
 //
-// [ShowHits] is a plugin.Each over [HitMark]: an entity that struck something shows a hit for its
+// [ShowHits] is a collision.Each over [HitMark]: an entity that struck something shows a hit for its
 // own Duration, or the one given. [HitOverlay] is a Drawing behavior for the world plugin: an
 // overlay sprite on top of the entity while its HitMark is active.
 //

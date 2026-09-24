@@ -1,6 +1,7 @@
 package effects
 
 import (
+	"github.com/kjkrol/gram/plugin/host"
 	"reflect"
 	"time"
 
@@ -18,7 +19,7 @@ type effectSystem struct {
 	worldPlugin *world.Plugin
 	defs        *[]def
 	originals   *originals
-	idlers      *plugin.EachHost[Idling]
+	idlers      *host.EachHost[Idling]
 
 	query   *goke.Query
 	active  goke.Comp[Active]
@@ -38,7 +39,7 @@ type effectSystem struct {
 	built        bool
 }
 
-func newEffectSystem(worldPlugin *world.Plugin, defs *[]def, originals *originals, idlers *plugin.EachHost[Idling]) *effectSystem {
+func newEffectSystem(worldPlugin *world.Plugin, defs *[]def, originals *originals, idlers *host.EachHost[Idling]) *effectSystem {
 	return &effectSystem{worldPlugin: worldPlugin, defs: defs, originals: originals, idlers: idlers, columns: map[reflect.Type]column{}}
 }
 

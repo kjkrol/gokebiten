@@ -1,6 +1,7 @@
 package board
 
 import (
+	"github.com/kjkrol/gram/plugin/host"
 	"time"
 
 	"github.com/kjkrol/aabbworld/geom"
@@ -10,8 +11,17 @@ import (
 	"github.com/kjkrol/uid"
 )
 
+// Each is a behavior run every tick on every entity on the board carrying T, told where it stands;
+// naturally Each[Mover]. Register it with Plugin.RegisterBehavior.
+func Each[T any](react func(t plugin.Tick, state *T, s Standing)) plugin.Behavior {
+	return host.Each(react)
+}
+
+// Every is Each without a state component: every entity on the board, every tick.
+func Every(react func(t plugin.Tick, s Standing)) plugin.Behavior { return host.Every(react) }
+
 // Standing is where an entity on the board stands this tick: the cell under its centre, that
-// cell's kind, and its box (Grid.CellsUnder lists every cell it touches). Board hosts plugin.Each
+// cell's kind, and its box (Grid.CellsUnder lists every cell it touches). Board hosts Each
 // behaviors of it; one over Mover knows the entity's domain.
 type Standing struct {
 	ID   uid.UID64
@@ -29,7 +39,7 @@ var _ goke.System = (*standingSystem)(nil)
 // movement and collisions have had their say.
 type standingSystem struct {
 	brd  *Board
-	host *plugin.EachHost[Standing]
+	host *host.EachHost[Standing]
 
 	query *goke.Query
 	base  goke.Comp[world.Base]
@@ -40,7 +50,7 @@ type standingSystem struct {
 	cells []Cell
 }
 
-func newStandingSystem(brd *Board, host *plugin.EachHost[Standing]) *standingSystem {
+func newStandingSystem(brd *Board, host *host.EachHost[Standing]) *standingSystem {
 	return &standingSystem{brd: brd, host: host}
 }
 

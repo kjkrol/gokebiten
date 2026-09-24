@@ -30,7 +30,7 @@
 // Allows says which may stand on it: water admits Water, a hole nobody. An entity's [Mover] says
 // which it uses (none means Land); the planner keeps it to cells that admit it. Every tick, after
 // collisions, the board tells each entity carrying Cell where it stands as a [Standing] —
-// [Plugin.RegisterBehavior] takes a plugin.Each of it, naturally one over Mover — and
+// [Plugin.RegisterBehavior] takes an [Each] of it, naturally one over Mover — and
 // [Standing.Fell] says the entity is where its domain may not be: pushed into water, dropped
 // into a hole. What follows is the
 // game's: despawn, teleport, damage. Call [Plugin.RunPlan] every tick, after collision's.

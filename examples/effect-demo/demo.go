@@ -138,8 +138,8 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 
 	// The whole of the game's logic: two reactions to where things stand, registered before Use.
 	if err := s.board.RegisterBehavior(
-		plugin.Each[witch](s.freeze),
-		plugin.Each[board.Mover](s.onGround),
+		board.Each[witch](s.freeze),
+		board.Each[board.Mover](s.onGround),
 	); err != nil {
 		return err
 	}
@@ -164,7 +164,7 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 		effects.Alter(func(st *world.Steering) { st.Brake = st.Accel / 8 }), // ice: brakes barely bite
 	})
 	frozen := s.frozenTag
-	if err := s.world.RegisterBehavior(plugin.Each[plugin.Tags[chill]](func(_ plugin.Tick, marks *plugin.Tags[chill], m world.Moving) {
+	if err := s.world.RegisterBehavior(world.Each[plugin.Tags[chill]](func(_ plugin.Tick, marks *plugin.Tags[chill], m world.Moving) {
 		if marks.Has(frozen) {
 			m.Base.Vel.Value = 0 // frozen fast: whoever carries the tag does not move
 		}

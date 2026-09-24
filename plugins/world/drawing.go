@@ -2,6 +2,7 @@ package world
 
 import (
 	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/gram/plugin/host"
 	"github.com/kjkrol/gram/render"
 	"github.com/kjkrol/uid"
 )
@@ -30,22 +31,22 @@ type draw struct{}
 
 // Overlay draws with on top of every entity carrying T.
 func (draw) Overlay[T any](with Appearance) plugin.Behavior {
-	return plugin.Each[T](func(_ plugin.Tick, _ *T, d Drawing) { d.Overlay(with) })
+	return host.Each[T](func(_ plugin.Tick, _ *T, d Drawing) { d.Overlay(with) })
 }
 
 // As draws every entity carrying T as with, in place of its own sprite.
 func (draw) As[T any](with Appearance) plugin.Behavior {
-	return plugin.Each[T](func(_ plugin.Tick, _ *T, d Drawing) { d.As(with) })
+	return host.Each[T](func(_ plugin.Tick, _ *T, d Drawing) { d.As(with) })
 }
 
 // With reworks the sprite of every entity carrying T through fn, which sees the T it carries.
 func (draw) With[T any](fn func(Appearance, T) Appearance) plugin.Behavior {
-	return plugin.Each[T](func(_ plugin.Tick, t *T, d Drawing) { d.With(func(a Appearance) Appearance { return fn(a, *t) }) })
+	return host.Each[T](func(_ plugin.Tick, t *T, d Drawing) { d.With(func(a Appearance) Appearance { return fn(a, *t) }) })
 }
 
 // Facing picks every entity's sprite from the way it moves.
 func (draw) Facing(spriteFor func(Velocity) render.SpriteID) plugin.Behavior {
-	return plugin.Every(func(_ plugin.Tick, d Drawing) {
+	return host.Every(func(_ plugin.Tick, d Drawing) {
 		d.With(func(a Appearance) Appearance { a.SpriteID = spriteFor(d.Base.Vel); return a })
 	})
 }

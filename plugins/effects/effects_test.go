@@ -67,7 +67,7 @@ func newRig(t *testing.T, withFamily bool, define func(r *rig)) *rig {
 	})
 	r.angry = r.w.Kinds().DefineTag[moods]("angry")
 	r.fx = effects.NewPlugin(r.w)
-	if err := r.fx.RegisterBehavior(plugin.Each[world.Steering](func(_ plugin.Tick, _ *world.Steering, i effects.Idling) {
+	if err := r.fx.RegisterBehavior(effects.Each[world.Steering](func(_ plugin.Tick, _ *world.Steering, i effects.Idling) {
 		r.idled = append(r.idled, i.ID)
 	})); err != nil {
 		t.Fatal(err)

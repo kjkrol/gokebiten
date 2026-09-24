@@ -2,6 +2,7 @@ package vision
 
 import (
 	"fmt"
+	"github.com/kjkrol/gram/plugin/host"
 	"time"
 
 	"github.com/kjkrol/goke/v3"
@@ -21,7 +22,7 @@ type Plugin struct {
 	renderer    *Renderer
 	style       ConeStyle
 
-	sightings plugin.PairHost[Sighting]
+	sightings host.PairHost[Sighting]
 }
 
 var _ plugin.Plugin = (*Plugin)(nil)
@@ -67,7 +68,7 @@ func (p *Plugin) EventHandler() control.EventHandler { return nil }
 // Serializable returns nil: vision keeps no state beside its components.
 func (p *Plugin) Serializable() plugin.Serializable { return nil }
 
-// RegisterBehavior hosts a plugin.Between of Sighting, run once per observer; call before Use.
+// RegisterBehavior hosts a Between of Sighting, run once per observer; call before Use.
 func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
 	for _, b := range behaviors {
 		if err := p.sightings.Add(b); err != nil {

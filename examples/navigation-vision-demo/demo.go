@@ -126,8 +126,8 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	s.unitTag = s.world.Kinds().DefineTag[units]("unit")
 	s.vision = vision.NewPlugin(s.world)
 	if err := s.vision.RegisterBehavior(
-		plugin.Between(plugin.Any, plugin.Any, faceTravel),
-		plugin.Between(s.unitTag, s.unitTag, s.noticedEachOther),
+		vision.Between(plugin.Any, plugin.Any, faceTravel),
+		vision.Between(s.unitTag, s.unitTag, s.noticedEachOther),
 	); err != nil {
 		return err
 	}

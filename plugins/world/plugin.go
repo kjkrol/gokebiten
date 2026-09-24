@@ -145,7 +145,7 @@ func (p *Plugin) EventHandler() control.EventHandler {
 func (p *Plugin) Serializable() plugin.Serializable { return &p.Res }
 
 // RegisterBehavior adds world.Behaviors to the decision pass run before movement, in order, and
-// hosts plugin.Each and Every of a Moving (every entity, before it moves), a Leaving (every tick an
+// hosts Each and Every of a Moving (every entity, before it moves), a Leaving (every tick an
 // entity is Outside an open edge) and a Drawing (every entity about to be drawn). Call before Use.
 func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
 	for _, b := range behaviors {

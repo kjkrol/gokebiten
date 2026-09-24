@@ -2,6 +2,7 @@ package board
 
 import (
 	"fmt"
+	"github.com/kjkrol/gram/plugin/host"
 	"time"
 
 	"github.com/kjkrol/goke/v3"
@@ -39,7 +40,7 @@ type Plugin struct {
 	worldPlugin *world.Plugin
 	collision   *collision.Plugin
 	module      *module
-	standing    plugin.EachHost[Standing]
+	standing    host.EachHost[Standing]
 	body        plugin.Tag[Family]
 }
 
@@ -110,7 +111,7 @@ func (p *Plugin) EventHandler() control.EventHandler { return nil }
 // Serializable returns board's persistable state (its terrain).
 func (p *Plugin) Serializable() plugin.Serializable { return &p.Res }
 
-// RegisterBehavior hosts a plugin.Each of Standing, run every tick for every entity on the board;
+// RegisterBehavior hosts an Each or Every of Standing, run every tick for every entity on the board;
 // register before Use.
 func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
 	for _, b := range behaviors {

@@ -20,7 +20,7 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
 - `WithCollision`: solid terrain becomes immovable bodies built from `Grid.CellBoxes` — one box
   for a square, capped strips for a hex — merged up to `MaxBodyCells` a side; veiled terrain
   becomes bodies carrying a `vision.Transparency` of 1 - Veil, dimming sight only.
-- `Standing`, reported every tick to `plugin.Each` behaviors: the cell under an entity, its kind,
+- `Standing`, reported every tick to `board.Each` behaviors: the cell under an entity, its kind,
   its box; `Fell(domain)` says the entity is where it may not be.
 - `Grid.CellsUnder`, `CellBounds`, `CellOutline`; hex cells drawn as hexagons; `TerrainMap.Version`.
 - Cell entities (`CellEntity`, `Ground`) let an effect change terrain for a while.
@@ -37,16 +37,21 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
 - `plugins/world`: `Kinds.Reserve` and `Bodies` for kind-less entities; `Kinds.DefineTag`.
 - `collision.Detector` is `CollisionSystem` (`NewCollisionSystem`), as every system is named.
 - Leaving by an open edge is a component, `world.Outside`, not a set: whoever moves the box out
-  marks it, `plugin.Each` behaviors of a `world.Leaving` registered on the world hear of it every
+  marks it, `world.Each` behaviors of a `world.Leaving` registered on the world hear of it every
   tick it is out (despawned with none), and it is unmarked once back inside. `world.Plugin.OnExit`
   and `Tracked` are gone.
+- Behaviors are built by the plugin that hosts them: `vision.Between`, `collision.Between`/`Each`/
+  `Every`, `board.Each`/`Every`, `effects.Each`/`Every`, `world.Each`/`Every` (payload inferred
+  from the function, one of `Moving`, `Leaving`, `Drawing`). `plugin.Between`/`Each`/`Every` and the
+  hosts moved to `plugin/host`, a plugin author's package a game never imports; `plugin` keeps
+  `Behavior`, `Tick`, `Tag`/`Tags`/`Any`, `Marks` (built by hosts with `MarksOf`).
 - Two kinds of thing remain, behaviors and effects: `world.SpeedModifier`, `RegisterSpeedModifier`,
   `AppearanceModifier`, `AppearanceStrategy` and the renderer's `With*` are gone. Speed is a
-  `plugin.Each`/`Every` of a `world.Moving` (board's terrain slows entities carrying `Mover`, and
-  only those), drawing a `plugin.Each`/`Every` of a `world.Drawing` (`world.Draw.Overlay[T]`,
+  `world.Each`/`Every` of a `world.Moving` (board's terrain slows entities carrying `Mover`, and
+  only those), drawing a `world.Each`/`Every` of a `world.Drawing` (`world.Draw.Overlay[T]`,
   `Draw.As[T]`, `Draw.With[T]`, `Draw.Facing`; `behavior.HitOverlay` is one), both registered on
-  the world plugin. `plugin.Every` is `Each` without a state component.
-- The end of an entity's last effect is a component, `effects.Idle`, on for one tick: `plugin.Each`
+  the world plugin. `Every` is `Each` without a state component.
+- The end of an entity's last effect is a component, `effects.Idle`, on for one tick: `effects.Each`
   behaviors of an `effects.Idling` registered on the effects plugin hear of it once, and the board
   drops a cell entity it finds so. `effects.Plugin.OnIdle` and `board.Plugin.WithEffects` are gone.
 - `vision`: sight through terrain — an entity carrying `Transparency` dims sight instead of

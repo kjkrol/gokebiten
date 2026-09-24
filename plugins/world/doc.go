@@ -10,7 +10,7 @@
 // a wrapping one, may leave by an open one); the [EntitiesCfg] bounds how many entities the world
 // holds and the sizes they spawn with; the camera.Config sizes the camera. An entity wholly past
 // an open edge carries [Outside] — put on by whoever moved it there, the MoveSystem or collision's
-// solver — and every tick it does, the plugin.Each behaviors of a [Leaving] registered with
+// solver — and every tick it does, the [Each] behaviors of a [Leaving] registered with
 // [Plugin.RegisterBehavior] hear of it; with none registered it is despawned. Put back inside, it
 // loses the mark. The Plugin exposes the shared [aabbworld.Space] ([Plugin.Space]) and the shared
 // camera ([Plugin.Camera], with [Plugin.WithCameraControls] for wheel zoom, a middle-drag pan 1:1
@@ -38,7 +38,7 @@
 // plugin's or the game's names the family, and [Kinds.DefineTag] hands out the bits by name — saved by name, so a build defining them in another order still loads. A
 // kind gives its entities tags with [kind.Tagged]; a query over the family's Tags narrows to
 // the entities carrying any of them, and setting or clearing a bit is a value write, seen the
-// same tick. Behaviors name tags in plugin.Between; the marker components of old are gone.
+// same tick. Behaviors name tags in a plugin's Between; the marker components of old are gone.
 //
 // # Bodies
 //
@@ -56,8 +56,8 @@
 //
 // [Plugin.RunPlan] runs the tick: every registered [Behavior] (a decision system, see
 // [Plugin.RegisterBehavior]), then [SteeringSystem] carries out [Steering] requests (heading, and base
-// speed for an entity with a motion profile), [VelocitySystem] runs the Each behaviors of a
-// [Moving] over every entity so they may scale that speed, then [MoveSystem] moves every box under the
+// speed for an entity with a motion profile), [VelocitySystem] runs the [Each] and [Every]
+// behaviors of a [Moving] over every entity so they may scale that speed, then [MoveSystem] moves every box under the
 // edge rules and hands the space every Base as an aabbworld.Item — Space.Rebuild. The space keeps
 // no state of its own between ticks: Populate and PostLoad rebuild it too, so it is whole before
 // the first tick, and a despawned entity is gone from it on the next. Anything reading the space

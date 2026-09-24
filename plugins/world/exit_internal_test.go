@@ -69,7 +69,7 @@ func TestExit_AnEntityLeavingByAnOpenEdgeIsDespawnedByDefault(t *testing.T) {
 
 // hears is an Each of Leaving that appends every id it is told of to dst.
 func hears(dst *[]uid.UID64) plugin.Behavior {
-	return plugin.Each[Appearance](func(_ plugin.Tick, _ *Appearance, l Leaving) { *dst = append(*dst, l.ID) })
+	return Each[Appearance](func(_ plugin.Tick, _ *Appearance, l Leaving) { *dst = append(*dst, l.ID) })
 }
 
 func TestExit_ALeavingBehaviorHearsOfTheLeaverEveryTickItIsOutAndKeepsItAlive(t *testing.T) {
@@ -95,7 +95,7 @@ func TestExit_ALeavingBehaviorHearsOfTheLeaverEveryTickItIsOutAndKeepsItAlive(t 
 
 func TestExit_ALeaverPutBackInsideLosesItsMark(t *testing.T) {
 	var heard []uid.UID64
-	back := plugin.Each[Appearance](func(_ plugin.Tick, _ *Appearance, l Leaving) {
+	back := Each[Appearance](func(_ plugin.Tick, _ *Appearance, l Leaving) {
 		b := l.Base
 		heard = append(heard, l.ID)
 		b.Pos.AABB = plane.NewAABB(geom.NewVec(500, 500), 10, 10)

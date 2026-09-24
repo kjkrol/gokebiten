@@ -1,6 +1,7 @@
 package collision
 
 import (
+	"github.com/kjkrol/gram/plugin/host"
 	"time"
 
 	"github.com/kjkrol/goke/v3"
@@ -16,8 +17,8 @@ type Plugin struct {
 	worldPlugin *world.Plugin
 	module      *module
 
-	pairs    plugin.PairHost[Meeting]
-	entities plugin.EachHost[Struck]
+	pairs    host.PairHost[Meeting]
+	entities host.EachHost[Struck]
 	shapes   ShapeTest
 }
 
@@ -62,7 +63,7 @@ func (p *Plugin) EventHandler() control.EventHandler { return nil }
 // Serializable is a no-op — collision has nothing to persist.
 func (p *Plugin) Serializable() plugin.Serializable { return nil }
 
-// RegisterBehavior hosts a plugin.Between of Meeting or a plugin.Each of Struck; call before Use.
+// RegisterBehavior hosts a Between of Meeting or an Each/Every of Struck; call before Use.
 func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
-	return host(&p.pairs, &p.entities, behaviors)
+	return hostAll(&p.pairs, &p.entities, behaviors)
 }

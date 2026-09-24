@@ -1,6 +1,7 @@
 package behavior_test
 
 import (
+	"github.com/kjkrol/gram/plugin/host"
 	"testing"
 	"time"
 
@@ -35,7 +36,7 @@ func run(t *testing.T, entities ...entity) []behavior.HitMark {
 
 	ecs := goke.New()
 	engine := collision.New(space, ecs)
-	if err := engine.RegisterBehavior(plugin.Each[behavior.HitMark](behavior.ShowHits(fallback))); err != nil {
+	if err := engine.RegisterBehavior(collision.Each[behavior.HitMark](behavior.ShowHits(fallback))); err != nil {
 		t.Fatalf("RegisterBehavior: %v", err)
 	}
 
@@ -107,7 +108,7 @@ func TestShowHits_NoContact_ClearsALapsedMark(t *testing.T) {
 // drawn runs HitOverlay(flash) over one entity carrying mark and returns its layers, base first.
 func drawn(t *testing.T, mark behavior.HitMark, base, flash world.Appearance) []world.Appearance {
 	t.Helper()
-	host := &plugin.EachHost[world.Drawing]{}
+	host := &host.EachHost[world.Drawing]{}
 	if err := host.Add(behavior.HitOverlay(flash)); err != nil {
 		t.Fatal(err)
 	}

@@ -25,7 +25,7 @@ func TestCollision_ABoxPushedThroughAnOpenEdgeIsReportedToTheWorld(t *testing.T)
 		Entities: world.EntitiesCfg{MaxCount: 4, MinSize: 10, MaxSize: 10},
 	})
 	var left []uid.UID64
-	if err := w.RegisterBehavior(plugin.Each[world.Appearance](func(_ plugin.Tick, _ *world.Appearance, l world.Leaving) {
+	if err := w.RegisterBehavior(world.Each[world.Appearance](func(_ plugin.Tick, _ *world.Appearance, l world.Leaving) {
 		left = append(left, l.ID)
 	})); err != nil {
 		t.Fatal(err)

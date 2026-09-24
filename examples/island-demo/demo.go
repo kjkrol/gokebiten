@@ -107,7 +107,7 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 		board.CellKind{Name: board.Named("mountain"), Cost: 8, Allows: board.Land},
 		board.CellKind{Name: board.Named("road"), Cost: 1, Allows: board.Land},
 	)
-	if err := s.board.RegisterBehavior(plugin.Each[board.Mover](s.drown)); err != nil {
+	if err := s.board.RegisterBehavior(board.Each[board.Mover](s.drown)); err != nil {
 		return err
 	}
 	if err := ctx.Use(s.board); err != nil {

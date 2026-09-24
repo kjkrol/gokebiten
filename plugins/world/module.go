@@ -2,9 +2,8 @@ package world
 
 import (
 	"fmt"
+	"github.com/kjkrol/gram/plugin/host"
 	"time"
-
-	"github.com/kjkrol/gram/plugin"
 
 	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/goke/v3"
@@ -34,9 +33,9 @@ type module struct {
 
 	behaviors         []Behavior
 	behaviorRunnables []goke.Runnable
-	leavers           *plugin.EachHost[Leaving]
-	movers            *plugin.EachHost[Moving]
-	drawers           *plugin.EachHost[Drawing]
+	leavers           *host.EachHost[Leaving]
+	movers            *host.EachHost[Moving]
+	drawers           *host.EachHost[Drawing]
 
 	steeringRunnable goke.Runnable
 	velocityRunnable goke.Runnable
@@ -53,7 +52,7 @@ var _ goke.Module = (*module)(nil)
 // newModule builds the world's topology and spatial index from cfg.
 func newModule(cfg Config) *module {
 	return &module{config: cfg, space: buildSpace(cfg), despawned: make(map[uid.UID64]struct{}),
-		leavers: &plugin.EachHost[Leaving]{}, movers: &plugin.EachHost[Moving]{}, drawers: &plugin.EachHost[Drawing]{}}
+		leavers: &host.EachHost[Leaving]{}, movers: &host.EachHost[Moving]{}, drawers: &host.EachHost[Drawing]{}}
 }
 
 // =================================================================
