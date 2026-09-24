@@ -13,16 +13,23 @@ import (
 var _ goke.System = (*effectSystem)(nil)
 
 // effectSystem begins, counts down and ends every slot of every Active, applying and undoing
-// what the effects grant and alter.
+// what the effects grant and alter; an entity whose last effect ended is Idle for a tick.
 type effectSystem struct {
 	worldPlugin *world.Plugin
 	defs        *[]def
 	originals   *originals
-	onIdle      *[]func(t plugin.Tick, id uid.UID64)
+	idlers      *plugin.EachHost[Idling]
 
 	query   *goke.Query
 	active  goke.Comp[Active]
 	columns map[reflect.Type]column
+
+	// idle walks the entities marked Idle last tick: the hosted behaviors hear of them, the mark goes.
+	idle      *goke.Query
+	idleBase  goke.Comp[world.Base]
+	idleID    goke.CompID
+	idleIDs   []uid.UID64
+	idleBases []world.Base
 
 	// lookup finds one entity's Active for Cast and Dispel outside the walk.
 	lookup       *goke.Query
@@ -31,8 +38,8 @@ type effectSystem struct {
 	built        bool
 }
 
-func newEffectSystem(worldPlugin *world.Plugin, defs *[]def, originals *originals, onIdle *[]func(t plugin.Tick, id uid.UID64)) *effectSystem {
-	return &effectSystem{worldPlugin: worldPlugin, defs: defs, originals: originals, onIdle: onIdle, columns: map[reflect.Type]column{}}
+func newEffectSystem(worldPlugin *world.Plugin, defs *[]def, originals *originals, idlers *plugin.EachHost[Idling]) *effectSystem {
+	return &effectSystem{worldPlugin: worldPlugin, defs: defs, originals: originals, idlers: idlers, columns: map[reflect.Type]column{}}
 }
 
 func (s *effectSystem) Init(si *goke.SysInit) {
@@ -54,11 +61,26 @@ func (s *effectSystem) Init(si *goke.SysInit) {
 	s.query = qb.Build()
 	s.lookup = si.NewQueryBuilder(&s.lookupActive).Build()
 	s.activeID = si.RegComp[Active]()
+	s.idleID = si.RegComp[Idle]()
+	iq := si.NewQueryBuilder(&s.idleBase).Include(goke.Include[Idle]())
+	s.idlers.Bind(iq)
+	s.idle = iq.Build()
 	s.built = true
 }
 
 func (s *effectSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 	t := plugin.Tick{CmdBuf: cb, Now: time.Now(), Dt: d}
+	s.idle.All()
+	for s.idle.Next() {
+		cursor := s.idle.Cursor()
+		s.idleIDs, s.idleBases = cursor.IDs, s.idleBase.Slice(cursor)
+		if !s.idlers.Empty() {
+			s.idlers.Run(t, cursor, s.idling)
+		}
+		for _, id := range s.idleIDs {
+			cb.RemoveCompOne(id, s.idleID)
+		}
+	}
 	s.query.All()
 	for s.query.Next() {
 		cursor := s.query.Cursor()
@@ -94,11 +116,12 @@ func (s *effectSystem) step(t plugin.Tick, cursor *goke.Cursor, i int, id uid.UI
 	if a.empty() {
 		s.originals.forget(id)
 		s.worldPlugin.Detach[Active](t.CmdBuf, id)
-		for _, fn := range *s.onIdle {
-			fn(t, id)
-		}
+		t.CmdBuf.AddOne(id, s.idleID, Idle{})
 	}
 }
+
+// idling describes the i-th entity of the Idle chunk being walked.
+func (s *effectSystem) idling(i int) Idling { return Idling{ID: s.idleIDs[i], Base: &s.idleBases[i]} }
 
 // begin applies a slot's grants and marks its alters for recompute; false while a granted
 // family is not on the entity yet — it is attached and the slot waits a tick.

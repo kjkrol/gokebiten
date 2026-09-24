@@ -123,8 +123,8 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 
 	grid := board.DefaultGrids{}.Square(GridWidth, GridHeight, CellSize)
 	s.effects = effects.NewPlugin(s.world)
-	// A frozen boat holds its cell, so the planner goes round; the board drops cell entities itself.
-	s.board = board.NewPlugin(grid, &board.SingleOccupancy{}, s.world).WithCollision(s.collision).WithEffects(s.effects)
+	// A frozen boat holds its cell, so the planner goes round.
+	s.board = board.NewPlugin(grid, &board.SingleOccupancy{}, s.world).WithCollision(s.collision)
 	s.brd = s.board.Res.Logic.Board
 	s.board.CellKindDict().Create(
 		board.CellKind{Name: "grass", Cost: 2, Allows: board.Land},

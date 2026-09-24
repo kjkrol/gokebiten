@@ -253,11 +253,13 @@ shows how much of it is boilerplate vs. real behavior.
 - **`effects`** — temporary changes to entities, cast from anywhere: `p.Define(name,
   Spec{Lasts, Stacking, Grant(tags...), Alter(func(*T))})`, `p.Cast`/`CastFor`/`Dispel`/`Has` by
   entity id, `Active` slots saved with the entity, originals of altered components kept by the
-  plugin and saved with the game, `OnIdle` listeners when an entity's last effect ends. A cast
-  before the plugin's pass lands the same tick. `board.Plugin.CellEntity(c)` gives a cell an
-  entity with `Ground`, whose Kind the board copies into the terrain each tick — so an
-  `Alter[board.Ground]` is a temporary change of terrain — and `board.NewPlugin(...).WithEffects(fx)`
-  makes the board drop such an entity once its last effect ends. Depends on `world`.
+  plugin and saved with the game. An entity whose last effect ended carries `effects.Idle`
+  for one tick, and `plugin.Each` behaviors of an `effects.Idling` registered on the plugin
+  hear of it once. A cast before the plugin's pass lands the same tick.
+  `board.Plugin.CellEntity(c)` gives a cell an entity with `Ground`, whose Kind the board
+  copies into the terrain each tick — so an `Alter[board.Ground]` is a temporary change of
+  terrain — and the board drops such an entity itself when it finds it `Idle` without an
+  `Active`. Depends on `world`.
 - **`selection`** — mouse click/drag → the `Selected` tag on `world` entities that carry
   `Selectable`, both bits of `selection.Family` from `Plugin.Tags()` (a kind's choice via
   `kind.Tagged`; terrain bodies never do); a bit flip, seen the same tick. Depends on `world`.

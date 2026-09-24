@@ -6,6 +6,7 @@ import (
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gram/plugins/effects"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
 	"github.com/kjkrol/uid"
@@ -18,7 +19,8 @@ type Ground struct{ Kind CellKind }
 var _ goke.System = (*cellEntitySystem)(nil)
 
 // cellEntitySystem spawns an entity per cell on request and copies each one's Ground into the
-// terrain every tick, so a change to the component is a change to the board.
+// terrain every tick, so a change to the component is a change to the board; one whose last
+// effect ended is let go.
 type cellEntitySystem struct {
 	brd         *Board
 	worldPlugin *world.Plugin
@@ -28,6 +30,8 @@ type cellEntitySystem struct {
 	query  *goke.Query
 	cell   goke.Comp[Cell]
 	ground goke.Comp[Ground]
+	idle   goke.OptComp[effects.Idle]
+	active goke.OptComp[effects.Active]
 
 	// The factory's own columns: a Comp handle serves one archetype or query, never two.
 	spawnCell   goke.Comp[Cell]
@@ -40,17 +44,23 @@ func newCellEntitySystem(brd *Board, worldPlugin *world.Plugin, typeID kind.ID) 
 
 func (s *cellEntitySystem) Init(si *goke.SysInit) {
 	s.bodies = s.worldPlugin.NewBodies(si, s.typeID, &s.spawnCell, &s.spawnGround)
-	s.query = si.NewQueryBuilder(&s.cell, &s.ground).Build()
+	s.query = si.NewQueryBuilder(&s.cell, &s.ground).Optional(&s.idle, &s.active).Build()
 }
 
-func (s *cellEntitySystem) Update(*goke.CmdBuf, time.Duration) {
+// Update copies every Ground into the terrain, then lets go of the entities marked Idle unless a
+// fresh effect is already on them.
+func (s *cellEntitySystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 	s.query.All()
 	for s.query.Next() {
 		cursor := s.query.Cursor()
 		cells := s.cell.Slice(cursor)
 		grounds := s.ground.Slice(cursor)
-		for i := range cursor.IDs {
+		spent := s.idle.Present(cursor) && !s.active.Present(cursor)
+		for i, id := range cursor.IDs {
 			s.brd.Set(cells[i].ID, grounds[i].Kind)
+			if spent {
+				s.bodies.Remove(cb, id)
+			}
 		}
 	}
 }

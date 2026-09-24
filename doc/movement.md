@@ -250,8 +250,8 @@ so granting one is a value write and the component budget stays for data.
 
 The board joins in through **cell entities**: `board.Plugin.CellEntity(c)` gives a cell an entity
 with a `Ground` the board copies into the terrain each tick, so an `Alter` of `Ground` is a
-temporary change of terrain — an ice witch's frost — and, built `WithEffects`, the board drops
-the entity once its last effect ends. Weather and seasons over the whole board are the same idea
+temporary change of terrain — an ice witch's frost — and the board drops the entity itself once it
+finds it `Idle` after its last effect, with no wiring between the two plugins. Weather and seasons over the whole board are the same idea
 on an entity standing for the board; not built yet.
 
 ## Who owns what

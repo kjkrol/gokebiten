@@ -1,10 +1,11 @@
 package board
 
 import (
-	"github.com/kjkrol/gram/plugins/vision"
 	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gram/plugins/effects"
+	"github.com/kjkrol/gram/plugins/vision"
 )
 
 var _ goke.Module = (*module)(nil)
@@ -45,10 +46,13 @@ func (m *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
 // SetupSystems is empty — the bodies build themselves in their own Init.
 func (m *module) SetupSystems() []goke.System { return nil }
 
-// LoadComps lists the component types board writes, so a save loads without the vision plugin —
-// see [goke.CompProvider].
+// LoadComps lists the component types board writes or reads, so a save loads without the vision
+// and effects plugins — see [goke.CompProvider].
 func (m *module) LoadComps() []goke.CompToken {
-	tokens := []goke.CompToken{goke.LoadComp[Cell](), goke.LoadComp[Mover](), goke.LoadComp[Ground]()}
+	tokens := []goke.CompToken{
+		goke.LoadComp[Cell](), goke.LoadComp[Mover](), goke.LoadComp[Ground](),
+		goke.LoadComp[effects.Active](), goke.LoadComp[effects.Idle](),
+	}
 	if m.bodies != nil {
 		tokens = append(tokens, goke.LoadComp[vision.Transparency]())
 	}

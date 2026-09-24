@@ -23,7 +23,7 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
 - `Standing`, reported every tick to `plugin.Each` behaviors: the cell under an entity, its kind,
   its box; `Fell(domain)` says the entity is where it may not be.
 - `Grid.CellsUnder`, `CellBounds`, `CellOutline`; hex cells drawn as hexagons; `TerrainMap.Version`.
-- Cell entities (`CellEntity`, `Ground`, `WithEffects`) let an effect change terrain for a while.
+- Cell entities (`CellEntity`, `Ground`) let an effect change terrain for a while.
 
 **Plugins**
 - Tags are bits of families: `plugin.Tags[F]` is one component per family, `Kinds.DefineTag`
@@ -38,6 +38,9 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
   marks it, `plugin.Each` behaviors of a `world.Leaving` registered on the world hear of it every
   tick it is out (despawned with none), and it is unmarked once back inside. `world.Plugin.OnExit`
   and `Tracked` are gone.
+- The end of an entity's last effect is a component, `effects.Idle`, on for one tick: `plugin.Each`
+  behaviors of an `effects.Idling` registered on the effects plugin hear of it once, and the board
+  drops a cell entity it finds so. `effects.Plugin.OnIdle` and `board.Plugin.WithEffects` are gone.
 - `vision`: sight through terrain — an entity carrying `Transparency` dims sight instead of
   cutting it (aabbworld v1.6.0: a ray spends its radius as a budget, a forest at 0.6 takes 2.5×
   its depth), `Sight.Clear` looks over the veils (a flyer), what cuts sight still cuts. A

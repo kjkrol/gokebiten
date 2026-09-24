@@ -15,7 +15,12 @@
 //
 // [Active] is what an entity is under: up to [MaxEffects] slots, saved with it. [Plugin.Cast] and
 // [Plugin.CastFor] put an effect on an entity — attaching Active when it has none — and the
-// change lands with the plugin's next pass; [Plugin.Dispel] ends one early; [Plugin.Has] asks. [Plugin.OnIdle] tells every
-// listener when an entity's last effect ended — the board built WithEffects lets a cell entity go. Effects host no behaviors of their own: they are what
-// behaviors cast. Call [Plugin.RunPlan] after world's.
+// change lands with the plugin's next pass; [Plugin.Dispel] ends one early; [Plugin.Has] asks.
+//
+// # Idle
+//
+// An entity whose last effect ended loses its Active and carries [Idle] for one tick: the board
+// drops a cell entity it finds so, and a plugin.Each of an [Idling] registered with
+// [Plugin.RegisterBehavior] hears of it once — a life lost when the shield ends. Effects host
+// nothing else: they are what behaviors cast. Call [Plugin.RunPlan] after world's.
 package effects

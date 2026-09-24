@@ -40,8 +40,8 @@
 // [Plugin.CellEntity] gives a cell an entity — a body with a [Cell] and a [Ground] holding the
 // cell's kind — so anything done to entities can be done to a cell: an effect altering Ground is
 // a temporary change of terrain. While the entity exists the board copies its Ground into the
-// TerrainMap every tick; [Plugin.DropCellEntity] lets it go, and built [Plugin.WithEffects] the
-// board does that itself once the entity's last effect ends.
+// TerrainMap every tick; [Plugin.DropCellEntity] lets it go, and the board does that itself once
+// the entity's last effect ended (effects.Idle on it, no Active).
 //
 // # Terrain bodies
 //

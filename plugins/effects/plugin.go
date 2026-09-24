@@ -18,7 +18,7 @@ type Plugin struct {
 	worldPlugin *world.Plugin
 	defs        []def
 	originals   *originals
-	onIdle      []func(t plugin.Tick, id uid.UID64)
+	idlers      plugin.EachHost[Idling]
 	system      *effectSystem
 	module      *module
 }
@@ -29,7 +29,7 @@ var _ plugin.Serializable = (*Plugin)(nil)
 // NewPlugin builds the effects plugin over worldPlugin.
 func NewPlugin(worldPlugin *world.Plugin) *Plugin {
 	p := &Plugin{worldPlugin: worldPlugin, originals: newOriginals()}
-	p.system = newEffectSystem(worldPlugin, &p.defs, p.originals, &p.onIdle)
+	p.system = newEffectSystem(worldPlugin, &p.defs, p.originals, &p.idlers)
 	return p
 }
 
@@ -65,10 +65,6 @@ func (p *Plugin) Dispel(id uid.UID64, effect ID) { p.system.dispel(id, effect) }
 
 // Has reports whether id is under effect.
 func (p *Plugin) Has(id uid.UID64, effect ID) bool { return p.system.has(id, effect) }
-
-// OnIdle adds what happens once an entity's last effect ends — the board lets a cell entity go,
-// a game reacts; every listener is told, in the order added.
-func (p *Plugin) OnIdle(fn func(t plugin.Tick, id uid.UID64)) { p.onIdle = append(p.onIdle, fn) }
 
 func (p *Plugin) lasts(effect ID) time.Duration {
 	if d := p.defs[effect].lasts; d > 0 {
@@ -107,10 +103,13 @@ func (p *Plugin) Serializable() plugin.Serializable { return p }
 // Persisted returns the saved originals for Persistence.Save and Load.
 func (p *Plugin) Persisted() []any { return []any{&p.originals.byEntity} }
 
-// RegisterBehavior reports ErrUnhostedBehavior — effects host no behaviors; cast them from others'.
+// RegisterBehavior hosts a plugin.Each of Idling, run once for an entity whose last effect ended;
+// call before Use.
 func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
 	for _, b := range behaviors {
-		return fmt.Errorf("%w: %T in %s", plugin.ErrUnhostedBehavior, b, p.Name())
+		if err := p.idlers.Add(b); err != nil {
+			return fmt.Errorf("%w in %s — it takes Each for Idling", err, p.Name())
+		}
 	}
 	return nil
 }

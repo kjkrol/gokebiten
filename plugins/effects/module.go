@@ -29,4 +29,6 @@ func (m *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
 func (m *module) SetupSystems() []goke.System { return nil }
 
 // LoadComps lists the component types effects owns — see [goke.CompProvider].
-func (m *module) LoadComps() []goke.CompToken { return []goke.CompToken{goke.LoadComp[Active]()} }
+func (m *module) LoadComps() []goke.CompToken {
+	return []goke.CompToken{goke.LoadComp[Active](), goke.LoadComp[Idle]()}
+}

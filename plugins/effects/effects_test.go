@@ -52,8 +52,9 @@ type rig struct {
 	look    goke.Comp[world.Appearance]
 	marks   goke.OptComp[plugin.Tags[moods]]
 	active  goke.OptComp[effects.Active]
+	idle    goke.OptComp[effects.Idle]
 	casting func(cb *goke.CmdBuf)
-	idle    int
+	idled   []uid.UID64 // whom the hosted Idling behavior heard of, in order
 }
 
 // newRig builds the rig; define adds effects before Install and may read the rig's tags.
@@ -66,8 +67,11 @@ func newRig(t *testing.T, withFamily bool, define func(r *rig)) *rig {
 	})
 	r.angry = r.w.Kinds().DefineTag[moods]("angry")
 	r.fx = effects.NewPlugin(r.w)
-	r.fx.OnIdle(func(plugin.Tick, uid.UID64) { r.idle++ })
-	r.fx.OnIdle(func(plugin.Tick, uid.UID64) { r.idle += 10 }) // a second listener is told as well
+	if err := r.fx.RegisterBehavior(plugin.Each[world.Steering](func(_ plugin.Tick, _ *world.Steering, i effects.Idling) {
+		r.idled = append(r.idled, i.ID)
+	})); err != nil {
+		t.Fatal(err)
+	}
 	define(r)
 
 	ctx := &installCtx{ecs: goke.New()}
@@ -96,7 +100,7 @@ func newRig(t *testing.T, withFamily bool, define func(r *rig)) *rig {
 		systems = append(systems, produce()...)
 	}
 	systems = append(systems, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		r.query = si.NewQueryBuilder(&r.base, &r.steer, &r.look).Optional(&r.marks, &r.active).Build()
+		r.query = si.NewQueryBuilder(&r.base, &r.steer, &r.look).Optional(&r.marks, &r.active, &r.idle).Build()
 	}})
 	ctx.ecs.Setup(systems...)
 	caster := ctx.ecs.RegSys(goke.SystemFn{OnUpdate: func(cb *goke.CmdBuf, _ time.Duration) {
@@ -140,6 +144,15 @@ func (r *rig) state() (speed float64, sprite uint8, angry bool, active bool) {
 	return
 }
 
+// idleMarked reports whether the entity carries Idle right now.
+func (r *rig) idleMarked() bool {
+	marked := false
+	for r.query.All(); r.query.Next(); {
+		marked = r.idle.Present(r.query.Cursor())
+	}
+	return marked
+}
+
 func TestEffects_GrantAndAlterHoldForLastsThenRevert(t *testing.T) {
 	var rage effects.ID
 	r := newRig(t, true, func(r *rig) {
@@ -162,8 +175,38 @@ func TestEffects_GrantAndAlterHoldForLastsThenRevert(t *testing.T) {
 	if speed, sprite, angry, active := r.state(); speed != 10 || sprite != 0 || angry || active {
 		t.Errorf("after its time: speed %v sprite %d angry %v active %v, want 10, 0, false, false", speed, sprite, angry, active)
 	}
-	if r.idle != 11 {
-		t.Errorf("OnIdle listeners tallied %d, want 11: each told once", r.idle)
+	if len(r.idled) != 1 || r.idled[0] != r.id {
+		t.Errorf("the Idling behavior heard %v, want the entity once", r.idled)
+	}
+}
+
+func TestEffects_IdleMarksTheEntityForOneTickAfterItsLastEffect(t *testing.T) {
+	var blink effects.ID
+	r := newRig(t, false, func(r *rig) {
+		blink = r.fx.Define("blink", effects.Spec{effects.Lasts(tick), effects.Alter(func(a *world.Appearance) { a.SpriteID = 3 })})
+	})
+	r.cast(blink)
+	r.tick() // lands and begins
+	if r.idleMarked() {
+		t.Fatal("Idle while the effect runs")
+	}
+	r.tick() // its time is up: Active goes, Idle comes
+	if _, _, _, active := r.state(); active || !r.idleMarked() {
+		t.Fatalf("after the effect: active %v, idle %v; want no Active and Idle on", active, r.idleMarked())
+	}
+	if len(r.idled) != 0 {
+		t.Errorf("heard %v before the Idle pass, want nothing yet", r.idled)
+	}
+	r.tick() // the Idle pass: behaviors hear, the mark goes
+	if r.idleMarked() {
+		t.Error("Idle still on after its tick")
+	}
+	if len(r.idled) != 1 {
+		t.Errorf("heard %v, want the entity once", r.idled)
+	}
+	r.tick()
+	if len(r.idled) != 1 {
+		t.Errorf("heard %v after another tick, want still once", r.idled)
 	}
 }
 

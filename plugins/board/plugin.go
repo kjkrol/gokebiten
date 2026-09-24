@@ -8,7 +8,6 @@ import (
 	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/collision"
-	"github.com/kjkrol/gram/plugins/effects"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/render"
 	"github.com/kjkrol/uid"
@@ -40,7 +39,6 @@ type Plugin struct {
 
 	worldPlugin *world.Plugin
 	collision   *collision.Plugin
-	effects     *effects.Plugin
 	module      *module
 	standing    plugin.EachHost[Standing]
 	body        plugin.Tag[Family]
@@ -83,9 +81,6 @@ func (p *Plugin) Install(ctx plugin.Installer) error {
 		typeID := p.worldPlugin.Kinds().Reserve("board.terrain")
 		p.body = p.worldPlugin.Kinds().DefineTag[Family]("board.body")
 		p.module.bodies = newTerrainBodySystem(p.Res.Logic.Board, p.worldPlugin, typeID, p.body)
-	}
-	if p.effects != nil {
-		p.effects.OnIdle(func(t plugin.Tick, id uid.UID64) { p.DropCellEntity(t.CmdBuf, id) })
 	}
 	ctx.UseModule(p.module)
 	return nil
@@ -141,22 +136,12 @@ func (p *Plugin) WithCollision(c *collision.Plugin) *Plugin {
 	return p
 }
 
-// WithEffects lets the board look after its cell entities: once one's last effect ends, the
-// board lets it go. Call before Use.
-func (p *Plugin) WithEffects(fx *effects.Plugin) *Plugin {
-	if fx == nil {
-		panic("board: WithEffects needs the effects plugin")
-	}
-	p.effects = fx
-	return p
-}
-
 // CellEntity is the entity standing for cell c — found, or spawned over the cell with a [Cell]
 // and a [Ground] — so an effect cast on it is an effect on the cell's terrain.
 func (p *Plugin) CellEntity(c CellID) uid.UID64 { return p.module.cells.entity(c) }
 
 // DropCellEntity despawns a cell entity, and does nothing for any other entity; the terrain keeps
-// what its Ground last said. Built WithEffects, the board calls it itself.
+// what its Ground last said. The board does it itself once the entity's last effect ended.
 func (p *Plugin) DropCellEntity(cb *goke.CmdBuf, id uid.UID64) { p.module.cells.drop(cb, id) }
 
 // Body is the tag every terrain body carries, in board's tag Family; zero without WithCollision.
