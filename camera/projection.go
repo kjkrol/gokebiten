@@ -1,5 +1,7 @@
 package camera
 
+import "math"
+
 // Projection is how a world point at a height lands on the screen at zoom 1, with the world's
 // origin at the screen's: the mapping a Camera draws through, pure arithmetic without a window.
 type Projection interface {
@@ -62,8 +64,11 @@ func (p Isometric) Unproject(sx, sy, z float32) (float32, float32) {
 	return (a + b) / 2 * p.Cell, (b - a) / 2 * p.Cell
 }
 
-// Depth is the world diagonal x + y in cells: rows further back are smaller; a height adds a
-// hair, so what stands on a tile follows it.
-func (p Isometric) Depth(x, y, z float32) float32 { return (x+y)/p.Cell + z*1e-4 }
+// Depth is the diagonal row of the cell under the point: rows further back are smaller, and
+// everything in one cell ties with its tile, so what a Sorted layer submits after the terrain —
+// the entities standing on it — is drawn over it and under the row in front.
+func (p Isometric) Depth(x, y, _ float32) float32 {
+	return float32(math.Floor(float64(x/p.Cell))) + float32(math.Floor(float64(y/p.Cell)))
+}
 
 func (Isometric) Wraps() bool { return false }

@@ -35,7 +35,7 @@ func TestIsometric_UnprojectInvertsProject(t *testing.T) {
 	}
 }
 
-func TestIsometric_DepthGrowsAlongTheDiagonalAndAHairWithHeight(t *testing.T) {
+func TestIsometric_DepthIsTheRowOfTheCellUnderThePoint(t *testing.T) {
 	back, front := iso.Depth(0, 0, 0), iso.Depth(32, 32, 0)
 	if back >= front {
 		t.Errorf("depth at the origin %v is not behind (32, 32) %v", back, front)
@@ -43,8 +43,8 @@ func TestIsometric_DepthGrowsAlongTheDiagonalAndAHairWithHeight(t *testing.T) {
 	if iso.Depth(32, 0, 0) != iso.Depth(0, 32, 0) {
 		t.Error("two cells on the same row differ in depth")
 	}
-	if tile, standing := iso.Depth(32, 32, 0), iso.Depth(32, 32, 2); standing <= tile || standing >= iso.Depth(64, 32, 0) {
-		t.Errorf("a thing 2 up on a tile has depth %v, want just past the tile's %v and before the next row", standing, tile)
+	if tile, standing := iso.Depth(48, 48, 0), iso.Depth(40, 60, 30); standing != tile || standing >= iso.Depth(64, 48, 0) {
+		t.Errorf("a thing anywhere in a cell has depth %v, want its tile's %v, before the next row", standing, tile)
 	}
 }
 

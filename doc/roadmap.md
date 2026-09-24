@@ -19,7 +19,8 @@ behind each item lives in [movement.md](movement.md) and [views.md](views.md).
   through `Sight.Blockers`, so a hawk on `Air` looks over walls, forests and walkers and still
   sees them — [movement §12](movement.md). Heights: `world.Config{Quasi3D: true}`, `world.Z`,
   the board's altitude raster as the world's `Ground`, sight from `Sight.Eye` over walls, forests
-  and hills; collision stays on planes — [movement §14](movement.md).
+  and hills; collision stays on planes — [movement §14](movement.md). An isometric view:
+  `camera.Projection`, `render.Sorted`, relief with sloping ground, billboards, `island-isometric-demo`.
 - Tags as bits of families, one component per family; `Between(a, b, fn)` by value; behaviors
   built by the hosting plugin (`vision.Between`, `board.Each`, `world.Every`), `plugin/host` for
   plugin authors;

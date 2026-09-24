@@ -45,6 +45,9 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
   cells' diamonds and the selection highlight rounds the diamond under the unit
   (`selection.HighlightStyle.Draw` takes the altitude). `render.QuadBatch.AppendCorners`,
   `render.ProjectCorners`, `render.Billboard`.
+- `island-isometric-demo`: the island in a Quasi3D world through an isometric camera — hills 20 and
+  mountains 40 up with sloping sides, forests 8 tall, units upright, a hawk 40 up; `island-demo`
+  gains sight cones and the hawk on the Air plane.
 - On a square grid the ground slopes between cells: `Board.Corners` (each corner the mean of the
   cells meeting there), `GroundAt` interpolated, tiles drawn tilted, faces only where a top stands
   above its neighbour's. `Grid.Coords` inverts `CellIndex`.

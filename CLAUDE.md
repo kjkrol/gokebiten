@@ -35,6 +35,7 @@ make demo-navigation-vision                                        # board + nav
 make demo-navigation-vision-hex                                    # the same on a hex board
 make demo-effect                                                   # an ice witch: frost and frozen as effects
 make demo-island                                                   # a map larger than the window under a moving camera
+make demo-island-isometric                                         # the island in Quasi3D through an isometric camera: relief, blocks, billboards
 make demo-scenes                                                  # go mod tidy && run examples/scenes-demo
 make demo-vision                                                  # go mod tidy && run examples/vision-demo
 make demo-minimal                                                 # the README example

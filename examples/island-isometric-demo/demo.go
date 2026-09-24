@@ -1,8 +1,8 @@
-// Command island-demo is a map larger than the window: an island of fields, forests, slow hills
-// and slower mountains in a sea that drowns whoever is pushed in, a road round it, units under
-// orders with sight cones, and a hawk on the Air plane whose cone nothing on the ground dims.
-// Scroll with the wheel, drag with the middle button or push the cursor to an edge to move the
-// camera.
+// Command island-isometric-demo is the island of island-demo in a Quasi3D world seen through an
+// isometric camera, Transport Tycoon's way: hills 20 and mountains 40 up with sloping sides,
+// forests standing 8 tall, units drawn upright on the ground and a hawk 40 up whose cone looks
+// over everything a walker's stops at. Scroll with the wheel, drag with the middle button or push
+// the cursor to an edge to move the camera.
 package main
 
 import (
@@ -15,6 +15,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gram/camera"
 	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/game"
 	"github.com/kjkrol/gram/plugin"
@@ -47,7 +48,7 @@ const (
 	// MaxEntCount is the units plus the terrain bodies the forests make.
 	MaxEntCount = 400
 
-	saveBasePath = "island-demo"
+	saveBasePath = "island-isometric-demo"
 )
 
 type State struct{ Saves int }
@@ -63,7 +64,7 @@ func NewDemo() *Demo { return &Demo{stage: &mainStage{}} }
 
 func (d *Demo) Props() game.Props {
 	return game.Props{
-		Title:       "gram — an island under a moving camera",
+		Title:       "gram — an island in isometric relief",
 		ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight,
 		TargetTPS: TPS,
 	}
@@ -91,7 +92,7 @@ type mainStage struct {
 
 var _ game.Stage = (*mainStage)(nil)
 
-func (s *mainStage) Name() string { return "island-demo" }
+func (s *mainStage) Name() string { return "island-isometric-demo" }
 
 func (s *mainStage) Stack() game.Scenes { return s.stack }
 
@@ -99,7 +100,12 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	s.world = ctx.UseWorld(world.Config{
 		Space:    world.SpaceCfg{Width: WorldWidth, Height: WorldHeight},
 		Entities: world.EntitiesCfg{MaxCount: MaxEntCount, MinSize: EntitySize, MaxSize: EntitySize},
+		Camera:   camera.Config{ViewportWidth: ScreenWidth, ViewportHeight: ScreenHeight, Projection: camera.Isometric{Cell: CellSize, HeightUnit: 1}},
+		Quasi3D:  true,
 	})
+	// Start over the island's middle rather than the world's corner.
+	s.world.Camera().MoveTo(WorldWidth/2, WorldHeight/2)
+	s.world.Camera().Pan(-ScreenWidth/2, -ScreenHeight/2)
 
 	s.collision = collision.NewPlugin(s.world)
 	if err := ctx.Use(s.collision); err != nil {
@@ -111,9 +117,9 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	s.board.CellKindDict().Create(
 		board.CellKind{Name: board.Named("water"), Cost: 1, Allows: board.Water | board.Air},
 		board.CellKind{Name: board.Named("field"), Cost: 1.5, Allows: board.Land | board.Air}.Costing(board.Air, 1),
-		board.CellKind{Name: board.Named("forest"), Cost: 3, Allows: board.Land | board.Air, Veil: 0.6, Veils: board.Land}.Costing(board.Air, 1),
-		board.CellKind{Name: board.Named("hills"), Cost: 4, Allows: board.Land | board.Air}.Costing(board.Air, 1),
-		board.CellKind{Name: board.Named("mountain"), Cost: 8, Allows: board.Land | board.Air}.Costing(board.Air, 1),
+		board.CellKind{Name: board.Named("forest"), Cost: 3, Allows: board.Land | board.Air, Veil: 0.6, Height: 8}.Costing(board.Air, 1),
+		board.CellKind{Name: board.Named("hills"), Cost: 4, Allows: board.Land | board.Air, Altitude: 20}.Costing(board.Air, 1),
+		board.CellKind{Name: board.Named("mountain"), Cost: 8, Allows: board.Land | board.Air, Altitude: 40}.Costing(board.Air, 1),
 		board.CellKind{Name: board.Named("road"), Cost: 1, Allows: board.Land | board.Air},
 	)
 	if err := s.board.RegisterBehavior(board.Each[board.Mover](s.drown)); err != nil {
@@ -182,19 +188,22 @@ type unit struct{ start, target board.CellID }
 // defineKinds says what this game's entities are, fresh or restored.
 func (s *mainStage) defineKinds() {
 	brd := s.board.Res.Logic.Board
-	units := board.NewUnits[unit](s.board, board.Shape{Size: EntitySize}, func(u unit) geom.Vec { return brd.CellCenter(u.start) })
+	// Every unit stands 2 tall; the board writes where it stands in height, the game only how high
+	// its eye is.
+	units := board.NewUnits[unit](s.board, board.Shape{Size: EntitySize, Height: 2}, func(u unit) geom.Vec { return brd.CellCenter(u.start) })
 	order := comp.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} })
-	sight := func(blockers board.Domain) comp.Comp {
-		return comp.Const(vision.Sight{Facing: geom.NewVec(1, 0), HalfAngle: sightHalf, Radius: sightRadius, Blockers: world.Layers(blockers)})
+	sight := func(eye float64) comp.Comp {
+		return comp.Const(vision.Sight{Facing: geom.NewVec(1, 0), HalfAngle: sightHalf, Radius: sightRadius, Eye: eye})
 	}
 	s.unit = units.Define("unit", board.Mover{Domain: board.Land}, world.Steering{MaxSpeed: UnitSpeed, Accel: UnitSpeed * 2, Brake: UnitSpeed * 4, V0: UnitSpeed / 2, TurnRate: 0.15},
 		order, comp.Tagged(s.selection.Tags().Selectable, s.selection.Tags().Selected),
-		sight(board.Land), comp.Const(vision.SightOutline{}),
+		sight(1.5), comp.Const(vision.SightOutline{}),
 	)
-	// The hawk is on the Air plane alone: nothing on the ground pushes it or dims its sight.
-	s.hawk = units.Define("hawk", board.Mover{Domain: board.Air}, world.Steering{MaxSpeed: UnitSpeed * 1.5, Accel: UnitSpeed * 2, Brake: UnitSpeed * 4, V0: UnitSpeed / 2, TurnRate: 0.1},
+	// The hawk flies 40 above the ground on the Air plane: its eye looks over the hills and the
+	// forests a walker's cone climbs and stops at.
+	s.hawk = units.Define("hawk", board.Mover{Domain: board.Air, Lift: 40}, world.Steering{MaxSpeed: UnitSpeed * 1.5, Accel: UnitSpeed * 2, Brake: UnitSpeed * 4, V0: UnitSpeed / 2, TurnRate: 0.1},
 		order, comp.Tagged(s.selection.Tags().Selectable),
-		sight(board.Air), comp.Const(vision.SightOutline{}),
+		sight(1), comp.Const(vision.SightOutline{}),
 	)
 }
 
@@ -278,7 +287,8 @@ func (m *mainScene) Layers() []render.Renderer {
 	s.players.WithRenderer(nil)
 
 	count := func() int { return s.world.Res.Telemetry.Count }
-	layers := append([]render.Renderer{s.board.Renderer(), s.vision.Renderer(), s.world.Renderer()}, s.players.Renderers()...)
+	// The terrain and the entities are one picture sorted by depth; the cones and the overlays go on top.
+	layers := append([]render.Renderer{render.NewSorted(s.board.Renderer(), s.world.Renderer()), s.vision.Renderer()}, s.players.Renderers()...)
 	return append(layers, render.NewTelemetryRenderer(&m.tps.Ticks, count, &m.none))
 }
 

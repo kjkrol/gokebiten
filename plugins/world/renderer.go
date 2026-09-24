@@ -53,9 +53,9 @@ func (s *Renderer) Draw(screen *ebiten.Image) {
 	s.batch.flush(screen)
 }
 
-// Submit hands every drawn entity to sink at the depth of its centre, a hair past the ground it
-// stands on: its box lifted to its altitude, or through an isometric camera a billboard the size
-// of its box standing on its centre.
+// Submit hands every drawn entity to sink at the depth of its centre, which ties with the tile it
+// stands on and follows it: its box lifted to its altitude, or through an isometric camera a
+// billboard the size of its box standing on its centre.
 func (s *Renderer) Submit(sink *render.Sink) {
 	_, iso := s.camera.Projection().(camera.Isometric)
 	s.each(func(i int, alt float32, sprite render.SpriteID) {
