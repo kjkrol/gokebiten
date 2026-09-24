@@ -30,6 +30,12 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
   domain may not keeps its order.
 - The camera pans in screen pixels at any zoom.
 
+**Isometric view**
+- `camera.Projection`: `TopDown` (the default, unchanged) and `Isometric` (Transport Tycoon's 2:1
+  diamonds, heights lifting a point); `Camera.Project/Unproject/Depth` and `Projection()`,
+  `camera.Config.Projection`. An isometric camera keeps a screen window over the projected world
+  and refuses a wrapping one.
+
 **Heights**
 - `world.Config{Quasi3D: true}` gives a world heights; the default is flat and no plugin guesses
   the mode from the data. Entities carry `world.Z{Altitude, Height}`; a flat world refuses a Z.
