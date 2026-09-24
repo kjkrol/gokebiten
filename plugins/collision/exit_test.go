@@ -25,7 +25,11 @@ func TestCollision_ABoxPushedThroughAnOpenEdgeIsReportedToTheWorld(t *testing.T)
 		Entities: world.EntitiesCfg{MaxCount: 4, MinSize: 10, MaxSize: 10},
 	})
 	var left []uid.UID64
-	w.OnExit(func(_ plugin.Tick, id uid.UID64) { left = append(left, id) })
+	if err := w.RegisterBehavior(plugin.Each[world.Appearance](func(_ plugin.Tick, _ *world.Appearance, l world.Leaving) {
+		left = append(left, l.ID)
+	})); err != nil {
+		t.Fatal(err)
+	}
 
 	c := collision.NewPlugin(w)
 	ctx := &installCtx{ecs: goke.New()}
@@ -66,7 +70,12 @@ func TestCollision_ABoxPushedThroughAnOpenEdgeIsReportedToTheWorld(t *testing.T)
 		ctx.ecs.Tick(time.Second / 60)
 	}
 
-	if len(left) != 1 {
-		t.Fatalf("OnExit heard %v, want exactly the box the wall pushed out", left)
+	if len(left) == 0 {
+		t.Fatal("no Leaving heard, want the box the wall pushed out")
+	}
+	for _, id := range left {
+		if id != left[0] {
+			t.Fatalf("heard %v, want one and the same box every tick it is out", left)
+		}
 	}
 }

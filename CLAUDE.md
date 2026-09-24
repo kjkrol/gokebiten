@@ -166,10 +166,11 @@ shows how much of it is boilerplate vs. real behavior.
   calls it gets no world. `SpaceCfg.Edges` (`aabbworld.Edges`) sets the edge rule
   per axis — `aabbworld.Torus`, `WrapX`/`WrapY` alone, `OpenX`/`OpenY`, a closed
   axis by default: a box stops whole at a closed edge, wraps at a wrapping one,
-  and may leave by an open one. An entity wholly past an open edge is handed,
-  once, to `world.Plugin.OnExit(fn)` — despawned when no handler is set; a
-  sibling plugin that moves boxes itself (collision's solver) reports through
-  `world.Plugin.Tracked`:
+  and may leave by an open one. An entity wholly past an open edge carries
+  `world.Outside`, put on by whoever moved it there (`MoveSystem`, collision's
+  solver); every tick it does, `plugin.Each` behaviors of a `world.Leaving`
+  registered on the world hear of it, and with none it is despawned; back inside
+  it loses the mark.
   `Base` — the one component every entity carries, holding its `Position`,
   `Velocity`, `TypeID` and `Caps` (the `aabbworld.Capability` bits the space
   indexes it under; `collision` writes them), so a host hands it to whatever it
@@ -224,7 +225,7 @@ shows how much of it is boilerplate vs. real behavior.
   and is its `Handler`) over the space's items: the engine pairs up whoever carries
   `CanCollide` and may touch within a step, tests the pairs exactly, pushes the overlapping apart and reports each
   pushed box (`Moved`), which the `CollisionSystem` writes back to `Base.Pos` by `Seek` —
-  `Left()` names whoever it pushed out through an open edge. Every overlap first
+  whoever it pushed out through an open edge (`Left()`) is marked `world.Outside`. Every overlap first
   passes the `CollisionSystem`'s `Touch`: both sides are resolved by `Seek`, and a side
   that lost its `Collider` since the last rebuild vetoes the pair, is marked
   `Plain`, and the space is rebuilt after the tick (so it partners nobody again); then

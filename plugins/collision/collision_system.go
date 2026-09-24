@@ -53,7 +53,7 @@ type CollisionSystem struct {
 	pair     pairSides
 	contacts []pairSides
 	between  *plugin.PairHost[Meeting]
-	tracked  func(t plugin.Tick, id uid.UID64, inside bool)
+	outside  goke.CompID // world.Outside, for whoever the solver pushes out by an open edge
 	shapes   ShapeTest
 
 	tick  plugin.Tick
@@ -78,13 +78,14 @@ func NewCollisionSystem(space *aabbworld.Space) *CollisionSystem {
 }
 
 func newCollisionSystem(space *aabbworld.Space, between *plugin.PairHost[Meeting], each *plugin.EachHost[Struck], shapes ShapeTest) *CollisionSystem {
-	d := &CollisionSystem{space: space, between: between, each: each, shapes: shapes, tracked: func(plugin.Tick, uid.UID64, bool) {}}
+	d := &CollisionSystem{space: space, between: between, each: each, shapes: shapes}
 	d.engine = space.CollideEngine((*handler)(d), collide.Config{Reach: world.StepReach, Iterations: solverIterations})
 	d.struckAt = d.struck
 	return d
 }
 
 func (d *CollisionSystem) Init(si *goke.SysInit) {
+	d.outside = si.RegComp[world.Outside]()
 	qb := si.NewQueryBuilder(&d.base, &d.collider).Optional(&d.physics)
 	d.each.Bind(qb)
 	d.walk = qb.Build()
@@ -106,7 +107,7 @@ func (d *CollisionSystem) Update(cb *goke.CmdBuf, dt time.Duration) {
 	d.lookupHot, d.stale = false, false
 	d.engine.Tick()
 	for _, id := range d.engine.Left() {
-		d.tracked(d.tick, id, false)
+		cb.AddOne(id, d.outside, world.Outside{})
 	}
 	if d.stale {
 		d.rebuild()

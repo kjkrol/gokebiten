@@ -32,17 +32,18 @@ type module struct {
 	// despawned is this tick's removals.
 	despawned map[uid.UID64]struct{}
 	items     []aabbworld.Item
-	exits     exits
 
 	kinds *Kinds
 
 	behaviors         []Behavior
 	behaviorRunnables []goke.Runnable
+	leavers           *plugin.EachHost[Leaving]
 
 	modifiers        []SpeedModifier
 	steeringRunnable goke.Runnable
 	velocityRunnable goke.Runnable
 	moveRunnable     goke.Runnable
+	exitRunnable     goke.Runnable
 
 	// views are refreshed after movement each tick — see Plugin.NewView.
 	views        []*View
@@ -53,7 +54,7 @@ var _ goke.Module = (*module)(nil)
 
 // newModule builds the world's topology and spatial index from cfg.
 func newModule(cfg Config) *module {
-	return &module{config: cfg, space: buildSpace(cfg), despawned: make(map[uid.UID64]struct{})}
+	return &module{config: cfg, space: buildSpace(cfg), despawned: make(map[uid.UID64]struct{}), leavers: &plugin.EachHost[Leaving]{}}
 }
 
 // =================================================================
@@ -69,16 +70,14 @@ func (w *module) RegSystems(ecs *goke.ECS) {
 		w.behaviorRunnables = append(w.behaviorRunnables, ecs.RegSys(b))
 	}
 	w.steeringRunnable = ecs.RegSys(NewSteeringSystem())
-	velocitySystem := NewVelocitySystem(w.modifiers)
-	moveSystem := NewMoveSystem(w.space)
-	moveSystem.exits = &w.exits
-	moveSystem.leave = w.leave
-	w.velocityRunnable = ecs.RegSys(velocitySystem)
-	w.moveRunnable = ecs.RegSys(moveSystem)
+	w.velocityRunnable = ecs.RegSys(NewVelocitySystem(w.modifiers))
+	w.moveRunnable = ecs.RegSys(NewMoveSystem(w.space))
+	w.exitRunnable = ecs.RegSys(newExitSystem(w, w.leavers))
 	w.viewRunnable = ecs.RegSys(NewViewSystem(w.space, &w.views, w.config.Space.Width, w.config.Space.Height))
 }
 
-// RunPlan runs world's tick: decisions, then speed modifiers, then movement, then the views.
+// RunPlan runs world's tick: decisions, speed modifiers, movement, then the leavers and the views.
+// The sync after movement lands the Outside marks, so a leaver is dealt with the tick it left.
 func (w *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	clear(w.despawned)
 	for _, b := range w.behaviorRunnables {
@@ -88,6 +87,8 @@ func (w *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	ctx.Run(w.steeringRunnable, d)
 	ctx.Run(w.velocityRunnable, d)
 	ctx.Run(w.moveRunnable, d)
+	ctx.Sync()
+	ctx.Run(w.exitRunnable, d)
 	ctx.Run(w.viewRunnable, d)
 	ctx.Sync()
 }
@@ -101,6 +102,7 @@ func (w *module) LoadComps() []goke.CompToken {
 		goke.LoadComp[Base](),
 		goke.LoadComp[Appearance](),
 		goke.LoadComp[Steering](),
+		goke.LoadComp[Outside](),
 	}, w.declared...)
 }
 
@@ -173,25 +175,9 @@ func (w *module) despawn(cb *goke.CmdBuf, id uid.UID64) {
 		return
 	}
 	w.despawned[id] = struct{}{}
-	w.exits.forget(id)
 	cb.RemoveOne(id)
 	w.spawnedCount--
 	w.telemetry.Count--
-}
-
-// tracked takes what the space said of id's box and handles each leaver once.
-func (w *module) tracked(t plugin.Tick, id uid.UID64, inside bool) {
-	if w.exits.left(id, inside) {
-		w.leave(t, id)
-	}
-}
-
-func (w *module) leave(t plugin.Tick, id uid.UID64) {
-	if w.exits.onExit == nil {
-		w.despawn(t.CmdBuf, id)
-		return
-	}
-	w.exits.onExit(t, id)
 }
 
 // populate queues a spawn of one entity of k per row, each row feeding k's Loads.

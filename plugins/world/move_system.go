@@ -4,9 +4,6 @@ import (
 	"math"
 	"time"
 
-	"github.com/kjkrol/gram/plugin"
-	"github.com/kjkrol/uid"
-
 	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
@@ -14,24 +11,25 @@ import (
 
 var _ goke.System = (*MoveSystem)(nil)
 
-// MoveSystem integrates each entity's already speed-scaled Velocity into
-// Position under the space's edge rules, then rebuilds the space from every Base.
+// MoveSystem integrates each entity's already speed-scaled Velocity into Position under the
+// space's edge rules, marks whoever left by an open edge Outside, then rebuilds the space.
 type MoveSystem struct {
 	space     *aabbworld.Space
 	moveQuery *goke.Query
 	base      goke.Comp[Base]
-	exits     *exits
-	leave     func(t plugin.Tick, id uid.UID64)
+	outside   goke.OptComp[Outside]
+	outsideID goke.CompID
 	items     []aabbworld.Item
 }
 
 // NewMoveSystem builds world's movement system; no entity moves past its Position.MaxStep a tick.
 func NewMoveSystem(space *aabbworld.Space) *MoveSystem {
-	return &MoveSystem{space: space, exits: &exits{}, leave: func(plugin.Tick, uid.UID64) {}}
+	return &MoveSystem{space: space}
 }
 
 func (s *MoveSystem) Init(si *goke.SysInit) {
-	s.moveQuery = si.NewQueryBuilder(&s.base).Build()
+	s.outsideID = si.RegComp[Outside]()
+	s.moveQuery = si.NewQueryBuilder(&s.base).Optional(&s.outside).Build()
 }
 
 func (s *MoveSystem) Update(cb *goke.CmdBuf, d time.Duration) {
@@ -40,15 +38,15 @@ func (s *MoveSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 	for s.moveQuery.Next() {
 		cursor := s.moveQuery.Cursor()
 		bases := s.base.Slice(cursor)
+		marked := s.outside.Present(cursor)
 		for i, id := range cursor.IDs {
 			rate := bases[i].Vel.Delta()
 			step := clampStep(geom.NewVec(rate.X*dt, rate.Y*dt), bases[i].Pos.MaxStep())
 			if step.X == 0 && step.Y == 0 {
 				continue
 			}
-			inside := s.space.Move(&bases[i].Pos.AABB, step)
-			if (!inside || !s.exits.quiet()) && s.exits.left(id, inside) {
-				s.leave(plugin.Tick{CmdBuf: cb, Now: time.Now(), Dt: d}, id)
+			if inside := s.space.Move(&bases[i].Pos.AABB, step); !inside && !marked {
+				cb.AddOne(id, s.outsideID, Outside{})
 			}
 		}
 	}

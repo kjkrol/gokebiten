@@ -142,14 +142,17 @@ func (p *Plugin) EventHandler() control.EventHandler {
 // Serializable returns world's persistable state (its camera's Viewport/Zoom).
 func (p *Plugin) Serializable() plugin.Serializable { return &p.Res }
 
-// RegisterBehavior adds world.Behaviors to the decision pass run before movement, in order.
+// RegisterBehavior adds world.Behaviors to the decision pass run before movement, in order, and
+// hosts a plugin.Each of Leaving, run every tick for every entity Outside an open edge.
 func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
 	for _, b := range behaviors {
-		system, ok := b.(Behavior)
-		if !ok {
-			return fmt.Errorf("%w: %T in %s", plugin.ErrUnhostedBehavior, b, p.Name())
+		if system, ok := b.(Behavior); ok {
+			p.module.RegisterBehavior(system)
+			continue
 		}
-		p.module.RegisterBehavior(system)
+		if err := p.module.leavers.Add(b); err != nil {
+			return fmt.Errorf("%w in %s — it takes a world.Behavior or Each for Leaving", err, p.Name())
+		}
 	}
 	return nil
 }
@@ -212,12 +215,6 @@ func compID[T any](p *Plugin) goke.CompID {
 
 // Despawn takes an entity out of the ECS at the end of the tick.
 func (p *Plugin) Despawn(cb *goke.CmdBuf, id uid.UID64) { p.module.despawn(cb, id) }
-
-// OnExit sets what happens, once, to an entity leaving by an open edge; unset, it is despawned.
-func (p *Plugin) OnExit(fn func(t plugin.Tick, id uid.UID64)) { p.module.exits.onExit = fn }
-
-// Tracked takes what the space said of a move a sibling plugin made for id.
-func (p *Plugin) Tracked(t plugin.Tick, id uid.UID64, inside bool) { p.module.tracked(t, id, inside) }
 
 // Space returns world's shared space, rebuilt from every entity each tick after movement.
 func (p *Plugin) Space() *aabbworld.Space { return p.module.space }

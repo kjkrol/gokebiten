@@ -3,7 +3,6 @@ package collision
 import (
 	"errors"
 	"fmt"
-	"github.com/kjkrol/uid"
 	"time"
 
 	"github.com/kjkrol/aabbworld"
@@ -21,10 +20,9 @@ type module struct {
 	pairs    *plugin.PairHost[Meeting]
 	entities *plugin.EachHost[Struck]
 
-	system  goke.Runnable
-	tracked func(t plugin.Tick, id uid.UID64, inside bool)
-	shapes  ShapeTest
-	built   bool
+	system goke.Runnable
+	shapes ShapeTest
+	built  bool
 }
 
 // New builds the collision engine over space.
@@ -90,10 +88,6 @@ func host(pairs *plugin.PairHost[Meeting], entities *plugin.EachHost[Struck], be
 }
 
 func (m *module) build() {
-	system := newCollisionSystem(m.space, m.pairs, m.entities, m.shapes)
-	if m.tracked != nil {
-		system.tracked = m.tracked
-	}
-	m.system = m.ecs.RegSys(system)
+	m.system = m.ecs.RegSys(newCollisionSystem(m.space, m.pairs, m.entities, m.shapes))
 	m.built = true
 }

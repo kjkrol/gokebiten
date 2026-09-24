@@ -34,6 +34,10 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
   or until `Dispel`, `Cast`/`CastFor`/`Dispel`/`Has` by entity id, `Active` saved with the entity.
 - `plugins/world`: `Kinds.Reserve` and `Bodies` for kind-less entities; `Kinds.DefineTag`.
 - `collision.Detector` is `CollisionSystem` (`NewCollisionSystem`), as every system is named.
+- Leaving by an open edge is a component, `world.Outside`, not a set: whoever moves the box out
+  marks it, `plugin.Each` behaviors of a `world.Leaving` registered on the world hear of it every
+  tick it is out (despawned with none), and it is unmarked once back inside. `world.Plugin.OnExit`
+  and `Tracked` are gone.
 - `vision`: sight through terrain — an entity carrying `Transparency` dims sight instead of
   cutting it (aabbworld v1.6.0: a ray spends its radius as a budget, a forest at 0.6 takes 2.5×
   its depth), `Sight.Clear` looks over the veils (a flyer), what cuts sight still cuts. A

@@ -36,7 +36,6 @@ func (p *Plugin) Name() string { return "gram.collision" }
 
 func (p *Plugin) Install(ctx plugin.Installer) error {
 	p.module = newModule(p.worldPlugin.Space(), ctx.ECS(), &p.pairs, &p.entities)
-	p.module.tracked = p.worldPlugin.Tracked
 	p.module.shapes = p.shapes
 	ctx.UseModule(p.module)
 	return nil

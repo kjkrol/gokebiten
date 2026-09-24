@@ -12,7 +12,7 @@
 // Tick over the space's items, with the CollisionSystem as its Handler: the engine pairs up whoever may
 // touch within a step, puts each overlapping pair to Touch, pushes the confirmed ones apart and
 // reports each pushed box, which the CollisionSystem writes back to Base.Pos; whoever it pushed out
-// through an open edge is handed to the world's Tracked. A side that lost its Collider since the
+// through an open edge is marked world.Outside. A side that lost its Collider since the
 // last rebuild vetoes the pair, is marked Plain, and the space is rebuilt after the tick.
 //
 // # Collider and Physics
