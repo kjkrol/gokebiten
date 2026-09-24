@@ -1,4 +1,4 @@
-package players
+package control
 
 import (
 	"reflect"
@@ -12,7 +12,7 @@ import (
 type Mods struct{ Shift, Ctrl, Alt bool }
 
 // Trigger is what fires a Binding: a key, a button, a gesture. The concrete triggers are values,
-// so two bindings on one trigger are told apart at Bind.
+// so two bindings on one trigger are told apart when bound.
 type Trigger interface{ trigger() }
 
 // KeyPress fires when Key goes down with Mods held.
@@ -41,7 +41,7 @@ type Wheel struct{}
 // Context.Delta is by how much.
 type ButtonHeld struct{ Button ebiten.MouseButton }
 
-// CursorAtEdge fires every tick the cursor rests within EdgeMargin of a window edge.
+// CursorAtEdge fires every tick the cursor rests near a window edge; the carrier says how near.
 type CursorAtEdge struct{}
 
 func (KeyPress) trigger()     {}
@@ -51,10 +51,11 @@ func (Wheel) trigger()        {}
 func (ButtonHeld) trigger()   {}
 func (CursorAtEdge) trigger() {}
 
-// Context is what a binding builds its command from: the player and this tick's input, in screen
-// pixels; World and WorldBox go through the player's camera.
+// Context is what a binding builds its command from: the player, its camera and this tick's input
+// in screen pixels; World and WorldBox go through the camera.
 type Context struct {
-	Player      *Player
+	Player      PlayerID
+	Camera      camera.Camera
 	Cursor      geom.Vec // where the cursor is, or where a button went down or up
 	Start       geom.Vec // where a Drag began
 	Delta       geom.Vec // cursor movement this tick
@@ -66,14 +67,14 @@ type Context struct {
 
 // World is the world point under screen position s.
 func (c Context) World(s geom.Vec) geom.Vec {
-	x, y := c.Player.Camera.FromScreen(float32(s.X), float32(s.Y))
+	x, y := c.Camera.FromScreen(float32(s.X), float32(s.Y))
 	return geom.NewVec(float64(x), float64(y))
 }
 
 // WorldBox is the world rectangle between screen points a and b, at least one unit a side and no
 // wider than what was dragged even across a wrapping seam.
 func (c Context) WorldBox(a, b geom.Vec) geom.AABB {
-	x0, y0, x1, y1 := camera.FromScreenRect(c.Player.Camera, float32(a.X), float32(a.Y), float32(b.X), float32(b.Y))
+	x0, y0, x1, y1 := camera.FromScreenRect(c.Camera, float32(a.X), float32(a.Y), float32(b.X), float32(b.Y))
 	minX, maxX := float64(min(x0, x1)), float64(max(x0, x1))
 	minY, maxY := float64(min(y0, y1)), float64(max(y0, y1))
 	return geom.NewAABBAt(geom.NewVec(minX, minY), max(maxX-minX, 1), max(maxY-minY, 1))
@@ -95,4 +96,15 @@ func Command[C any](trigger Trigger, label string, build func(c Context) (C, boo
 		cmd, ok := build(c)
 		return cmd, ok
 	}}
+}
+
+// Command is the type of command the binding issues; nil for one not built with Command.
+func (b Binding) Command() reflect.Type { return b.command }
+
+// Build is the command for c, if the binding has one to give.
+func (b Binding) Build(c Context) (any, bool) {
+	if b.build == nil {
+		return nil, false
+	}
+	return b.build(c)
 }

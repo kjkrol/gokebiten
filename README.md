@@ -76,7 +76,7 @@ and a few system libraries; Ebitengine uses cgo on most platforms).
 | **Sight** | `plugins/vision` | A `Sight` cone scanned each tick into `Seen`, nearest first; `Sighting` behaviors per observer; drawn outlines |
 | **Board and navigation** | `plugins/board`, `plugins/navigation` | Square or hex grid with terrain and occupancy; `MoveOrder` paths that re-route when terrain changes |
 | **Selection** | `plugins/selection` | A `Select` command into a `Selected` tag, with default bindings (click, marquee, shift-add) and a highlight renderer |
-| **Players** | `plugins/players` | Who acts: a camera and view per player, labelled bindings turning input into typed commands, inboxes the owning plugins drain |
+| **Players** | `plugins/players` | Who acts: a camera and view per player, the plugins' default bindings gathered and bound, input translated into typed commands the defining plugins drain |
 | **Persistence** | `game.Persistence` | Save, load and list the active Stage's ECS and every tracked value by name |
 | **Camera and rendering** | `camera`, `render` | A wrap-aware camera with zoom and pan; an atlas baked at `Close`, quad batching, cached and telemetry renderers |
 
@@ -305,9 +305,9 @@ is a bit of a family — one `plugin.Tags[F]` component per family, named throug
 given to a kind with `kind.Tagged` — so markers cost no component types of their own. Ready-made
 behaviors live in `plugins/collision/behavior` and `plugins/vision/behavior`; which tags they run
 between is the registration's to say. What a player *wants* goes the other way, as a command:
-the plugin that defines the type (`navigation.MoveTo`, `selection.Select`) listens for it on the
-`players` plugin and drains its inbox in its own pass; a player's bindings, an AI or a network
-issue them alike.
+the plugin that defines the type (`navigation.MoveTo`, `selection.Select`) is a `plugin.Commander`
+that keeps its `control.Inbox` and drains it in its own pass; the `players` plugin is built over
+the Commanders and carries what a player's bindings, an AI or a network issue.
 
 ## Kinds, spawning and saves
 
@@ -331,7 +331,7 @@ effects, [`views.md`](doc/views.md) where players and networking are headed.
 | Package | Responsibility |
 |:---|:---|
 | [`camera`](camera/doc.go) | The view onto a world: screen conversion, culling, move and zoom; wrap-aware |
-| [`control`](control/doc.go) | The input vocabulary: `InputEvents`, `KeyEvent`, `ClickEvent`, `EventHandler` |
+| [`control`](control/doc.go) | The input vocabulary: `InputEvents`, `KeyEvent`, `ClickEvent`, `EventHandler`; commands and bindings: `Inbox`, `Issued`, `Binding`, `Command`, the triggers |
 | [`render`](render/doc.go) | Drawing primitives: `Renderer`, `Atlas` baked at `Close`, `QuadBatch`, sprite drawers, cached and telemetry renderers |
 | [`plugin`](plugin/doc.go) | The extension contract: `Plugin`, `Installer`, `Tick`, `Behavior`, `Tag`/`Tags`/`Any`, `Marks`, `Serializable`, `PostLoader`, `Populator` |
 | [`plugin/host`](plugin/host/doc.go) | A plugin author's package: `Pair`/`Each`/`Every` behind a plugin's typed constructors, `PairHost` and `EachHost` that run them |
@@ -346,15 +346,15 @@ effects, [`views.md`](doc/views.md) where players and networking are headed.
 | [`plugins/effects`](plugins/effects/doc.go) | Temporary changes to entities — tags granted, components altered and restored — cast from anywhere |
 | [`plugins/navigation`](plugins/navigation/doc.go) | `MoveOrder` paths across a board, re-routing when terrain changes; right-click commands; route drawing |
 | [`plugins/selection`](plugins/selection/doc.go) | `Select` into `Selected`; default bindings; highlight renderer |
-| [`plugins/players`](plugins/players/doc.go) | Players, bindings, commands and their inboxes; `Pan` and `Zoom` |
+| [`plugins/players`](plugins/players/doc.go) | A carrier over the Commanders: players and their bindings, `Pan` and `Zoom` |
 | [`internal/engine`](internal/engine/doc.go) | The `Engine`: the Ebitengine loop, one active Stage, persistence, input capture |
 | [`gram`](doc.go) (public) | `Run`; the package you import. The root `doc.go` carries the concepts and the full package graph |
 
 ```
 camera ──► render ──► plugin ──► plugins/world/kind ──► plugins/world ──► game ──► internal/engine ──► gram
-control ───┘                                              │  ▲
+control ───┘ (→ camera)                                   │  ▲
                                                           ▼  │
-                     plugins/{collision, players, vision, effects} ──► plugins/selection, plugins/board ──► plugins/navigation, plugins/*/behavior
+                     plugins/{collision, selection, vision, effects} ──► plugins/board ──► plugins/navigation, plugins/*/behavior ──► plugins/players
 ```
 
 Outside the module: [goke](https://github.com/kjkrol/goke) is the ECS every Stage runs on,

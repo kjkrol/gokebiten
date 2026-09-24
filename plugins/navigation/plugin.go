@@ -9,14 +9,13 @@ import (
 	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/board"
-	"github.com/kjkrol/gram/plugins/players"
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/render"
 )
 
 // Plugin moves entities along a MoveOrder's path across a board, re-pathing when terrain changes,
-// and carries out MoveTo commands from players; WithRenderer draws the remaining route.
+// and defines the MoveTo command; WithRenderer draws the remaining route.
 type Plugin struct {
 	boardPlugin *board.Plugin
 	worldPlugin *world.Plugin
@@ -25,7 +24,7 @@ type Plugin struct {
 	board  *board.Board
 	module *module
 
-	moves  *players.Inbox[MoveTo]
+	moves  control.Inbox[MoveTo]
 	finder *pathFinder
 
 	pathSprites  PathSprites
@@ -36,11 +35,10 @@ type Plugin struct {
 
 var _ plugin.Plugin = (*Plugin)(nil)
 
-// NewPlugin builds a navigation plugin over a board, listening for MoveTo on playersPlugin; entities
-// move as their Steering profile says.
-func NewPlugin(boardPlugin *board.Plugin, worldPlugin *world.Plugin, selectionPlugin *selection.Plugin, playersPlugin *players.Plugin) *Plugin {
-	return &Plugin{boardPlugin: boardPlugin, worldPlugin: worldPlugin, camera: worldPlugin.Camera(),
-		selected: selectionPlugin.Tags().Selected, moves: playersPlugin.Listen[MoveTo]()}
+// NewPlugin builds a navigation plugin over a board; hand it to the players plugin for its MoveTo
+// command and default bindings. Entities move as their Steering profile says.
+func NewPlugin(boardPlugin *board.Plugin, worldPlugin *world.Plugin, selectionPlugin *selection.Plugin) *Plugin {
+	return &Plugin{boardPlugin: boardPlugin, worldPlugin: worldPlugin, camera: worldPlugin.Camera(), selected: selectionPlugin.Tags().Selected}
 }
 
 // =================================================================
@@ -62,7 +60,7 @@ func (p *Plugin) Install(ctx plugin.Installer) error {
 	navSys := newNavigationSystem(finder, brd, brd, occupancy)
 	navSys.BindSpace(p.worldPlugin.Space())
 
-	moveCommandSystem := newMoveCommandSystem(finder, p.moves, p.selected)
+	moveCommandSystem := newMoveCommandSystem(finder, &p.moves, p.selected)
 
 	p.module = &module{navigationSystem: navSys, moveCommandSystem: moveCommandSystem}
 	ctx.UseModule(p.module)

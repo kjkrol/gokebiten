@@ -106,19 +106,18 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 		return err
 	}
 
-	s.players = players.NewPlugin(s.world)
-	s.selection = selection.NewPlugin(s.world, s.players)
+	s.selection = selection.NewPlugin(s.world)
 	if err := ctx.Use(s.selection); err != nil {
 		return err
 	}
 
-	s.nav = navigation.NewPlugin(s.board, s.world, s.selection, s.players)
+	s.nav = navigation.NewPlugin(s.board, s.world, s.selection)
 	if err := ctx.Use(s.nav); err != nil {
 		return err
 	}
 
-	local := s.players.Local("player")
-	if err := local.Bind(slices.Concat(selection.DefaultBindings(), s.nav.DefaultBindings(), players.CameraBindings())...); err != nil {
+	s.players = players.NewPlugin(s.world, s.selection, s.nav)
+	if err := s.players.Local("player").Bind(s.players.Defaults()...); err != nil {
 		return err
 	}
 	if err := ctx.Use(s.players); err != nil {
@@ -257,8 +256,9 @@ func (m *mainScene) Layers() []render.Renderer {
 	s.nav.WithRenderer(pathAtlas)
 
 	s.selection.WithRenderer(nil)
+	s.players.WithRenderer(nil)
 
-	return []render.Renderer{s.board.Renderer(), s.nav.Renderer(), s.world.Renderer(), s.selection.Renderer()}
+	return append([]render.Renderer{s.board.Renderer(), s.world.Renderer()}, s.players.Renderers()...)
 }
 
 func (m *mainScene) HandleEvents(events *control.InputEvents, runtime game.Runtime, composition game.Composition) {

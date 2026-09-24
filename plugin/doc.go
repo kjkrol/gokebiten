@@ -34,6 +34,13 @@
 // costs no query of its own, and a host reads what an entity carries as [Marks] — what a payload
 // passes on for [Marks.Carries]. One host's behaviors may name at most [MaxFamilies] families.
 //
+// # Commands
+//
+// What a player wants goes the other way, as a command — the vocabulary is package control's. A
+// [Commander] is a plugin, or a game, that defines command types: it keeps a control.Inbox of each
+// as a field, lists them in Commands, drains them in its own pass, and suggests the
+// control.Bindings that issue them. The players plugin is the carrier built over the Commanders.
+//
 // # Tick
 //
 // [Tick] is what a behavior is told about the pass it runs in: the command buffer its structural

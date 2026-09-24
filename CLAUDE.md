@@ -256,8 +256,9 @@ shows how much of it is boilerplate vs. real behavior.
   heading (at a lookahead point, so turns start before the bend) and for its own top speed, braking
   from the profile before the goal; a waypoint is passed by projection, the goal by radius. A
   `MoveOrder` queues up to `MaxWaypoints` further goals. A `MoveTo{Cell, Append}` command orders
-  every `Selected` entity; `nav.DefaultBindings()` make a right click one, Shift appends. Depends
-  on `board`, `world`, `selection` (its `Selected` tag picks whom a command orders) and `players`.
+  every `Selected` entity; a `plugin.Commander`, its `DefaultBindings()` make a right click one,
+  Shift appends. Depends on `board`, `world` and `selection` (its `Selected` tag picks whom a
+  command orders).
 - **`effects`** — temporary changes to entities, cast from anywhere: `p.Define(name,
   Spec{Lasts, Stacking, Grant(tags...), Alter(func(*T))})`, `p.Cast`/`CastFor`/`Dispel`/`Has` by
   entity id, `Active` slots saved with the entity, originals of altered components kept by the
@@ -271,19 +272,23 @@ shows how much of it is boilerplate vs. real behavior.
 - **`selection`** — a `Select` command (ids, or a world box, additive or not) → the `Selected`
   tag on `world` entities that carry `Selectable`, both bits of `selection.Family` from
   `Plugin.Tags()` (a kind's choice via `kind.Tagged`; terrain bodies never do); a bit flip, seen
-  the same tick. `selection.DefaultBindings()` make a left drag one (Shift adds). Depends on
-  `world` and `players` (its inbox).
-- **`players`** — whoever acts in the game: `Local(name)` a player at the keyboard over the
-  world's camera and `View`; `Listen[C]()` makes the caller the owner of command type `C` and
-  returns the `Inbox[C]` its system drains in its own pass (`Drain`); `Issue(player, cmd)` is
-  how a command comes in, from a binding, an AI or a network (`ErrUnknownCommand` for a type
-  nobody listens for). A `Binding` is a `Trigger` (`KeyPress`, `ButtonPress`, `Drag`, `Wheel`,
-  `ButtonHeld`, `CursorAtEdge`, with exact `Mods`), the command `Command[C]` builds from a
-  `Context` (cursor, drag start, `World`/`WorldBox` through the player's camera) and a label;
-  `Player.Bind` refuses two on one trigger, Setup refuses a command nobody listens for. Plugins
-  ship defaults (`selection.DefaultBindings()`, `nav.DefaultBindings()`, `players.CameraBindings()`
-  for `Pan`/`Zoom`, which players carries out itself). The Scene hands input to
-  `players.EventHandler()`; `players.RunPlan` runs last and empties the inboxes. Depends on `world`.
+  the same tick. A `plugin.Commander`: its `DefaultBindings()` make a left drag one (Shift adds).
+  Depends on `world`.
+- **`players`** — whoever acts in the game, a carrier over `plugin.Commander`s:
+  `players.NewPlugin(world, s.selection, s.nav, ...)` gathers each one's `Commands()` (the
+  `control.Inbox[C]` it drains in its own pass) and `DefaultBindings()`; `Defaults()` is all of
+  them plus `CameraBindings()` for players' own `Pan`/`Zoom`. `Local(name)` is a player at the
+  keyboard over the world's camera and `View`, `Add(name)` one without (an AI, a client);
+  `Issue(player, cmd)` is how any command comes in (`ErrUnknownCommand` for a type no Commander
+  defines). The contract — `Inbox`, `Issued`, `PlayerID`/`Nobody`, `Binding` (`Trigger`s
+  `KeyPress`, `ButtonPress`, `Drag`, `Wheel`, `ButtonHeld`, `CursorAtEdge` with exact `Mods`,
+  `Command[C]` built from a `Context` with `World`/`WorldBox` through the camera) — lives in
+  `control`, and `plugin.Commander` names what defines commands, so a plugin with commands never
+  imports players. `Renderers()` is the Commanders' renderers in order plus the marquee, for the
+  Scene to lay over the world. `Player.Bind` refuses two on one
+  trigger, Setup refuses a command nobody defines; `WithRenderer` draws the marquee of a drag.
+  The Scene hands input to `players.EventHandler()`; `players.RunPlan` runs last and empties the
+  inboxes. Depends on `world`.
 - **`vision`** — narrowed perception: a `Sight` cone scanned against `world`'s
   space each tick fills its own `Sight.Seen` (who this entity can see, nearest first), and
   `SightOutline` on an entity gets its view's shape computed and drawn. An entity carrying

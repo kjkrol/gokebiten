@@ -18,8 +18,9 @@
 // # Commands
 //
 // A [MoveTo] sends every Selected entity to a cell, or with Append queues the cell behind their
-// orders; the plugin listens for it on the players plugin and its command system issues or extends
-// the orders. [Plugin.DefaultBindings] make a right click one, Shift + right click an appending one.
+// orders; the plugin is a plugin.Commander ([Plugin.Commands] is the inbox) and its command
+// system issues or extends the orders. [Plugin.DefaultBindings] make a right click one, Shift +
+// right click an appending one.
 //
 // # Renderer
 //

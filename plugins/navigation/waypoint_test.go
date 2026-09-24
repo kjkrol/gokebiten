@@ -1,13 +1,13 @@
 package navigation
 
 import (
+	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/plugin"
 	"testing"
 	"time"
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/plugins/board"
-	"github.com/kjkrol/gram/plugins/players"
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/uid"
@@ -17,7 +17,7 @@ import (
 // by the command system alone.
 type commandWorld struct {
 	grid  board.Grid
-	moves *players.Inbox[MoveTo]
+	moves *control.Inbox[MoveTo]
 	ecs   *goke.ECS
 	order goke.OptComp[MoveOrder]
 	q     *goke.Query
@@ -28,7 +28,7 @@ type commandWorld struct {
 
 func newCommandWorld(t *testing.T) *commandWorld {
 	t.Helper()
-	cw := &commandWorld{grid: board.DefaultGrids{}.Square(10, 1, 10), moves: &players.Inbox[MoveTo]{}}
+	cw := &commandWorld{grid: board.DefaultGrids{}.Square(10, 1, 10), moves: &control.Inbox[MoveTo]{}}
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	cmds := newMoveCommandSystem(newPathFinder(cw.grid, terrain, &board.SingleOccupancy{}), cw.moves, selTags.Selected)
@@ -70,7 +70,7 @@ func (cw *commandWorld) cellAt(x uint32) board.CellID { c, _ := cw.grid.CellInde
 
 // issue runs one command through a tick.
 func (cw *commandWorld) issue(cell board.CellID, appendIt bool) {
-	cw.moves.Add(nil, MoveTo{Cell: cell, Append: appendIt})
+	cw.moves.Add(control.Nobody, MoveTo{Cell: cell, Append: appendIt})
 	cw.ecs.Tick(time.Second)
 }
 

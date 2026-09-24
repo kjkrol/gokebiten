@@ -66,8 +66,9 @@
 // The packages form a strict acyclic graph; each imports only layers below it:
 //
 //	Layer 0   camera              — a Camera over a world: screen conversion, culling, move and zoom
-//	          control             — the input vocabulary: InputEvents, KeyEvent, ClickEvent, EventHandler
 //	Layer 1   render              — drawing primitives: Renderer, Atlas, QuadBatch, sprites          (→ camera)
+//	          control             — the input vocabulary: InputEvents, KeyEvent, ClickEvent, EventHandler;
+//	                                commands and bindings: Inbox, Issued, Binding, Command, the triggers   (→ camera)
 //	Layer 2   plugin              — the extension contract: Plugin, Installer, Tick, Between and Each,
 //	                                PairHost and EachHost, Serializable, PostLoader, Populator      (→ control, render)
 //	Layer 3   plugins/world/kind  — what an entity is: Spec, Const and Load, Define, Of, Registry    (→ render)
@@ -76,13 +77,13 @@
 //	Layer 5   game                — what a game implements and receives: Game, Stage, Scene, Scenes,
 //	                                Composition, Initializer, Runtime, Persistence, Props, TPS       (→ camera, control, plugin, world, render)
 //	          plugins/collision   — the CollisionSystem over the world's Space; Collider, Physics, Meeting, Struck (→ world, …)
-//	          plugins/players     — players, bindings, commands and their inboxes; Pan and Zoom     (→ world, …)
-//	          plugins/selection   — a Select command into a Selected tag                           (→ world, players, …)
+//	          plugins/selection   — a Select command into a Selected tag                           (→ world, …)
 //	          plugins/vision      — a Sight cone into Seen, Sighting, SightOutline                   (→ world, …)
 //	          plugins/effects     — temporary changes to entities: Grant and Alter, cast anywhere    (→ world, …)
 //	Layer 6   plugins/board       — a grid with terrain over the world, walls as bodies              (→ world, collision, …)
 //	          plugins/collision/behavior, plugins/vision/behavior — ready-made reactions              (→ their plugin, world, plugin)
 //	Layer 7   plugins/navigation  — MoveOrder paths across a board                                   (→ board, selection, world, …)
+//	          plugins/players     — a carrier over the Commanders: players, their bindings, Pan and Zoom (→ world, …)
 //	Layer 8   internal/engine     — the Engine: the Ebitengine loop, one active Stage, persistence   (→ game, plugin, world, camera, control, render)
 //	Layer 9   gram                — Run; the package you import                                     (→ game, internal/engine)
 //

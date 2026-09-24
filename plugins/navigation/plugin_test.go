@@ -40,8 +40,8 @@ func TestPlugin_DefaultBindings_TurnARightClickIntoMoveTo(t *testing.T) {
 	})
 	boardPlugin := board.NewPlugin(grid, &board.SingleOccupancy{}, worldPlugin)
 	boardPlugin.Res.Logic.Board.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
-	pl := players.NewPlugin(worldPlugin)
-	navPlugin := NewPlugin(boardPlugin, worldPlugin, selection.NewPlugin(worldPlugin, pl), pl)
+	navPlugin := NewPlugin(boardPlugin, worldPlugin, selection.NewPlugin(worldPlugin))
+	pl := players.NewPlugin(worldPlugin, navPlugin)
 	local := pl.Local("tester")
 	if err := local.Bind(navPlugin.DefaultBindings()...); err != nil {
 		t.Fatal(err)
@@ -52,7 +52,7 @@ func TestPlugin_DefaultBindings_TurnARightClickIntoMoveTo(t *testing.T) {
 	events.AddClickEvent(25, 25, ebiten.MouseButtonRight, control.ActionPress)
 	pl.EventHandler().HandleEvents(events)
 	var got []MoveTo
-	navPlugin.moves.Drain(func(i players.Issued[MoveTo]) { got = append(got, i.Command) })
+	navPlugin.moves.Drain(func(i control.Issued[MoveTo]) { got = append(got, i.Command) })
 	if len(got) != 1 || got[0] != (MoveTo{Cell: want}) {
 		t.Errorf("a right click issued %v, want one MoveTo to %v", got, want)
 	}
@@ -62,7 +62,7 @@ func TestPlugin_DefaultBindings_TurnARightClickIntoMoveTo(t *testing.T) {
 	events.AddClickEvent(25, 25, ebiten.MouseButtonRight, control.ActionPress)
 	pl.EventHandler().HandleEvents(events)
 	got = got[:0]
-	navPlugin.moves.Drain(func(i players.Issued[MoveTo]) { got = append(got, i.Command) })
+	navPlugin.moves.Drain(func(i control.Issued[MoveTo]) { got = append(got, i.Command) })
 	if len(got) != 1 || !got[0].Append {
 		t.Errorf("a Shift right click issued %v, want one MoveTo that appends", got)
 	}

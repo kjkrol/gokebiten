@@ -12,6 +12,18 @@
 // # EventHandler
 //
 // [EventHandler] reacts to this tick's input. The engine calls the active Scene's HandleEvents
-// once per tick, after capture and before the Stage's Update; a plugin's own EventHandler, such
-// as the world's camera controls or selection's click and drag, runs the same way.
+// once per tick, after capture and before the Stage's Update; the players plugin's EventHandler,
+// which turns input into commands, runs the same way.
+//
+// # Commands and bindings
+//
+// A command is an intention in the game's vocabulary, as data (selection.Select,
+// navigation.MoveTo). The plugin that defines a command's type owns it: it keeps an [Inbox] of it
+// and drains it in its own pass ([Inbox.Drain], every [Issued] with the [PlayerID] that gave it,
+// [Nobody] for none); [Mailbox] is an Inbox with the type erased, as a carrier sorts commands into
+// them. A [Binding] is a [Trigger] — [KeyPress], [ButtonPress], [Drag], [Wheel], [ButtonHeld],
+// [CursorAtEdge], each with exactly its [Mods] — the command [Command] builds from a [Context] (the
+// player, its camera, the cursor, a drag's start and end, World and WorldBox through the camera)
+// and a label for a help screen. plugin.Commander is what defines commands, plugins/players what
+// carries them.
 package control

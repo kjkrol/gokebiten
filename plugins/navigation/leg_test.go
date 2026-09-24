@@ -1,13 +1,13 @@
 package navigation
 
 import (
+	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/plugin"
 	"testing"
 	"time"
 
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/plugins/board"
-	"github.com/kjkrol/gram/plugins/players"
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/uid"
@@ -255,7 +255,7 @@ func TestCommandSystem_Update_RetargetMidLegKeepsLeg(t *testing.T) {
 	terrain := board.NewTerrainMap()
 	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	occupancy := &board.SingleOccupancy{}
-	moves := &players.Inbox[MoveTo]{}
+	moves := &control.Inbox[MoveTo]{}
 	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, occupancy), moves, selTags.Selected)
 
 	from, _ := grid.CellIndex(0, 0)
@@ -289,7 +289,7 @@ func TestCommandSystem_Update_RetargetMidLegKeepsLeg(t *testing.T) {
 		ctx.Sync()
 	})
 
-	moves.Add(nil, MoveTo{Cell: newTarget})
+	moves.Add(control.Nobody, MoveTo{Cell: newTarget})
 	ecs.Tick(time.Second)
 
 	_, mt := readCellAndMoveOrder(t, q, &cell, &order)

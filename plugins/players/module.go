@@ -14,7 +14,6 @@ var _ goke.Module = (*module)(nil)
 // command has an owner.
 type module struct {
 	p        *Plugin
-	camera   *cameraSystem
 	runnable goke.Runnable
 }
 
@@ -22,14 +21,14 @@ type module struct {
 // goke.Module contract
 // =================================================================
 
-func (m *module) RegSystems(ecs *goke.ECS) { m.runnable = ecs.RegSys(m.camera) }
+func (m *module) RegSystems(ecs *goke.ECS) { m.runnable = ecs.RegSys(&cameraSystem{p: m.p}) }
 
 // RunPlan moves the cameras and empties every inbox; call it after the plugins that drain theirs.
 func (m *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	ctx.Run(m.runnable, d)
 	ctx.Sync()
 	for _, box := range m.p.inboxes {
-		box.clear()
+		box.Clear()
 	}
 }
 
@@ -38,10 +37,10 @@ func (m *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
 func (m *module) SetupSystems() []goke.System {
 	return []goke.System{goke.SystemFn{OnInit: func(*goke.SysInit) {
 		var missing []string
-		for _, pl := range m.p.locals {
+		for _, pl := range m.p.players {
 			for _, b := range pl.bindings {
-				if _, ok := m.p.inboxes[b.command]; !ok {
-					missing = append(missing, fmt.Sprintf("%v (%q for %s)", b.command, b.Label, pl.Name))
+				if _, ok := m.p.inboxes[b.Command()]; !ok {
+					missing = append(missing, fmt.Sprintf("%v (%q for %s)", b.Command(), b.Label, pl.Name))
 				}
 			}
 		}

@@ -3,7 +3,8 @@ package selection
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/aabbworld/geom"
-	"github.com/kjkrol/gram/plugins/players"
+	"github.com/kjkrol/gram/control"
+	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/uid"
 )
 
@@ -15,16 +16,21 @@ type Select struct {
 	Additive bool
 }
 
-// DefaultBindings is left drag (a click is a drag of no length) into a Select of the box it drew,
-// Shift for an additive one. Bind them on a player.
-func DefaultBindings() []players.Binding {
-	box := func(additive bool) func(c players.Context) (Select, bool) {
-		return func(c players.Context) (Select, bool) {
+var _ plugin.Commander = (*Plugin)(nil)
+
+// Commands is the inbox Select lands in — for the players plugin.
+func (p *Plugin) Commands() []control.Mailbox { return []control.Mailbox{&p.selects} }
+
+// DefaultBindings is a left drag (a click is a drag of no length) into a Select of the box it
+// drew, Shift for an additive one.
+func (p *Plugin) DefaultBindings() []control.Binding {
+	box := func(additive bool) func(c control.Context) (Select, bool) {
+		return func(c control.Context) (Select, bool) {
 			return Select{Box: c.WorldBox(c.Start, c.Cursor), Additive: additive}, true
 		}
 	}
-	return []players.Binding{
-		players.Command(players.Drag{Button: ebiten.MouseButtonLeft}, "Select", box(false)),
-		players.Command(players.Drag{Button: ebiten.MouseButtonLeft, Mods: players.Mods{Shift: true}}, "Add to selection", box(true)),
+	return []control.Binding{
+		control.Command(control.Drag{Button: ebiten.MouseButtonLeft}, "Select", box(false)),
+		control.Command(control.Drag{Button: ebiten.MouseButtonLeft, Mods: control.Mods{Shift: true}}, "Add to selection", box(true)),
 	}
 }

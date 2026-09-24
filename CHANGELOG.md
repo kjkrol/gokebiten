@@ -28,16 +28,20 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
   `Ground` component is contiguous in memory; `CellKindDict.Get` and `Layout` keep taking strings.
 
 **Plugins**
-- `plugins/players`: who acts in the game. A local player over the world's camera and `View`;
-  commands as typed data — `selection.Select`, `navigation.MoveTo`, `players.Pan`/`Zoom` —
-  owned by the plugin that defines them (`Listen[C]` gives the `Inbox[C]` its system drains) and
-  issued by a player's bindings, an AI or a network alike (`Issue`); labelled bindings on triggers
-  (`KeyPress`, `ButtonPress`, `Drag`, `Wheel`, `ButtonHeld`, `CursorAtEdge`, exact `Mods`) with
-  defaults from the plugins (`selection.DefaultBindings`, `nav.DefaultBindings`,
-  `players.CameraBindings`); two on one trigger refused at `Bind`, a command nobody listens for at
-  Setup. Gone: `selection.Resources`/`DefaultEventHandler`, `navigation.Resources`/`MoveCommand`/
-  `DefaultCommandEventHandler`, `world.WithCameraControls`; `selection.NewPlugin` and
-  `navigation.NewPlugin` take the players plugin.
+- Commands, the other direction of behaviors, as `control`'s vocabulary: a `plugin.Commander`
+  keeps a `control.Inbox[C]` of each command type it defines, drains it in its own pass (`Issued`
+  with the `PlayerID`, `Nobody` for none) and suggests `DefaultBindings` — a `control.Binding` is
+  a `Trigger` (`KeyPress`, `ButtonPress`, `Drag`, `Wheel`, `ButtonHeld`, `CursorAtEdge`, exact
+  `Mods`), the command `Command[C]` builds from a `Context` (camera, cursor, drag;
+  `World`/`WorldBox`) and a label. `selection.Select` and `navigation.MoveTo` are such commands.
+- `plugins/players`: who acts in the game, a carrier built over the Commanders
+  (`players.NewPlugin(world, selection, nav)`): a `Local` player at the keyboard over the world's
+  camera and `View`, `Add` one without (an AI, a client), `Defaults()` to bind, `Issue` for any
+  command, `Pan`/`Zoom` with `CameraBindings`, the marquee of a drag drawn by its renderer,
+  `Renderers()` as the player's overlays for the Scene; two
+  bindings on one trigger refused at `Bind`, a command nobody defines at Setup. Gone:
+  `selection.Resources`/`DefaultEventHandler`, `navigation.Resources`/`MoveCommand`/
+  `DefaultCommandEventHandler`, `world.WithCameraControls`.
 - Tags are bits of families: `plugin.Tags[F]` is one component per family, `Kinds.DefineTag`
   names the bits (saved by name), `kind.Tagged` gives them to a kind, `Between(a, b, fn)` takes
   them as values; `Selectable` and `Selected`, the vision behaviors' tags and terrain bodies are

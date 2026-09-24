@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/board"
-	"github.com/kjkrol/gram/plugins/players"
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/uid"
 )
@@ -18,7 +18,7 @@ import (
 // order already in flight.
 type moveCommandSystem struct {
 	pathFinder *pathFinder
-	moves      *players.Inbox[MoveTo]
+	moves      *control.Inbox[MoveTo]
 	selected   plugin.Tag[selection.Family]
 
 	query   *goke.Query
@@ -32,7 +32,7 @@ type moveCommandSystem struct {
 var _ goke.System = (*moveCommandSystem)(nil)
 
 // newMoveCommandSystem builds a moveCommandSystem draining moves into orders via pathFinder.
-func newMoveCommandSystem(pathFinder *pathFinder, moves *players.Inbox[MoveTo], selected plugin.Tag[selection.Family]) *moveCommandSystem {
+func newMoveCommandSystem(pathFinder *pathFinder, moves *control.Inbox[MoveTo], selected plugin.Tag[selection.Family]) *moveCommandSystem {
 	return &moveCommandSystem{moves: moves, pathFinder: pathFinder, selected: selected}
 }
 
@@ -42,7 +42,7 @@ func (s *moveCommandSystem) Init(si *goke.SysInit) {
 }
 
 func (s *moveCommandSystem) Update(cb *goke.CmdBuf, _ time.Duration) {
-	s.moves.Drain(func(i players.Issued[MoveTo]) { s.carryOut(cb, i.Command) })
+	s.moves.Drain(func(i control.Issued[MoveTo]) { s.carryOut(cb, i.Command) })
 }
 
 // carryOut gives the Selected entities their orders toward cmd.Cell.

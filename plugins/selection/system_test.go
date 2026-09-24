@@ -29,7 +29,7 @@ type harness struct {
 	space     *aabbworld.Space
 	players   *players.Plugin
 	local     *players.Player
-	selects   *players.Inbox[Select]
+	sel       *Plugin
 	sys       *SelectionSystem
 	handler   control.EventHandler
 	ecs       *goke.ECS
@@ -57,16 +57,16 @@ func newHarness(t *testing.T) *harness {
 		Space:    world.SpaceCfg{Width: 1000, Height: 1000},
 		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
 	})
-	pl := players.NewPlugin(w)
+	sel := NewPlugin(w)
+	pl := players.NewPlugin(w, sel)
 	local := pl.Local("tester")
-	if err := local.Bind(DefaultBindings()...); err != nil {
+	if err := local.Bind(sel.DefaultBindings()...); err != nil {
 		t.Fatal(err)
 	}
-	selects := pl.Listen[Select]()
 	tags := Tags{Selectable: 0, Selected: 1}
-	sys := NewSelectionSystem(selects, space, tags)
+	sys := NewSelectionSystem(&sel.selects, space, tags)
 
-	return &harness{t: t, space: space, players: pl, local: local, selects: selects, sys: sys, handler: pl.EventHandler(), ecs: goke.New(), tags: tags}
+	return &harness{t: t, space: space, players: pl, local: local, sel: sel, sys: sys, handler: pl.EventHandler(), ecs: goke.New(), tags: tags}
 }
 
 // seed queues a Selectable size x size entity at (x,y); the returned id is filled in by start.
@@ -266,7 +266,7 @@ func TestSystem_Update_SelectByID_TagsExactlyGivenEntities(t *testing.T) {
 		t.Fatal("sanity check failed: expected other to be selected first")
 	}
 
-	h.selects.Add(h.local, Select{IDs: []uid.UID64{*target}})
+	h.sel.selects.Add(h.local.ID, Select{IDs: []uid.UID64{*target}})
 	h.ecs.Tick(time.Second)
 
 	if !h.isSelected(*target) {

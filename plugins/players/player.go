@@ -6,30 +6,29 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/gram/camera"
+	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/plugins/world"
 )
 
-// ID names one player of a game.
-type ID uint8
-
 // Player is whoever acts in the game and may look at a part of it: a camera and the View through
-// it, and the bindings that turn this player's input into commands.
+// it, and — at this keyboard — the bindings that turn its input into commands.
 type Player struct {
-	ID     ID
+	ID     control.PlayerID
 	Name   string
 	Camera camera.Camera
 	View   *world.View
 
-	bindings []Binding
+	local    bool
+	bindings []control.Binding
 	cursor   geom.Vec
 	held     map[ebiten.MouseButton]geom.Vec // buttons down and where they went down
 }
 
 // Bind adds bindings to the player; two on one Trigger are an error, never a silent last-one-wins.
-func (p *Player) Bind(bindings ...Binding) error {
+func (p *Player) Bind(bindings ...control.Binding) error {
 	for _, b := range bindings {
-		if b.build == nil {
-			return fmt.Errorf("players: %q is not a Binding built with Command", b.Label)
+		if b.Command() == nil {
+			return fmt.Errorf("players: %q is not a Binding built with control.Command", b.Label)
 		}
 		for _, have := range p.bindings {
 			if have.Trigger == b.Trigger {
@@ -42,12 +41,12 @@ func (p *Player) Bind(bindings ...Binding) error {
 }
 
 // Bindings lists what the player can do, in the order bound.
-func (p *Player) Bindings() []Binding { return p.bindings }
+func (p *Player) Bindings() []control.Binding { return p.bindings }
 
 // DragBox is the drag in progress of a button the player has a Drag binding on, in screen pixels.
 func (p *Player) DragBox() (start, current geom.Vec, dragging bool) {
 	for _, b := range p.bindings {
-		d, ok := b.Trigger.(Drag)
+		d, ok := b.Trigger.(control.Drag)
 		if !ok {
 			continue
 		}

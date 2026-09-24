@@ -34,17 +34,22 @@ func (c *installCtx) Setup(providers ...goke.SetupProvider) {
 func (c *installCtx) RegSys(factory func() goke.System) goke.Runnable { return c.ecs.RegSys(factory()) }
 func (c *installCtx) ECS() *goke.ECS                                  { return c.ecs }
 
-// order and note are two command types of a made-up plugin.
+// order and note are two command types; general is the made-up plugin defining order.
 type order struct{ Cell int }
 type note struct{ Text string }
 
-// rig is a players plugin over a 1000×1000 world with one local player and an order inbox.
+type general struct{ orders control.Inbox[order] }
+
+func (g *general) Commands() []control.Mailbox        { return []control.Mailbox{&g.orders} }
+func (g *general) DefaultBindings() []control.Binding { return nil }
+
+// rig is a players plugin over a 1000×1000 world with one local player and a general's order inbox.
 type rig struct {
 	t      *testing.T
 	w      *world.Plugin
 	p      *players.Plugin
 	local  *players.Player
-	orders *players.Inbox[order]
+	orders *control.Inbox[order]
 }
 
 func newRig(t *testing.T, cfg ...camera.Config) *rig {
@@ -56,8 +61,9 @@ func newRig(t *testing.T, cfg ...camera.Config) *rig {
 	if len(cfg) > 0 {
 		w.Res.Camera = camera.NewFromSpaceWithConfig(1000, 1000, 0, cfg[0])
 	}
-	p := players.NewPlugin(w)
-	return &rig{t: t, w: w, p: p, local: p.Local("tester"), orders: p.Listen[order]()}
+	g := &general{}
+	p := players.NewPlugin(w, g)
+	return &rig{t: t, w: w, p: p, local: p.Local("tester"), orders: &g.orders}
 }
 
 // start installs the plugin into an ECS whose plan is players' RunPlan, so camera commands land.
@@ -76,7 +82,7 @@ func (r *rig) start() *goke.ECS {
 	return ctx.ecs
 }
 
-func (r *rig) bind(b ...players.Binding) {
+func (r *rig) bind(b ...control.Binding) {
 	r.t.Helper()
 	if err := r.local.Bind(b...); err != nil {
 		r.t.Fatal(err)
@@ -85,27 +91,27 @@ func (r *rig) bind(b ...players.Binding) {
 
 func (r *rig) handle(ev *control.InputEvents) { r.p.EventHandler().HandleEvents(ev) }
 
-func (r *rig) drained() []players.Issued[order] {
-	var got []players.Issued[order]
-	r.orders.Drain(func(i players.Issued[order]) { got = append(got, i) })
+func (r *rig) drained() []control.Issued[order] {
+	var got []control.Issued[order]
+	r.orders.Drain(func(i control.Issued[order]) { got = append(got, i) })
 	return got
 }
 
-func orderOf(n int) func(players.Context) (order, bool) {
-	return func(players.Context) (order, bool) { return order{n}, true }
+func orderOf(n int) func(control.Context) (order, bool) {
+	return func(control.Context) (order, bool) { return order{n}, true }
 }
 
 func TestBind_RefusesTwoBindingsOnOneTrigger(t *testing.T) {
 	r := newRig(t)
-	r.bind(players.Command(players.KeyPress{Key: ebiten.KeyA}, "one", orderOf(1)))
-	err := r.local.Bind(players.Command(players.KeyPress{Key: ebiten.KeyA}, "two", orderOf(2)))
+	r.bind(control.Command(control.KeyPress{Key: ebiten.KeyA}, "one", orderOf(1)))
+	err := r.local.Bind(control.Command(control.KeyPress{Key: ebiten.KeyA}, "two", orderOf(2)))
 	if err == nil {
 		t.Fatal("two bindings on KeyPress A were accepted")
 	}
-	if err := r.local.Bind(players.Command(players.KeyPress{Key: ebiten.KeyA, Mods: players.Mods{Shift: true}}, "shifted", orderOf(3))); err != nil {
+	if err := r.local.Bind(control.Command(control.KeyPress{Key: ebiten.KeyA, Mods: control.Mods{Shift: true}}, "shifted", orderOf(3))); err != nil {
 		t.Errorf("Shift+A beside A: %v, want accepted as a different trigger", err)
 	}
-	if err := r.local.Bind(players.Binding{Label: "bare"}); err == nil {
+	if err := r.local.Bind(control.Binding{Label: "bare"}); err == nil {
 		t.Error("a Binding not built with Command was accepted")
 	}
 }
@@ -118,27 +124,57 @@ func TestIssue_RefusesACommandNobodyListensFor(t *testing.T) {
 	if err := r.p.Issue(nil, order{7}); err != nil {
 		t.Fatalf("Issue(order) = %v", err)
 	}
-	if got := r.drained(); len(got) != 1 || got[0].Command.Cell != 7 || got[0].Player != nil {
-		t.Errorf("drained %v, want order 7 from nobody", got)
+	if got := r.drained(); len(got) != 1 || got[0].Command.Cell != 7 || got[0].Player != control.Nobody {
+		t.Errorf("drained %v, want order 7 from Nobody", got)
 	}
 	if !r.orders.Empty() {
 		t.Error("the inbox is not empty after Drain")
 	}
 }
 
-func TestListen_TwiceForOneTypePanics(t *testing.T) {
-	r := newRig(t)
+func TestNewPlugin_RefusesTwoCommandersOfOneType(t *testing.T) {
+	w := world.NewPlugin(world.Config{
+		Space:    world.SpaceCfg{Width: 1000, Height: 1000},
+		Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 1, MaxSize: 10},
+	})
 	defer func() {
 		if recover() == nil {
-			t.Error("a second Listen[order] did not panic")
+			t.Error("two Commanders defining order did not panic")
 		}
 	}()
-	r.p.Listen[order]()
+	players.NewPlugin(w, &general{}, &general{})
+}
+
+func TestAdd_MakesAPlayerWithoutAKeyboard(t *testing.T) {
+	r := newRig(t)
+	bot := r.p.Add("bot")
+	if bot.ID == control.Nobody || bot.ID == r.local.ID || r.p.ByID(bot.ID) != bot || r.p.ByID(control.Nobody) != nil {
+		t.Errorf("bot has id %d beside local %d; ByID must find it and nobody else", bot.ID, r.local.ID)
+	}
+	if locals := r.p.Locals(); len(locals) != 1 || locals[0] != r.local {
+		t.Errorf("Locals = %v, want the keyboard player alone", locals)
+	}
+	if err := r.p.Issue(bot, order{3}); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.drained(); len(got) != 1 || got[0].Player != bot.ID {
+		t.Errorf("drained %v, want the bot's order", got)
+	}
+}
+
+func TestDefaults_CollectEveryCommandersBindings(t *testing.T) {
+	r := newRig(t)
+	if got := len(r.p.Defaults()); got != len(players.CameraBindings()) {
+		t.Errorf("Defaults has %d bindings, want the camera's %d (the general suggests none)", got, len(players.CameraBindings()))
+	}
+	if err := r.local.Bind(r.p.Defaults()...); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestSetup_PanicsOnABindingNobodyListensFor(t *testing.T) {
 	r := newRig(t)
-	r.bind(players.Command(players.KeyPress{Key: ebiten.KeyN}, "unheard", func(players.Context) (note, bool) { return note{}, true }))
+	r.bind(control.Command(control.KeyPress{Key: ebiten.KeyN}, "unheard", func(control.Context) (note, bool) { return note{}, true }))
 	ctx := &installCtx{ecs: goke.New()}
 	if err := r.p.Install(ctx); err != nil {
 		t.Fatal(err)
@@ -158,9 +194,9 @@ func TestSetup_PanicsOnABindingNobodyListensFor(t *testing.T) {
 func TestKeysAndButtons_FireWithExactlyTheirModifiers(t *testing.T) {
 	r := newRig(t)
 	r.bind(
-		players.Command(players.KeyPress{Key: ebiten.KeyA}, "a", orderOf(1)),
-		players.Command(players.KeyPress{Key: ebiten.KeyA, Mods: players.Mods{Shift: true}}, "shift a", orderOf(2)),
-		players.Command(players.ButtonPress{Button: ebiten.MouseButtonRight}, "right", func(c players.Context) (order, bool) {
+		control.Command(control.KeyPress{Key: ebiten.KeyA}, "a", orderOf(1)),
+		control.Command(control.KeyPress{Key: ebiten.KeyA, Mods: control.Mods{Shift: true}}, "shift a", orderOf(2)),
+		control.Command(control.ButtonPress{Button: ebiten.MouseButtonRight}, "right", func(c control.Context) (order, bool) {
 			return order{int(c.Cursor.X)}, true
 		}),
 	)
@@ -170,7 +206,7 @@ func TestKeysAndButtons_FireWithExactlyTheirModifiers(t *testing.T) {
 	ev.AddClickEvent(40, 5, ebiten.MouseButtonRight, control.ActionPress)
 	r.handle(ev)
 	got := r.drained()
-	if len(got) != 2 || got[0].Command.Cell != 1 || got[1].Command.Cell != 40 || got[0].Player != r.local {
+	if len(got) != 2 || got[0].Command.Cell != 1 || got[1].Command.Cell != 40 || got[0].Player != r.local.ID {
 		t.Errorf("plain A and a right click at 40 issued %v, want orders 1 and 40 from the local player", got)
 	}
 
@@ -185,7 +221,7 @@ func TestKeysAndButtons_FireWithExactlyTheirModifiers(t *testing.T) {
 
 func TestDrag_FiresOnReleaseAndShowsWhileHeld(t *testing.T) {
 	r := newRig(t)
-	r.bind(players.Command(players.Drag{Button: ebiten.MouseButtonLeft}, "box", func(c players.Context) (order, bool) {
+	r.bind(control.Command(control.Drag{Button: ebiten.MouseButtonLeft}, "box", func(c control.Context) (order, bool) {
 		return order{int(c.Start.X)*1000 + int(c.Cursor.X)}, true
 	}))
 	if _, _, dragging := r.local.DragBox(); dragging {
@@ -226,8 +262,7 @@ func TestWorldBox_StaysNarrowAcrossATorusSeam(t *testing.T) {
 	})
 	w.Res.Camera = camera.NewFromSpaceWithConfig(1000, 1000, aabbworld.Torus, camera.Config{ViewportWidth: 200, ViewportHeight: 200})
 	w.Res.Camera.MoveTo(950, 500)
-	p := players.NewPlugin(w)
-	ctx := players.Context{Player: p.Local("tester")}
+	ctx := control.Context{Camera: w.Res.Camera}
 
 	box := ctx.WorldBox(geom.NewVec(0, 0), geom.NewVec(200, 10))
 	if width := box.BottomRight.X - box.TopLeft.X; width > 200 {

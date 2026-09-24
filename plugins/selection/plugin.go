@@ -8,16 +8,14 @@ import (
 	"github.com/kjkrol/gram/camera"
 	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/plugin"
-	"github.com/kjkrol/gram/plugins/players"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/render"
 )
 
-// Plugin wires selection into a Game; it depends on world and takes its Select commands from players.
+// Plugin wires selection into a Game; it depends on world and defines the Select command.
 type Plugin struct {
 	worldPlugin *world.Plugin
-	players     *players.Plugin
-	selects     *players.Inbox[Select]
+	selects     control.Inbox[Select]
 	camera      camera.Camera
 	module      *module
 	renderer    *Renderer
@@ -26,15 +24,15 @@ type Plugin struct {
 
 var _ plugin.Plugin = (*Plugin)(nil)
 
-// NewPlugin builds the selection plugin over worldPlugin's space, listening for Select on playersPlugin.
-func NewPlugin(worldPlugin *world.Plugin, playersPlugin *players.Plugin) *Plugin {
+// NewPlugin builds the selection plugin over worldPlugin's space; hand it to the players plugin
+// for its Select command and default bindings.
+func NewPlugin(worldPlugin *world.Plugin) *Plugin {
 	reg := worldPlugin.Kinds()
 	tags := Tags{
 		Selectable: reg.DefineTag[Family]("selection.selectable"),
 		Selected:   reg.DefineTag[Family]("selection.selected"),
 	}
-	return &Plugin{worldPlugin: worldPlugin, players: playersPlugin, selects: playersPlugin.Listen[Select](),
-		camera: worldPlugin.Camera(), tags: tags}
+	return &Plugin{worldPlugin: worldPlugin, camera: worldPlugin.Camera(), tags: tags}
 }
 
 // Tags returns selection's tags, to give Selectable to a kind or to read Selected.
@@ -47,7 +45,7 @@ func (p *Plugin) Tags() Tags { return p.tags }
 func (p *Plugin) Name() string { return "gram.selection" }
 
 func (p *Plugin) Install(ctx plugin.Installer) error {
-	sys := NewSelectionSystem(p.selects, p.worldPlugin.Space(), p.tags)
+	sys := NewSelectionSystem(&p.selects, p.worldPlugin.Space(), p.tags)
 	p.module = &module{sys: sys}
 	ctx.UseModule(p.module)
 	return nil
@@ -57,7 +55,7 @@ func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) { p.module.RunPlan(ct
 
 // WithRenderer builds the highlight renderer; atlas is unused, selection draws primitives.
 func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
-	p.renderer = NewRenderer(p.camera, p.players, p.tags.Selected)
+	p.renderer = NewRenderer(p.camera, p.tags.Selected)
 }
 
 func (p *Plugin) Renderer() render.Renderer {

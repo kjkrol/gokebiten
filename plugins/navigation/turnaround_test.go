@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/plugins/board"
 	"github.com/kjkrol/gram/plugins/collision"
-	"github.com/kjkrol/gram/plugins/players"
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
@@ -50,9 +50,8 @@ func newTurnaroundWorld(t *testing.T, collide bool) *turnaroundWorld {
 	for y := uint32(0); y < 4; y++ {
 		brd.Res.Logic.Board.Set(tw.at(0, y), board.CellKind{Cost: 1, Solid: true})
 	}
-	pl := players.NewPlugin(w)
-	sel := selection.NewPlugin(w, pl)
-	tw.nav = NewPlugin(brd, w, sel, pl)
+	sel := selection.NewPlugin(w)
+	tw.nav = NewPlugin(brd, w, sel)
 	var c *collision.Plugin
 	if collide {
 		c = collision.NewPlugin(w)
@@ -157,7 +156,7 @@ func runTurnaround(t *testing.T, collide bool, after int) (replans int, err stri
 	if _, mt := tw.blueState(); mt == nil {
 		return 0, "done" // already arrived below red: nothing to turn around from
 	}
-	tw.nav.moves.Add(nil, MoveTo{Cell: a})
+	tw.nav.moves.Add(control.Nobody, MoveTo{Cell: a})
 	var last []board.CellID
 	for tick := range 60 * 10 {
 		tw.ecs.Tick(time.Second / 60)

@@ -5,8 +5,8 @@ import (
 
 	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/plugin"
-	"github.com/kjkrol/gram/plugins/players"
 	"github.com/kjkrol/uid"
 )
 
@@ -15,7 +15,7 @@ var _ goke.System = (*SelectionSystem)(nil)
 // SelectionSystem carries out Select commands as the Selected tag on Selectable entities — a bit
 // flipped in place, seen the same tick.
 type SelectionSystem struct {
-	selects *players.Inbox[Select]
+	selects *control.Inbox[Select]
 	space   *aabbworld.Space
 	tags    Tags
 
@@ -24,7 +24,7 @@ type SelectionSystem struct {
 }
 
 // NewSelectionSystem builds a SelectionSystem draining selects over space.
-func NewSelectionSystem(selects *players.Inbox[Select], space *aabbworld.Space, tags Tags) *SelectionSystem {
+func NewSelectionSystem(selects *control.Inbox[Select], space *aabbworld.Space, tags Tags) *SelectionSystem {
 	return &SelectionSystem{selects: selects, space: space, tags: tags}
 }
 
@@ -33,7 +33,7 @@ func (s *SelectionSystem) Init(si *goke.SysInit) {
 }
 
 func (s *SelectionSystem) Update(_ *goke.CmdBuf, _ time.Duration) {
-	s.selects.Drain(func(i players.Issued[Select]) {
+	s.selects.Drain(func(i control.Issued[Select]) {
 		cmd := i.Command
 		hit := make(map[uid.UID64]struct{}, len(cmd.IDs))
 		if cmd.IDs != nil {
