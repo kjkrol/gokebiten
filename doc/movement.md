@@ -92,8 +92,17 @@ Entering a cell — for `Occupancy` and the `CellEntered` tag — is `CellAt(cen
 changing, as today, and has nothing to do with waypoints. The next cell is reserved (`Leg`) ahead
 of time, when the lookahead point enters it; if `CanEnter` refuses, the unit asks for
 `WantSpeed = 0` and waits (`targetWaitTimeout`, `nearestFree` as today) — the one legitimate halt
-on a route. `Reflex` delays a reaction, it does not stop anything: requests come every tick and
-`Steering` coalesces them.
+on a route. The other is a bump: a unit under orders that struck someone (collision's `Struck`,
+which navigation listens for with a behavior of its own) stops for the tick, plans again from
+where it stands and holds that route for `bumpInterval`, deaf to further bumps — without the
+interval it would plan again every tick and never move. What the new route avoids is the
+`Occupancy`'s to say: it is kept **per domain** — `SingleOccupancy` lets one entity per domain
+into a cell, so two walkers head-on on a one-cell road find each other's cells taken, step aside
+into the field and pass, while a hawk over them holds the Air layer and neither blocks nor is
+blocked; `MultipleOccupancy` is tokens on a square, any number, and such tokens carry no
+`Physics`, because bodies cannot overlap. A walker whose goal someone stands on gets no route,
+waits `targetWaitTimeout` and settles beside. `Reflex` delays a reaction, it does not
+stop anything: requests come every tick and `Steering` coalesces them.
 
 ## 5. Obstacles come from one source: the terrain — done
 
@@ -140,7 +149,11 @@ decision (`board.CellKind`). Walls, holes and water are done; sight through terr
 - **A forest.** `CellKind.Veil` makes a passable cell a body without a `Collider`: it dims sight
   and nothing else — how much is §12's business.
 - **After a push, and after the ground changes.** The existing re-plan on being knocked off a
-  `Leg` covers it, and covers being pushed onto a passable cell off the route as well. When the
+  `Leg` covers it, and covers being pushed onto a passable cell off the route as well; a push
+  that keeps the unit on its leg — two units pushing each other along a road — is a bump, §4,
+  which with occupancy per domain is what stopped island-demo's units from shoving each other
+  for ever. Collision knows domains too: `Collider.Layers` are a unit's domain bits and a wall's
+  the bits of whoever it keeps out, so a flyer passes over walls and walkers. When the
   terrain's version moves, every route is checked against `Admits` and dropped at the first step
   that no longer takes the unit; a `Leg` whose far cells stop admitting it while the unit is
   still on its near cell is let go and the unit asked to stop — whether it stops in time is its

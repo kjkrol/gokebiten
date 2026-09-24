@@ -25,6 +25,10 @@ type MoveOrder struct {
 	Path      Path
 	Leg       Leg
 	Waited    time.Duration
+	// Bumped says the entity struck someone since the last tick; Cooldown is how long it then
+	// keeps its new route before it would react to a bump again.
+	Bumped   bool
+	Cooldown time.Duration
 }
 
 // Enqueue adds a goal after the last queued one; false when the queue is full.
@@ -104,6 +108,9 @@ var _ goke.System = (*navigationSystem)(nil)
 
 // targetWaitTimeout is how long an entity waits for an occupied target before settling nearby.
 const targetWaitTimeout = 500 * time.Millisecond
+
+// bumpInterval is how long after a bump an entity keeps its new route, deaf to further bumps.
+const bumpInterval = 500 * time.Millisecond
 
 // arrivalEpsilon is how close, in world units, counts as having reached the goal.
 const arrivalEpsilon = 2.0
@@ -190,17 +197,36 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 				p.Length = 0 // the ground changed under the route: plan again
 			}
 
+			orders[i].Cooldown = max(orders[i].Cooldown-d, 0)
+			if orders[i].Bumped {
+				// struck someone: stop here, plan again from where it stands, and hold that route for
+				// bumpInterval however many bumps follow
+				orders[i].Bumped, orders[i].Cooldown = false, bumpInterval
+				if leg.Active {
+					s.releaseLeg(*leg, id)
+					s.occupancy.Enter(actual, id, domain)
+				} else if actual != current {
+					s.occupancy.Leave(current, id)
+					s.occupancy.Enter(actual, id, domain)
+				}
+				moveTo(actual)
+				*leg = Leg{}
+				p.Length = 0
+				st.RequestSpeed(0)
+				continue
+			}
+
 			switch {
 			case leg.Active && actual == leg.From && !s.admitsAll(leg.cells()[1:], domain):
 				// the ground ahead no longer takes the unit: let the leg go and stop
 				s.releaseLeg(*leg, id)
-				s.occupancy.Enter(actual, id)
+				s.occupancy.Enter(actual, id, domain)
 				*leg = Leg{}
 				p.Length = 0
 				st.RequestSpeed(0)
 			case leg.Active && !slices.Contains(leg.cells(), actual):
 				s.releaseLeg(*leg, id)
-				s.occupancy.Enter(actual, id)
+				s.occupancy.Enter(actual, id, domain)
 				moveTo(actual)
 				*leg = Leg{}
 				p.Length = 0
@@ -208,7 +234,7 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 				moveTo(actual)
 			case !leg.Active && actual != current:
 				s.occupancy.Leave(current, id)
-				s.occupancy.Enter(actual, id)
+				s.occupancy.Enter(actual, id, domain)
 				moveTo(actual)
 				p.Length = 0
 			}
@@ -279,7 +305,7 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 				}
 				if leg.Active {
 					s.releaseLeg(*leg, id)
-					s.occupancy.Enter(leg.To, id)
+					s.occupancy.Enter(leg.To, id, domain)
 					moveTo(leg.To)
 					*leg = Leg{}
 				}
@@ -301,7 +327,7 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 				}
 				if leg.Active {
 					s.releaseLeg(*leg, id)
-					s.occupancy.Enter(leg.To, id)
+					s.occupancy.Enter(leg.To, id, domain)
 					moveTo(leg.To)
 					*leg = Leg{}
 				}
@@ -331,7 +357,7 @@ func (s *navigationSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 
 			if leg.Active {
 				s.releaseLeg(*leg, id)
-				s.occupancy.Enter(leg.To, id)
+				s.occupancy.Enter(leg.To, id, domain)
 				moveTo(leg.To)
 				*leg = Leg{}
 			}
@@ -488,12 +514,12 @@ func (s *navigationSystem) reserveLeg(from, to board.CellID, id uid.UID64, domai
 		leg.C1, leg.C2, leg.Diagonal = c1, c2, true
 	}
 	for _, c := range leg.cells()[1:] {
-		if !s.terrain.Kind(c).Admits(domain) || !s.occupancy.CanEnter(c, id) {
+		if !s.terrain.Kind(c).Admits(domain) || !s.occupancy.CanEnter(c, id, domain) {
 			return Leg{}, false
 		}
 	}
 	for _, c := range leg.cells() {
-		s.occupancy.Enter(c, id)
+		s.occupancy.Enter(c, id, domain)
 	}
 	return leg, true
 }

@@ -180,16 +180,14 @@ var hawkColor = color.RGBA{R: 120, G: 130, B: 60, A: 255}
 // defineKinds says what this game's entities are: one kind per colour, all scouts, and a hawk.
 func (s *mainStage) defineKinds() {
 	brd := s.board.Res.Logic.Board
-	occupancy := s.board.Occupancy()
 	spec := kind.Spec{
 		kind.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(brd, u.start, EntitySize)} }),
 		kind.Const(world.Velocity{}),
 		kind.Const(world.Steering{MaxSpeed: UnitSpeed, Accel: UnitSpeed * 2, Brake: UnitSpeed * 4, V0: UnitSpeed / 2, TurnRate: 0.15}),
 		kind.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
-		kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }).
-			WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
+		kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }),
 		kind.Tagged(s.selection.Tags().Selectable, s.selection.Tags().Selected),
-		kind.Const(collision.Collider{}),
+		kind.Const(collision.Collider{Layers: uint8(board.Land)}),
 		kind.Const(collision.Physics{}),
 		kind.Const(board.Mover{Domain: board.Land}),
 		kind.Const(vision.Sight{Facing: geom.NewVec(1, 0), HalfAngle: sightHalf, Radius: sightRadius}),
@@ -203,20 +201,19 @@ func (s *mainStage) defineKinds() {
 	s.hawk = kind.Define[unit](s.world.Kinds(), "hawk", s.hawkSpec())
 }
 
-// hawkSpec is a flyer: it moves in Air, nothing pushes it (a Collider without Physics) and its
-// sight is Clear of veils.
+// hawkSpec is a flyer: it moves in Air, collides on the Air layer alone (walls and walkers pass
+// under it, other flyers push it) and its sight is Clear of veils.
 func (s *mainStage) hawkSpec() kind.Spec {
 	brd := s.board.Res.Logic.Board
-	occupancy := s.board.Occupancy()
 	return kind.Spec{
 		kind.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(brd, u.start, EntitySize)} }),
 		kind.Const(world.Velocity{}),
 		kind.Const(world.Steering{MaxSpeed: UnitSpeed * 1.5, Accel: UnitSpeed * 2, Brake: UnitSpeed * 4, V0: UnitSpeed / 2, TurnRate: 0.1}),
 		kind.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
-		kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }).
-			WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
+		kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }),
 		kind.Tagged(s.selection.Tags().Selectable),
-		kind.Const(collision.Collider{}),
+		kind.Const(collision.Collider{Layers: uint8(board.Air)}),
+		kind.Const(collision.Physics{}),
 		kind.Const(board.Mover{Domain: board.Air}),
 		kind.Const(vision.Sight{Facing: geom.NewVec(1, 0), HalfAngle: sightHalf, Radius: sightRadius, Clear: true}),
 		kind.Const(vision.SightOutline{}),

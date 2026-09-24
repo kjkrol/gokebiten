@@ -56,7 +56,7 @@ func newProfiledWorld(t *testing.T, w, h uint32, start board.CellID, mt MoveOrde
 		if withSteering {
 			steer.Slice(&f.Cursor)[0] = profile
 		}
-		occupancy.Enter(start, pw.id)
+		occupancy.Enter(start, pw.id, board.Land)
 		pw.q = si.NewQueryBuilder(&pw.pos).Optional(&pw.order).Build()
 	}})
 
@@ -151,7 +151,7 @@ func TestNavigation_PassesAWaypointByProjectionNotDistance(t *testing.T) {
 		order.Slice(&f.Cursor)[0] = mt
 		profile.Slice(&f.Cursor)[0] = world.Steering{MaxSpeed: 20}
 		for _, c := range mt.Leg.cells() {
-			occupancy.Enter(c, id)
+			occupancy.Enter(c, id, board.Land)
 		}
 		q = si.NewQueryBuilder(&cell, &order).Build()
 	}})
@@ -308,7 +308,7 @@ func TestNavigation_QueuedGoalIsPassedByProjection(t *testing.T) {
 		order.Slice(&f.Cursor)[0] = mt
 		profile.Slice(&f.Cursor)[0] = world.Steering{MaxSpeed: 20}
 		for _, c := range mt.Leg.cells() {
-			occupancy.Enter(c, id)
+			occupancy.Enter(c, id, board.Land)
 		}
 		q = si.NewQueryBuilder(&cell, &order).Build()
 	}})
@@ -423,7 +423,7 @@ func TestNavigation_ALegIsTurnedRoundWhenTheRouteGoesBack(t *testing.T) {
 		order.Slice(&f.Cursor)[0] = mt
 		profile.Slice(&f.Cursor)[0] = world.Steering{MaxSpeed: 20}
 		for _, c := range mt.Leg.cells() {
-			occupancy.Enter(c, id)
+			occupancy.Enter(c, id, board.Land)
 		}
 		q = si.NewQueryBuilder(&cell, &order).Build()
 	}})

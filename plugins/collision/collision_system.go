@@ -187,7 +187,8 @@ type contactSide struct {
 	Physics *Physics
 }
 
-// resolve looks both sides of an overlapping pair up and asks the shapes; a lost Collider vetoes.
+// resolve looks both sides of an overlapping pair up and asks the shapes; a lost Collider vetoes,
+// and so do two colliders on no common layer.
 func (d *CollisionSystem) resolve(a, b uid.UID64, pen geom.Vec) (geom.Vec, bool) {
 	sideA, tagsA, ok := d.side(a)
 	if !ok {
@@ -195,6 +196,9 @@ func (d *CollisionSystem) resolve(a, b uid.UID64, pen geom.Vec) (geom.Vec, bool)
 	}
 	sideB, tagsB, ok := d.side(b)
 	if !ok {
+		return pen, false
+	}
+	if !sideA.Collider.touches(sideB.Collider) {
 		return pen, false
 	}
 	d.pair = pairSides{A: sideA, B: sideB, tagsA: tagsA, tagsB: tagsB}

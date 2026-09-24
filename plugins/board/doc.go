@@ -57,8 +57,12 @@
 //
 // # Occupancy
 //
-// [Occupancy] tracks who holds each cell, gating and recording every step navigation takes:
-// [SingleOccupancy] lets one entity in, [MultipleOccupancy] any number.
+// [Occupancy] tracks who holds each cell and in which domains, gating and recording every step
+// navigation takes: [SingleOccupancy] lets one entity per domain into a cell (a walker and a
+// hawk share one, two walkers do not), [MultipleOccupancy] any number — tokens on a square, which
+// carry no Physics, since bodies cannot overlap. Solid terrain bodies collide on the layers of
+// whoever their kind keeps out (collision's Collider.Layers), so a wall admitting Air lets a
+// flyer over.
 //
 // # Renderer
 //

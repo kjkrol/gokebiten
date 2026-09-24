@@ -12,8 +12,12 @@
 // cell it holds in Occupancy until it reaches the next centre. [CellEntered] is a one-tick tag
 // added the tick an entity's Cell changes. A navigated entity carries a world.Steering profile:
 // navigation only asks it for a heading at the lookahead point and for its own top speed, braking
-// from the profile before the goal. The [Plugin], built over a board and a world, runs before the
-// world's RunPlan.
+// from the profile before the goal. An entity that struck someone (a Struck behavior navigation
+// registers on the board's collision plugin) stops, plans again from where it stands and keeps
+// that route for a while whatever bumps follow — MoveOrder.Bumped and Cooldown; the board's
+// Occupancy, kept per domain, is what the new route goes round. Occupancy is seeded from every
+// entity's Cell and Mover when the Stage is set up, fresh or loaded. The [Plugin], built over a
+// board and a world, runs before the world's RunPlan.
 //
 // # Commands
 //

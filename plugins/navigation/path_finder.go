@@ -47,7 +47,7 @@ func (p *pathFinder) transitionsFor(entity uid.UID64, domain board.Domain) astar
 				continue
 			}
 			kind := p.terrain.Kind(n)
-			if !kind.Admits(domain) || !p.occupancy.CanEnter(n, entity) {
+			if !kind.Admits(domain) || !p.occupancy.CanEnter(n, entity, domain) {
 				continue
 			}
 			if c1, c2, ok := p.grid.DiagonalNeighbors(from, n); ok {
@@ -61,9 +61,9 @@ func (p *pathFinder) transitionsFor(entity uid.UID64, domain board.Domain) astar
 	}
 }
 
-// enterable reports whether entity may hold c: terrain admitting its domain, nobody else there.
+// enterable reports whether entity may hold c: terrain admitting its domain, the Occupancy letting it in.
 func (p *pathFinder) enterable(c board.CellID, entity uid.UID64, domain board.Domain) bool {
-	return p.terrain.Kind(c).Admits(domain) && p.occupancy.CanEnter(c, entity)
+	return p.terrain.Kind(c).Admits(domain) && p.occupancy.CanEnter(c, entity, domain)
 }
 
 // maxVisitedCells bounds how many cells nearestFree inspects around its target.

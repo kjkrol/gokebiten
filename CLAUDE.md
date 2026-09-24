@@ -224,7 +224,9 @@ shows how much of it is boilerplate vs. real behavior.
   `CollisionSystem` system a tick. An entity collides exactly while it carries `Collider` —
   `kind.Const(collision.Collider{})`, or `Attach`/`Detach` mid-game. The `CollisionSystem`
   first settles every `Collider`'s `Base.Caps` (`CanCollide`, plus `Static` for an
-  immovable `Physics`, `Sensor` for none) and rebuilds the space when any changed,
+  immovable `Physics`, `Sensor` for none) and rebuilds the space when any changed;
+  `Collider.Layers` are the bits it collides on (zero: all), two colliders touching only where
+  they share a bit — a board game uses `Domain` bits, walls the bits of whoever they keep out,
   so a `Collider` counts from the tick it is carried. The tick is then one
   `collide.Engine.Tick` (`github.com/kjkrol/aabbworld/collide` holds the contract —
   `Handler`, `Config`, `Engine`; the `CollisionSystem` builds the engine once with
@@ -255,7 +257,11 @@ shows how much of it is boilerplate vs. real behavior.
   `board`. A navigated unit carries a `world.Steering` profile: navigation only asks it for a
   heading (at a lookahead point, so turns start before the bend) and for its own top speed, braking
   from the profile before the goal; a waypoint is passed by projection, the goal by radius. A
-  `MoveOrder` queues up to `MaxWaypoints` further goals. A `MoveTo{Cell, Append}` command orders
+  `MoveOrder` queues up to `MaxWaypoints` further goals. A unit that struck someone (a `Struck`
+  behavior navigation registers on the board's collision plugin) stops, re-plans from where it
+  stands and holds that route for `bumpInterval`, so units pushing each other on a road step
+  aside instead of shoving for ever. Occupancy is seeded from `Cell` + `Mover` at Setup (no spawn
+  effect needed). A `MoveTo{Cell, Append}` command orders
   every `Selected` entity; a `plugin.Commander`, its `DefaultBindings()` make a right click one,
   Shift appends. Depends on `board`, `world` and `selection` (its `Selected` tag picks whom a
   command orders).

@@ -1,71 +1,89 @@
 package board
 
-import (
-	"slices"
+import "github.com/kjkrol/uid"
 
-	"github.com/kjkrol/uid"
-)
-
-// Occupancy tracks which entity/entities hold each cell, gating and
-// recording every step Movement takes.
+// Occupancy tracks who holds each cell and in which domains, gating and recording every step
+// navigation takes: a land unit and a flyer may share a cell, two land units may not.
 type Occupancy interface {
-	CanEnter(c CellID, entity uid.UID64) bool
-	Enter(c CellID, entity uid.UID64)
+	// CanEnter reports whether entity, moving in domain, may hold c.
+	CanEnter(c CellID, entity uid.UID64, domain Domain) bool
+	Enter(c CellID, entity uid.UID64, domain Domain)
 	Leave(c CellID, entity uid.UID64)
 }
 
-// SingleOccupancy allows at most one entity per cell, rejecting every
-// other entrant. Zero-value ready — no constructor needed.
+// holder is one entity on a cell and the domains it holds it in.
+type holder struct {
+	entity uid.UID64
+	domain Domain
+}
+
+// SingleOccupancy lets one entity per domain into a cell: whoever shares a domain with a holder
+// is refused. Zero-value ready — no constructor needed.
 type SingleOccupancy struct {
-	holders map[CellID]uid.UID64
+	holders map[CellID][]holder
 }
 
 var _ Occupancy = (*SingleOccupancy)(nil)
 
-func (o *SingleOccupancy) CanEnter(c CellID, entity uid.UID64) bool {
-	holder, occupied := o.holders[c]
-	return !occupied || holder == entity
+func (o *SingleOccupancy) CanEnter(c CellID, entity uid.UID64, domain Domain) bool {
+	for _, h := range o.holders[c] {
+		if h.entity != entity && h.domain&domain != 0 {
+			return false
+		}
+	}
+	return true
 }
 
-func (o *SingleOccupancy) Enter(c CellID, entity uid.UID64) {
+func (o *SingleOccupancy) Enter(c CellID, entity uid.UID64, domain Domain) {
 	if o.holders == nil {
-		o.holders = make(map[CellID]uid.UID64)
+		o.holders = make(map[CellID][]holder)
 	}
-	o.holders[c] = entity
+	for i, h := range o.holders[c] {
+		if h.entity == entity {
+			o.holders[c][i].domain = domain
+			return
+		}
+	}
+	o.holders[c] = append(o.holders[c], holder{entity, domain})
 }
 
 func (o *SingleOccupancy) Leave(c CellID, entity uid.UID64) {
-	if o.holders[c] == entity {
-		delete(o.holders, c)
-	}
+	o.holders[c] = leave(o.holders[c], entity)
 }
 
-// MultipleOccupancy lets any number of entities share a cell. Zero-value
-// ready — no constructor needed.
+// MultipleOccupancy lets any number of entities share a cell — tokens on a board square. Such
+// entities carry no Physics: bodies cannot overlap. Zero-value ready — no constructor needed.
 type MultipleOccupancy struct {
-	holders map[CellID][]uid.UID64
+	holders map[CellID][]holder
 }
 
 var _ Occupancy = (*MultipleOccupancy)(nil)
 
-func (o *MultipleOccupancy) CanEnter(CellID, uid.UID64) bool { return true }
+func (o *MultipleOccupancy) CanEnter(CellID, uid.UID64, Domain) bool { return true }
 
-func (o *MultipleOccupancy) Enter(c CellID, entity uid.UID64) {
-	if slices.Contains(o.holders[c], entity) {
-		return
-	}
+func (o *MultipleOccupancy) Enter(c CellID, entity uid.UID64, domain Domain) {
 	if o.holders == nil {
-		o.holders = make(map[CellID][]uid.UID64)
+		o.holders = make(map[CellID][]holder)
 	}
-	o.holders[c] = append(o.holders[c], entity)
-}
-
-func (o *MultipleOccupancy) Leave(c CellID, entity uid.UID64) {
-	list := o.holders[c]
-	for i, e := range list {
-		if e == entity {
-			o.holders[c] = append(list[:i], list[i+1:]...)
+	for i, h := range o.holders[c] {
+		if h.entity == entity {
+			o.holders[c][i].domain = domain
 			return
 		}
 	}
+	o.holders[c] = append(o.holders[c], holder{entity, domain})
+}
+
+func (o *MultipleOccupancy) Leave(c CellID, entity uid.UID64) {
+	o.holders[c] = leave(o.holders[c], entity)
+}
+
+// leave drops entity from holders, keeping the order of the rest.
+func leave(holders []holder, entity uid.UID64) []holder {
+	for i, h := range holders {
+		if h.entity == entity {
+			return append(holders[:i], holders[i+1:]...)
+		}
+	}
+	return holders
 }

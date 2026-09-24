@@ -27,7 +27,6 @@ import (
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
 	"github.com/kjkrol/gram/render"
-	"github.com/kjkrol/uid"
 )
 
 const (
@@ -272,17 +271,15 @@ func (s *mainStage) onGround(t plugin.Tick, m *board.Mover, st board.Standing) {
 // defineKinds says what this game's entities are: the witch walks on land and water, the walker
 // on land, the boat on water.
 func (s *mainStage) defineKinds() {
-	occupancy := s.board.Occupancy()
 	spec := func(domain board.Domain, brake float64, extra ...kind.Comp) kind.Spec {
 		base := kind.Spec{
 			kind.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(s.brd, u.start, EntitySize)} }),
 			kind.Const(world.Velocity{}),
 			kind.Const(world.Steering{MaxSpeed: UnitSpeed, Accel: UnitSpeed * 2, Brake: brake, V0: UnitSpeed / 2, TurnRate: 0.15}),
-			kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }).
-				WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
+			kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }),
 			kind.Const(board.Mover{Domain: domain}),
 			kind.Tagged(s.selection.Tags().Selectable),
-			kind.Const(collision.Collider{}),
+			kind.Const(collision.Collider{Layers: uint8(domain)}),
 			kind.Const(collision.Physics{}),
 		}
 		return append(base, extra...)
@@ -291,7 +288,6 @@ func (s *mainStage) defineKinds() {
 	kinds := s.world.Kinds()
 	s.witch = kind.Define[unit](kinds, "witch", spec(board.Land|board.Water|Frost, UnitSpeed*4, order, kind.Const(witch{Power: 1})))
 	s.walker = kind.Define[unit](kinds, "walker", spec(board.Land, UnitSpeed*4))
-	// A boat brakes badly: it sees the ice coming and still sails onto it.
 	s.boat = kind.Define[unit](kinds, "boat", spec(board.Water, UnitSpeed/4, order))
 }
 

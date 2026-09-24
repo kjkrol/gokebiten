@@ -79,7 +79,7 @@ func newTurnaroundWorld(t *testing.T, collide bool) *turnaroundWorld {
 			kind.Const(world.Velocity{}),
 			kind.Const(world.Steering{MaxSpeed: 64, Accel: 128, V0: 32, TurnRate: 0.15}),
 			kind.Load(func(u unitRow) board.Cell { return board.Cell{ID: u.start} }).
-				WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
+				WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id, board.Land) }),
 			kind.Const(collision.Collider{}),
 			kind.Const(collision.Physics{}),
 		}

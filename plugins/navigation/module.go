@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
-	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/board"
 )
 
@@ -19,7 +18,6 @@ type module struct {
 }
 
 var _ goke.Module = (*module)(nil)
-var _ plugin.PostLoader = (*module)(nil)
 
 // =================================================================
 // goke.Module contract
@@ -41,8 +39,33 @@ func (m *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
 
 }
 
-// SetupSystems is empty — spawning board entities is the game's responsibility.
-func (m *module) SetupSystems() []goke.System { return nil }
+// SetupSystems seeds board.Occupancy from every entity's Cell, Mover and in-progress Leg — after
+// a Populate as after a Load, so the board never depends on a spawn effect to know who stands where.
+func (m *module) SetupSystems() []goke.System {
+	return []goke.System{goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		var cell goke.Comp[board.Cell]
+		var order goke.OptComp[MoveOrder]
+		var mover goke.OptComp[board.Mover]
+		query := si.NewQueryBuilder(&cell).Optional(&order, &mover).Build()
+		occupancy := m.navigationSystem.occupancy
+		query.All()
+		for query.Next() {
+			cursor := query.Cursor()
+			cells := cell.Slice(cursor)
+			orders := order.Slice(cursor)
+			movers := mover.Slice(cursor)
+			for i, id := range cursor.IDs {
+				domain := board.DomainAt(movers, i)
+				occupancy.Enter(cells[i].ID, id, domain)
+				if orders != nil && orders[i].Leg.Active {
+					for _, c := range orders[i].Leg.cells() {
+						occupancy.Enter(c, id, domain)
+					}
+				}
+			}
+		}
+	}}}
+}
 
 // LoadComps lists the component types navigation owns — see [goke.CompProvider].
 func (m *module) LoadComps() []goke.CompToken {
@@ -51,32 +74,4 @@ func (m *module) LoadComps() []goke.CompToken {
 		goke.LoadComp[MoveOrder](),
 		goke.LoadComp[CellEntered](),
 	}
-}
-
-// =================================================================
-// plugin.PostLoader contract
-// =================================================================
-
-// PostLoad rebuilds board.Occupancy from every loaded entity's Cell and in-progress Leg.
-func (m *module) PostLoad() goke.System {
-	return goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		var cell goke.Comp[board.Cell]
-		var order goke.OptComp[MoveOrder]
-		query := si.NewQueryBuilder(&cell).Optional(&order).Build()
-		occupancy := m.navigationSystem.occupancy
-		query.All()
-		for query.Next() {
-			cursor := query.Cursor()
-			cells := cell.Slice(cursor)
-			orders := order.Slice(cursor)
-			for i, id := range cursor.IDs {
-				occupancy.Enter(cells[i].ID, id)
-				if orders != nil && orders[i].Leg.Active {
-					for _, c := range orders[i].Leg.cells() {
-						occupancy.Enter(c, id)
-					}
-				}
-			}
-		}
-	}}
 }

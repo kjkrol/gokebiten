@@ -81,7 +81,7 @@ func TestNavigationSystem_Update_DeviationTriggersRepath(t *testing.T) {
 		pos.Slice(&f.Cursor)[0].Pos = world.Position{AABB: board.CellAABB(grid, start, 8)}
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		profile.Slice(&f.Cursor)[0] = world.Steering{MaxSpeed: 20}
-		occupancy.Enter(start, id)
+		occupancy.Enter(start, id, board.Land)
 
 		q = si.NewQueryBuilder(&cell, &order).Build()
 	}})
@@ -158,7 +158,7 @@ func TestNavigationSystem_Update_TransientFlankerCellDoesNotInvalidatePath(t *te
 		order.Slice(&f.Cursor)[0] = mt
 		profile.Slice(&f.Cursor)[0] = world.Steering{MaxSpeed: 20}
 		for _, c := range mt.Leg.cells() {
-			occupancy.Enter(c, id)
+			occupancy.Enter(c, id, board.Land)
 		}
 
 		q = si.NewQueryBuilder(&cell, &order).Build()
@@ -210,7 +210,7 @@ func TestNavigationSystem_Update_ArrivalStopsEntity(t *testing.T) {
 		pos.Slice(&f.Cursor)[0].Vel = world.Velocity{Dir: geom.NewVec(1, 0), Value: 50}
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		profile.Slice(&f.Cursor)[0] = world.Steering{MaxSpeed: 20}
-		occupancy.Enter(start, id)
+		occupancy.Enter(start, id, board.Land)
 
 		q = si.NewQueryBuilder(&cell, &pos).Build()
 	}})
@@ -270,7 +270,7 @@ func TestNavigationSystem_Update_ArrivalSnapsToCellCenter(t *testing.T) {
 		pos.Slice(&f.Cursor)[0].Pos = offCenter
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		profile.Slice(&f.Cursor)[0] = world.Steering{MaxSpeed: 20}
-		occupancy.Enter(target, id)
+		occupancy.Enter(target, id, board.Land)
 
 		q = si.NewQueryBuilder(&pos).Build()
 	}})
@@ -334,7 +334,7 @@ func TestNavigationSystem_Update_ArrivalGlidesSmoothlyToCellCenter(t *testing.T)
 		pos.Slice(&f.Cursor)[0].Pos = offCenter
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		profile.Slice(&f.Cursor)[0] = world.Steering{MaxSpeed: 20}
-		occupancy.Enter(target, id)
+		occupancy.Enter(target, id, board.Land)
 
 		q = si.NewQueryBuilder(&pos).Build()
 	}})
@@ -428,7 +428,7 @@ func TestNavigationSystem_Update_ReproducesBoardDemoWallScenario(t *testing.T) {
 		pos.Slice(&f.Cursor)[0].Pos = startPos
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		profile.Slice(&f.Cursor)[0] = world.Steering{MaxSpeed: speed}
-		occupancy.Enter(start, id)
+		occupancy.Enter(start, id, board.Land)
 
 		q = si.NewQueryBuilder(&cell, &pos, &order).Build()
 	}})

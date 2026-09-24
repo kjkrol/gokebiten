@@ -464,3 +464,36 @@ func TestBodies_VeiledBodiesCarryTheirTransparency(t *testing.T) {
 		t.Errorf("found %d walls, %d forests, %d units; want 1, some, 1", walls, forests, units)
 	}
 }
+
+// A solid kind admitting Air keeps Land and Water out: its bodies collide on every layer but Air.
+func TestBodies_CollideOnTheLayersTheirKindKeepsOut(t *testing.T) {
+	grid := board.DefaultGrids{}.Square(6, 16, cellSize)
+	cell := func(x, y uint32) board.CellID { c, _ := grid.CellIndex(x, y); return c }
+	bw := newBodiesWorld(t, grid, 6*cellSize, 16*cellSize, func(brd *board.Board) {
+		brd.SetAll(board.CellKind{Name: board.Named("grass"), Cost: 1, Allows: board.Land})
+		brd.Set(cell(3, 3), board.CellKind{Name: board.Named("wall"), Cost: 1, Solid: true, Allows: board.Air})
+		brd.Set(cell(3, 8), board.CellKind{Name: board.Named("rock"), Cost: 1, Solid: true})
+	}, []mover{{cell: cell(1, 1)}})
+	bw.tick()
+
+	var collider goke.Comp[collision.Collider]
+	var base goke.Comp[world.Base]
+	var q *goke.Query
+	bw.ecs.RegSys(goke.SystemFn{OnInit: func(si *goke.SysInit) { q = si.NewQueryBuilder(&base, &collider).Build() }})
+	got := map[float64]uint8{}
+	for q.All(); q.Next(); {
+		cur := q.Cursor()
+		for i, id := range cur.IDs {
+			if bw.isBody(id) {
+				got[base.Slice(cur)[i].Pos.TopLeft.Y] = collider.Slice(cur)[i].Layers
+			}
+		}
+	}
+	wall, rock := got[float64(3*cellSize)], got[float64(8*cellSize)]
+	if wall&uint8(board.Air) != 0 || wall&uint8(board.Land) == 0 || wall&uint8(board.Water) == 0 {
+		t.Errorf("the wall admitting Air collides on layers %08b, want every layer but Air", wall)
+	}
+	if rock != 0xFF {
+		t.Errorf("the rock admitting nobody collides on layers %08b, want all of them", rock)
+	}
+}

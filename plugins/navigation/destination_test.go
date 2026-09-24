@@ -81,8 +81,8 @@ func TestPathFinder_NearestFree_SkipsOccupiedTakenAndUnreachableCells(t *testing
 	at := func(x uint32) board.CellID { c, _ := grid.CellIndex(x, 0); return c }
 
 	const mover, other = uid.UID64(1), uid.UID64(2)
-	occupancy.Enter(at(0), mover)
-	occupancy.Enter(at(4), other)
+	occupancy.Enter(at(0), mover, board.Land)
+	occupancy.Enter(at(4), other, board.Land)
 	terrain.Set(at(2), board.CellKind{Cost: 1, Solid: true})
 	taken := map[board.CellID]bool{at(5): true}
 
@@ -121,7 +121,7 @@ func TestCommandSystem_Update_SpreadsGroupOverDistinctFreeCells(t *testing.T) {
 		}
 		for i, id := range f.Cursor.IDs {
 			cell.Slice(&f.Cursor)[i] = board.Cell{ID: starts[i]}
-			occupancy.Enter(starts[i], id)
+			occupancy.Enter(starts[i], id, board.Land)
 			if starts[i] == at(5, 4) {
 				nearest = id
 			}

@@ -9,6 +9,16 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
   `SteeringSystem` writes the base speed every tick; navigation steers through it: a lookahead
   point, waypoints passed by projection, braking to rest on the goal, a queue of goals
   (Shift + right click), routes previewed to every queued goal.
+- A unit under orders that struck someone stops, plans again and holds that route for a while
+  (`MoveOrder.Bumped`, `Cooldown`), so units head-on on a road step aside instead of pushing each
+  other for ever. `board.Plugin.Collision()`.
+- `Occupancy` is kept per domain (`CanEnter`/`Enter` take a `Domain`): `SingleOccupancy` lets one
+  entity per domain into a cell, so a flyer and a walker share one; `MultipleOccupancy` stays a
+  stack of tokens. Navigation seeds it from `Cell` + `Mover` at Setup, fresh or loaded — the
+  demos' spawn effects are gone. island-demo uses `SingleOccupancy`.
+- `collision.Collider.Layers`: two colliders touch only where their layer bits overlap (zero: every
+  layer); terrain bodies collide on the bits of the domains their kind keeps out, so a wall
+  admitting Air lets a flyer over, and the demos' hawk now carries `Physics` on the Air layer.
 - Routes and legs lose their footing when the terrain changes under them; a unit stuck where its
   domain may not keeps its order.
 - The camera pans in screen pixels at any zoom.

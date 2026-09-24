@@ -58,7 +58,7 @@ func newEnteredWorld(t *testing.T, w, h uint32, start, target board.CellID) *ent
 		pos.Slice(&f.Cursor)[0].Pos = p
 		order.Slice(&f.Cursor)[0] = MoveOrder{Target: target}
 		profile.Slice(&f.Cursor)[0] = world.Steering{MaxSpeed: float64(legCellSize * 2)}
-		occupancy.Enter(start, ew.id)
+		occupancy.Enter(start, ew.id, board.Land)
 
 		enteredQ = si.NewQueryBuilder(&enteredComp).Build()
 		orderQ = si.NewQueryBuilder(&cellComp).Optional(&orderComp).Build()

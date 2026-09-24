@@ -151,6 +151,9 @@ func (p *Plugin) Body() plugin.Tag[Family] { return p.body }
 // Occupancy returns the occupancy tracker this plugin was built with.
 func (p *Plugin) Occupancy() Occupancy { return p.occupancy }
 
+// Collision returns the collision plugin the board was built WithCollision, or nil.
+func (p *Plugin) Collision() *collision.Plugin { return p.collision }
+
 // CellKindDict returns this Plugin's registered CellKinds.
 func (p *Plugin) CellKindDict() CellKindDict { return p.kinds }
 

@@ -53,7 +53,7 @@ func TestKind_LoadWithEffect_EntersOccupancyOnSpawn(t *testing.T) {
 		kind.Const(placement.Place(0, 1)),
 		kind.Const(world.Velocity{}),
 		kind.Load(func(c board.CellID) board.Cell { return board.Cell{ID: c} }).
-			WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
+			WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id, board.Land) }),
 	})
 	plugin.Seed(unit.Entry(target))
 	if err := plugin.Populate(); err != nil {
@@ -89,7 +89,7 @@ func TestKind_LoadWithEffect_EntersOccupancyOnSpawn(t *testing.T) {
 	if !found {
 		t.Fatal("expected the spawned entity to exist")
 	}
-	if occupancy.CanEnter(target, uid.UID64(999)) {
+	if occupancy.CanEnter(target, uid.UID64(999), board.Land) {
 		t.Error("expected occupancy.Enter to have claimed the target cell for the spawned entity")
 	}
 }

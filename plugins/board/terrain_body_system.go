@@ -42,6 +42,7 @@ type terrainBodySystem struct {
 	boxes  []bodyBox
 	planes []plane.AABB
 	veils  []float64
+	allows []Domain
 	ids    []uid.UID64
 }
 
@@ -88,12 +89,15 @@ func (s *terrainBodySystem) present() []uid.UID64 {
 func (s *terrainBodySystem) spawn() {
 	s.boxes = terrainBoxes(s.brd, s.boxes)
 	tagged := plugin.Tags[Family](0).With(s.body)
+	n := 0
 	s.solid.Spawn(s.planesOf(true), func(i int, _ uid.UID64, cursor *goke.Cursor) {
-		s.collider.Slice(cursor)[i] = collision.Collider{}
+		// a body pushes whoever its kind does not admit: a wall admitting Air lets a flyer over
+		s.collider.Slice(cursor)[i] = collision.Collider{Layers: ^uint8(s.allows[n])}
 		s.physics.Slice(cursor)[i] = collision.Physics{Mass: math.Inf(1)}
 		s.solidMarks.Slice(cursor)[i] = tagged
+		n++
 	})
-	n := 0
+	n = 0
 	s.veiled.Spawn(s.planesOf(false), func(i int, _ uid.UID64, cursor *goke.Cursor) {
 		s.veiledMarks.Slice(cursor)[i] = tagged
 		s.transparency.Slice(cursor)[i] = vision.Transparency{Value: 1 - min(s.veils[n], 1)}
@@ -102,9 +106,10 @@ func (s *terrainBodySystem) spawn() {
 	s.seen = s.brd.Version()
 }
 
-// planesOf lists the boxes of the solid or the veiled bodies as space rectangles, with their veils.
+// planesOf lists the boxes of the solid or the veiled bodies as space rectangles, with their veils
+// and the domains their kind admits, in the same order.
 func (s *terrainBodySystem) planesOf(solid bool) []plane.AABB {
-	s.planes, s.veils = s.planes[:0], s.veils[:0]
+	s.planes, s.veils, s.allows = s.planes[:0], s.veils[:0], s.allows[:0]
 	for _, b := range s.boxes {
 		if b.solid != solid {
 			continue
@@ -112,6 +117,7 @@ func (s *terrainBodySystem) planesOf(solid bool) []plane.AABB {
 		size := b.box.BottomRight.Sub(b.box.TopLeft)
 		s.planes = append(s.planes, plane.NewAABB(b.box.TopLeft, size.X, size.Y))
 		s.veils = append(s.veils, b.veil)
+		s.allows = append(s.allows, b.allows)
 	}
 	return s.planes
 }

@@ -61,6 +61,11 @@ func (p *Plugin) Install(ctx plugin.Installer) error {
 	navSys.BindSpace(p.worldPlugin.Space())
 
 	moveCommandSystem := newMoveCommandSystem(finder, &p.moves, p.selected)
+	if c := p.boardPlugin.Collision(); c != nil {
+		if err := c.RegisterBehavior(bumped()); err != nil {
+			return err
+		}
+	}
 
 	p.module = &module{navigationSystem: navSys, moveCommandSystem: moveCommandSystem}
 	ctx.UseModule(p.module)
