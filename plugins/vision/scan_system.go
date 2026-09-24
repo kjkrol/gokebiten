@@ -20,8 +20,9 @@ type ScanSystem struct {
 	space *aabbworld.Space
 	view  aabbworld.View // one for the whole system — see Update
 
-	// veiled reads an entity's Transparency for the cone; clear is the same with every veil lifted.
-	veiled, clear func(uid.UID64) float64
+	// tau answers the cone how see-through an entity is to the observer in hand, blockers its Blockers.
+	tau      func(uid.UID64) float64
+	blockers world.Layers
 
 	query   *goke.Query
 	sight   goke.Comp[Sight]
@@ -33,6 +34,7 @@ type ScanSystem struct {
 	lookup     *goke.Query
 	lookupBase goke.Comp[world.Base]
 	lookupTau  goke.OptComp[Transparency]
+	lookupLay  goke.OptComp[world.Layers]
 	lookupHot  bool
 
 	// host runs the Between behaviors registered with the plugin, inside this pass.
@@ -59,30 +61,29 @@ func NewScanSystem(space *aabbworld.Space) *ScanSystem {
 func newScanSystem(space *aabbworld.Space, host *host.PairHost[Sighting]) *ScanSystem {
 	s := &ScanSystem{space: space, host: host}
 	s.sightingOf = s.sighting
-	s.veiled = s.transparency
-	s.clear = func(id uid.UID64) float64 {
-		if s.transparency(id) > 0 {
-			return 1
-		}
-		return 0
-	}
+	s.tau = s.transparency
 	return s
 }
 
 func (s *ScanSystem) Init(si *goke.SysInit) {
 	walk := si.NewQueryBuilder(&s.sight, &s.base).Optional(&s.outline, &s.steer)
-	seek := si.NewQueryBuilder(&s.lookupBase).Optional(&s.lookupTau)
+	seek := si.NewQueryBuilder(&s.lookupBase).Optional(&s.lookupTau, &s.lookupLay)
 	s.host.Bind(walk, seek)
 	s.query, s.lookup = walk.Build(), seek.Build()
 }
 
-// transparency is what id carries as Transparency, 0 without one.
+// transparency is how see-through id is to the observer in hand: as empty on none of its
+// Blockers, else its Transparency, 0 without one.
 func (s *ScanSystem) transparency(id uid.UID64) float64 {
 	if !s.lookup.Seek(id) {
 		return 0
 	}
 	s.lookupHot = false
-	if t := s.lookupTau.At(s.lookup.Cursor()); t != nil {
+	cur := s.lookup.Cursor()
+	if !world.LayersOf(s.lookupLay.At(cur)).Meets(s.blockers) {
+		return 1
+	}
+	if t := s.lookupTau.At(cur); t != nil {
 		return t.Value
 	}
 	return 0
@@ -107,6 +108,7 @@ func (s *ScanSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 
 		for i, id := range cursor.IDs {
 			sight := &sights[i]
+			s.blockers = sight.Blockers
 			if s.space.Scan(id, s.cone(sight), &s.view) {
 				record(&sight.Seen, &s.view)
 				if outlines != nil {
@@ -158,13 +160,9 @@ func (s *ScanSystem) sighting(matched []int) Sighting {
 	return out
 }
 
-// cone is the query for one Sight: veiled by what the entities carry, or clear of the veils.
+// cone is the query for one Sight, see-through as the entities are to it.
 func (s *ScanSystem) cone(sight *Sight) aabbworld.Cone {
-	c := aabbworld.Cone{Direction: sight.Facing, HalfAngle: sight.HalfAngle, Radius: sight.Radius, Transparency: s.veiled}
-	if sight.Clear {
-		c.Transparency = s.clear
-	}
-	return c
+	return aabbworld.Cone{Direction: sight.Facing, HalfAngle: sight.HalfAngle, Radius: sight.Radius, Transparency: s.tau}
 }
 
 // record keeps the nearest MaxSeen entities of view.

@@ -49,7 +49,8 @@
 // cells becomes an immovable entity in the world — tagged [Plugin.Body] in board's tag [Family], with a collider and an
 // infinite mass, no sprite, no kind — so no unit ends a tick inside a wall and walls cut sight;
 // a run of veiled cells becomes a body without a collider carrying a vision.Transparency of
-// 1 - Veil, so a cone fades through it; a flying observer looks over the veils with Sight.Clear.
+// 1 - Veil, so a cone fades through it, on the world.Layers of the kind's Veils, so an observer
+// whose Sight.Blockers miss them looks over it.
 // A body is made of the boxes the grid gives for each cell ([Grid.CellBoxes]: one for a square,
 // [HexCapStrips] strips over each cap of a hex, covering it from outside), merged along both axes
 // up to [MaxBodyCells] a side. The bodies follow [TerrainMap.Version]; call [Plugin.RunPlan] after
@@ -60,9 +61,9 @@
 // [Occupancy] tracks who holds each cell and in which domains, gating and recording every step
 // navigation takes: [SingleOccupancy] lets one entity per domain into a cell (a walker and a
 // hawk share one, two walkers do not), [MultipleOccupancy] any number — tokens on a square, which
-// carry no Physics, since bodies cannot overlap. Solid terrain bodies collide on the layers of
-// whoever their kind keeps out (collision's Collider.Layers), so a wall admitting Air lets a
-// flyer over.
+// carry no Physics, since bodies cannot overlap. Solid terrain bodies are on the world.Layers of
+// whoever their kind keeps out, so a wall admitting Air lets a flyer over and cuts none of its
+// sight.
 //
 // # Renderer
 //

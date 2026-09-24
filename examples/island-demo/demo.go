@@ -175,7 +175,8 @@ func (s *mainStage) defineKinds() {
 		kind.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
 		kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }),
 		kind.Tagged(s.selection.Tags().Selectable, s.selection.Tags().Selected),
-		kind.Const(collision.Collider{Layers: uint8(board.Land)}),
+		kind.Const(collision.Collider{}),
+		kind.Const(world.Layers(board.Land)),
 		kind.Const(collision.Physics{}),
 		kind.Const(board.Mover{Domain: board.Land}),
 	})

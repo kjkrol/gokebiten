@@ -22,7 +22,10 @@ type CellKind struct {
 	Solid bool
 	// Veil dims sight without blocking movement, 0 clear to 1 cutting it: a forest at 0.6 is looked
 	// through at 0.4 of the reach; see Plugin.WithCollision.
-	Veil     float64
+	Veil float64
+	// Veils is whom the Veil dims, as world.Layers: a forest veiling Land is looked over from Air.
+	// Zero veils everyone.
+	Veils    Domain
 	SpriteID render.SpriteID
 	// Costs overrides Cost for entities moving in a domain — Costs[i] for the domain bit i, when
 	// set; see Costing and CostFor.

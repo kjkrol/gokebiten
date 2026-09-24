@@ -36,11 +36,13 @@ func (c *installCtx) RegSys(factory func() goke.System) goke.Runnable { return c
 func (c *installCtx) ECS() *goke.ECS                                  { return c.ecs }
 
 // spawn describes one entity the fixture puts in the world: a 10×10 box unless size says
-// otherwise, cutting sight unless tau says how see-through it is.
+// otherwise, cutting sight unless tau says how see-through it is, on every plane unless layers
+// says which.
 type spawn struct {
 	x, y    float64
 	size    float64
 	tau     float64
+	layers  world.Layers
 	sight   *vision.Sight // nil for something that is merely seen
 	outline bool
 }
@@ -78,6 +80,9 @@ func scene(t *testing.T, spawns ...spawn) ([]uid.UID64, []vision.Sighted, []visi
 		}
 		if s.tau > 0 {
 			spec = append(spec, kind.Const(vision.Transparency{Value: s.tau}))
+		}
+		if s.layers != 0 {
+			spec = append(spec, kind.Const(s.layers))
 		}
 		if s.sight != nil {
 			spec = append(spec, kind.Const(*s.sight))

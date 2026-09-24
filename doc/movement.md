@@ -147,12 +147,12 @@ decision (`board.CellKind`). Walls, holes and water are done; sight through terr
   domain — and `Standing.Fell(domain)` says the unit stands where its domain may not. It is a state, not an event, because `Each` runs for every entity the host
   walks — as `Struck` does in collision. The reaction is the game's: despawn, teleport, damage.
 - **A forest.** `CellKind.Veil` makes a passable cell a body without a `Collider`: it dims sight
-  and nothing else — how much is §12's business.
+  and nothing else — how much, and for whom (`Veils`), is §12's business.
 - **After a push, and after the ground changes.** The existing re-plan on being knocked off a
   `Leg` covers it, and covers being pushed onto a passable cell off the route as well; a push
   that keeps the unit on its leg — two units pushing each other along a road — is a bump, §4,
   which with occupancy per domain is what stopped island-demo's units from shoving each other
-  for ever. Collision knows domains too: `Collider.Layers` are a unit's domain bits and a wall's
+  for ever. Collision knows domains too: `world.Layers` are a unit's domain bits and a wall's
   the bits of whoever it keeps out, so a flyer passes over walls and walkers. When the
   terrain's version moves, every route is checked against `Admits` and dropped at the first step
   that no longer takes the unit; a `Leg` whose far cells stop admitting it while the unit is
@@ -227,15 +227,18 @@ step into the water; a unit stuck where it may not be keeps its order.
 ## 12. Sight through terrain, sight range and flying units — done
 
 Terrain limits sight by kind, not switching it off: a forest takes range, a hill none, a wall all.
+A world without heights is a set of planes — `world.Layers` — and sight and collision follow them;
+heights are the next step, §14.
 
 - **A budget, not a switch.** aabbworld v1.6.0's `Cone.Transparency` gives each entry a τ. A ray
   starts with the cone's radius as a budget: an empty stretch costs its length, a stretch through
   an entry costs its length divided by τ, an entry at τ ≤ 0 cuts. A forest at τ = 0.4 takes 2.5×
-  its depth; a see-through entry dims but is never "seen" (the game knows where its forests are);
-  `Depths` and `Outline` show the shortened reach, so a cone fades into a forest instead of
-  stopping at its edge. The choice of a budget over a multiplied attenuation is what keeps the
-  sweep exact for walls and cheap for forests: the opaque-only scan measures the same as before,
-  a scene with three entries in ten see-through costs about 8% more.
+  its depth; a see-through entry the ray enters within its budget is seen like anything else
+  (aabbworld v1.7.0 — v1.6.0 kept forests out of `Entities`, and a hawk looking over a walker
+  needs them in); `Depths` and `Outline` show the shortened reach, so a cone fades into a forest
+  instead of stopping at its edge. The choice of a budget over a multiplied attenuation is what
+  keeps the sweep exact for walls and cheap for forests: the opaque-only scan measures the same as
+  before, a scene with three entries in ten see-through costs about 8% more.
 - **Veil per kind, transparency per body.** `CellKind.Veil` in 0..1 replaces `Opaque`; a veiled
   body carries a `vision.Transparency` of 1 - Veil, and the scan reads it off the entity it is
   about to cross — nothing else carries one, so walls and units still cut. The transparency is
@@ -243,12 +246,27 @@ Terrain limits sight by kind, not switching it off: a forest takes range, a hill
   per kind after all.
 - **Range is the unit's.** `Sight.Radius`; `MaxSightRadius` only sizes the outline buffer, a
   longer sight sees as far as it says with a coarser outline.
-- **Flying is a convention.** `Mover{Domain: Air}` keeps the planner on cells admitting `Air` (the
-  demos admit it over the wall and the forest); a `Collider` without `Physics` makes the flyer a
-  sensor nothing pushes, so the terrain bodies do not stop it — no veto in collision was needed;
-  `Costing(Air, 1)` keeps the forest from slowing it; `Sight{Clear: true}` looks over the veils:
-  what only dims is lifted, what cuts still cuts, so a hawk sees through the forest and not through
-  the wall.
+- **Flying is a plane.** `Mover{Domain: Air}` keeps the planner on cells admitting `Air` (the
+  demos admit it over the wall and the forest) and `Costing(Air, 1)` keeps the forest from slowing
+  it. Everything else follows from `world.Layers`, the planes an entity is on: the hawk carries
+  `Air`, walkers `Land`, a solid body the bits of whoever its kind keeps out (`^Allows`, so a wall
+  admitting Air is on `Land|Water`), a veiled body its kind's `Veils` (a forest veils `Land`).
+  Collision pairs only entities whose layers meet, so the hawk keeps its `Physics` and other
+  flyers push it while walls and walkers pass under. Sight reads the same bits through
+  `Sight.Blockers`, the layers that cut or dim an observer at all: the hawk's are `Air`, so a
+  wall, a forest or a walker is as empty to it — looked over, and still seen when the ray enters
+  it; a walker's are `Land`, so the hawk above shades nothing. `Sight.Clear` is gone: "over the
+  veils" was one case of "on another plane". What a plane cannot say — a wall lower than the
+  eye, a hill, a tower seen over the wall — is §14's, the 2.5D world, which is a conscious
+  choice in `world.Config` and costs the scan about three times as much.
+
+## 14. Heights — planned
+
+The 2.5D world: `world.Config{Quasi3D: true}`, `Position.Altitude`/`Height`, `CellKind.Altitude`/
+`Height`, `Mover.Lift`, `Sight.Eye`, the board's height raster as aabbworld's `Cone.Ground`,
+collision vetoing pairs without overlap in Z. In a 2.5D world `Layers` and `Blockers` are an
+error, in a flat one the heights are: one model per world, chosen once. The plan is in the
+session notes; the raycast side is aabbworld v1.7.0.
 
 ## 13. Effects, tags and the profile — done
 

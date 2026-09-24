@@ -12,8 +12,10 @@
 // an open edge carries [Outside] — put on by whoever moved it there, the MoveSystem or collision's
 // solver — and every tick it does, the [Each] behaviors of a [Leaving] registered with
 // [Plugin.RegisterBehavior] hear of it; with none registered it is despawned. Put back inside, it
-// loses the mark. The Plugin exposes the shared [aabbworld.Space] ([Plugin.Space]) and the shared
-// camera ([Plugin.Camera]; the players plugin moves it through Pan and Zoom commands).
+// loses the mark. [Layers] are the planes an entity is on, one bit each, read by collision and
+// sight: two entities meet only where they share a bit, and one carrying none is on every plane.
+// The Plugin exposes the shared [aabbworld.Space] ([Plugin.Space]) and the shared camera
+// ([Plugin.Camera]; the players plugin moves it through Pan and Zoom commands).
 //
 // # Base, Position and Velocity
 //

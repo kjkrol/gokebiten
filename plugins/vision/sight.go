@@ -2,6 +2,7 @@ package vision
 
 import (
 	"github.com/kjkrol/aabbworld/geom"
+	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/uid"
 )
 
@@ -30,9 +31,10 @@ type Sight struct {
 	Facing    geom.Vec // unit vector
 	HalfAngle float64  // radians either side of Facing
 	Radius    float64  // world units
-	// Clear looks over whatever only dims sight — a flyer over a forest; what cuts sight still does.
-	Clear bool
-	Seen  Sighted // nearest first
+	// Blockers are the world.Layers whose entities cut or dim this sight; one on none of them is
+	// looked over — a walker under a hawk — and still seen. Zero: every entity does.
+	Blockers world.Layers
+	Seen     Sighted // nearest first
 }
 
 // Transparency is how see-through an entity is to a Sight: 0 cuts sight as an entity without it

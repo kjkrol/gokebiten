@@ -48,6 +48,7 @@ type CollisionSystem struct {
 	lookupBase     goke.Comp[world.Base]
 	lookupCollider goke.Comp[Collider]
 	lookupPhysics  goke.OptComp[Physics]
+	lookupLayers   goke.OptComp[world.Layers]
 	lookupHot      bool
 
 	// pair is the contact being settled; contacts is what this tick confirmed.
@@ -93,7 +94,7 @@ func (d *CollisionSystem) Init(si *goke.SysInit) {
 
 	d.all = si.NewQueryBuilder(&d.allBase).Build()
 
-	seek := si.NewQueryBuilder(&d.lookupBase, &d.lookupCollider).Optional(&d.lookupPhysics)
+	seek := si.NewQueryBuilder(&d.lookupBase, &d.lookupCollider).Optional(&d.lookupPhysics, &d.lookupLayers)
 	d.between.Bind(seek)
 	d.lookup = seek.Build()
 }
@@ -185,10 +186,11 @@ type contactSide struct {
 	Collider *Collider
 	// Physics is nil for a side that is only ever detected.
 	Physics *Physics
+	Layers  world.Layers
 }
 
 // resolve looks both sides of an overlapping pair up and asks the shapes; a lost Collider vetoes,
-// and so do two colliders on no common layer.
+// and so do two sides on no common plane.
 func (d *CollisionSystem) resolve(a, b uid.UID64, pen geom.Vec) (geom.Vec, bool) {
 	sideA, tagsA, ok := d.side(a)
 	if !ok {
@@ -198,7 +200,7 @@ func (d *CollisionSystem) resolve(a, b uid.UID64, pen geom.Vec) (geom.Vec, bool)
 	if !ok {
 		return pen, false
 	}
-	if !sideA.Collider.touches(sideB.Collider) {
+	if !sideA.Layers.Meets(sideB.Layers) {
 		return pen, false
 	}
 	d.pair = pairSides{A: sideA, B: sideB, tagsA: tagsA, tagsB: tagsB}
@@ -220,6 +222,7 @@ func (d *CollisionSystem) side(id uid.UID64) (contactSide, plugin.Marks, bool) {
 	return contactSide{
 		Entity: id, Base: d.lookupBase.At(cur),
 		Collider: d.lookupCollider.At(cur), Physics: d.lookupPhysics.At(cur),
+		Layers: world.LayersOf(d.lookupLayers.At(cur)),
 	}, d.between.At(sought, cur), true
 }
 

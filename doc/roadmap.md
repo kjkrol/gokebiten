@@ -15,8 +15,9 @@ behind each item lives in [movement.md](movement.md) and [views.md](views.md).
   reports where everyone stands (`Standing`, `Fell`), costs are priced per domain, and routes are
   checked whenever the terrain changes — [movement §5, §6, §11](movement.md).
 - Sight through terrain: a `Veil` per kind on a body carrying `vision.Transparency`, aabbworld's
-  raycast spending its radius as a budget, `Sight.Clear` for flyers over the veils; flying as a
-  convention (`Mover{Air}`, a sensor collider, `Costing(Air, 1)`) — [movement §12](movement.md).
+  raycast spending its radius as a budget; planes — `world.Layers` read by collision and by sight
+  through `Sight.Blockers`, so a hawk on `Air` looks over walls, forests and walkers and still
+  sees them — [movement §12](movement.md). Heights (2.5D) are next — [movement §14](movement.md).
 - Tags as bits of families, one component per family; `Between(a, b, fn)` by value; behaviors
   built by the hosting plugin (`vision.Between`, `board.Each`, `world.Every`), `plugin/host` for
   plugin authors;

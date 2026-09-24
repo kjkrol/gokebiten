@@ -76,7 +76,8 @@ func newRoadWorld(t *testing.T, width uint32, units []roadUnit) *roadWorld {
 			kind.Const(world.Velocity{}),
 			kind.Const(world.Steering{MaxSpeed: 96, Accel: 192, Brake: 384, V0: 48, TurnRate: 0.15}),
 			kind.Load(func(u roadUnit) board.Cell { return board.Cell{ID: u.start} }),
-			kind.Const(collision.Collider{Layers: uint8(domain)}),
+			kind.Const(collision.Collider{}),
+			kind.Const(world.Layers(domain)),
 			kind.Const(collision.Physics{}),
 			kind.Const(board.Mover{Domain: domain}),
 		}

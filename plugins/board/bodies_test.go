@@ -340,7 +340,7 @@ func forestColumn(grid board.Grid, veil float64) func(*board.Board) {
 	return func(brd *board.Board) {
 		brd.SetAll(board.CellKind{Name: board.Named("grass"), Cost: 1, Allows: board.Land})
 		for y := uint32(1); y <= 14; y++ {
-			brd.Set(cell(3, y), board.CellKind{Name: board.Named("forest"), Cost: 1, Allows: board.Land, Veil: veil})
+			brd.Set(cell(3, y), board.CellKind{Name: board.Named("forest"), Cost: 1, Allows: board.Land, Veil: veil, Veils: board.Land})
 		}
 	}
 }
@@ -377,48 +377,47 @@ func TestBodies_AFullyVeiledCellOnlyBlocksSight(t *testing.T) {
 }
 
 // A forest column one cell (32) thick at Veil 0.6 costs 80 of reach: the target two cells past it
-// is 165 away in budget terms and 117 as the crow flies.
+// is 165 away in budget terms and 117 as the crow flies. The forest, looked into, is seen first.
 func TestBodies_AVeilDimsSightByItsDepth(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(6, 16, cellSize)
 	cell := func(x, y uint32) board.CellID { c, _ := grid.CellIndex(x, y); return c }
 	forest := forestColumn(grid, 0.6)
 	target := mover{cell: cell(5, 7)}
-	look := func(radius float64, clear bool) vision.Sighted {
-		observer := mover{cell: cell(1, 7), sight: &vision.Sight{Facing: east, HalfAngle: math.Pi / 8, Radius: radius, Clear: clear}}
+	look := func(radius float64, blockers world.Layers) vision.Sighted {
+		observer := mover{cell: cell(1, 7), sight: &vision.Sight{Facing: east, HalfAngle: math.Pi / 8, Radius: radius, Blockers: blockers}}
 		bw := newBodiesWorld(t, grid, 6*cellSize, 16*cellSize, forest, []mover{observer, target})
 		bw.tick()
 		seen, ok := bw.seen()
 		if !ok {
 			t.Fatal("no observer")
 		}
-		for _, id := range seen.IDs[:seen.Count] {
-			if bw.isBody(id) {
-				t.Errorf("radius %v: the forest %d is listed as seen", radius, id)
-			}
+		if seen.Count == 0 || !bw.isBody(seen.IDs[0]) {
+			t.Errorf("radius %v: saw %v, want the forest first", radius, seen.IDs[:seen.Count])
 		}
 		return seen
 	}
 
-	if seen := look(160, false); seen.Count != 0 {
-		t.Errorf("at 160 through the forest saw %v, want nothing", seen.IDs[:seen.Count])
+	if seen := look(160, 0); seen.Count != 1 {
+		t.Errorf("at 160 through the forest saw %v, want the forest alone", seen.IDs[:seen.Count])
 	}
-	if seen := look(170, false); seen.Count != 1 {
-		t.Errorf("at 170 through the forest saw %d, want the target", seen.Count)
+	if seen := look(170, 0); seen.Count != 2 {
+		t.Errorf("at 170 through the forest saw %d, want the forest and the target", seen.Count)
 	}
-	if seen := look(160, true); seen.Count != 1 {
-		t.Errorf("at 160 looking over the forest saw %d, want the target", seen.Count)
+	if seen := look(160, world.Layers(board.Air)); seen.Count != 2 {
+		t.Errorf("at 160 looking over the forest from Air saw %d, want the forest and the target", seen.Count)
 	}
 }
 
-func TestBodies_AWallCutsSightWhateverTheVeils(t *testing.T) {
+// The wall admits nobody, so it is on every plane and cuts sight whatever the Blockers.
+func TestBodies_AWallAdmittingNobodyCutsSightFromEveryLayer(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(6, 16, cellSize)
 	cell := func(x, y uint32) board.CellID { c, _ := grid.CellIndex(x, y); return c }
-	for _, clear := range []bool{false, true} {
-		observer := mover{cell: cell(1, 7), sight: &vision.Sight{Facing: east, HalfAngle: math.Pi / 8, Radius: 300, Clear: clear}}
+	for _, blockers := range []world.Layers{0, world.Layers(board.Land), world.Layers(board.Air)} {
+		observer := mover{cell: cell(1, 7), sight: &vision.Sight{Facing: east, HalfAngle: math.Pi / 8, Radius: 300, Blockers: blockers}}
 		bw, _ := squareWorld(t, observer, mover{cell: cell(5, 7)})
 		bw.tick()
 		if seen, ok := bw.seen(); !ok || seen.Count != 1 || !bw.isBody(seen.IDs[0]) {
-			t.Errorf("clear %v: saw %v through the wall, want the wall alone", clear, seen.IDs[:seen.Count])
+			t.Errorf("blockers %08b: saw %v through the wall, want the wall alone", blockers, seen.IDs[:seen.Count])
 		}
 	}
 }
@@ -465,8 +464,8 @@ func TestBodies_VeiledBodiesCarryTheirTransparency(t *testing.T) {
 	}
 }
 
-// A solid kind admitting Air keeps Land and Water out: its bodies collide on every layer but Air.
-func TestBodies_CollideOnTheLayersTheirKindKeepsOut(t *testing.T) {
+// A solid kind admitting Air keeps Land and Water out: its bodies are on every plane but Air.
+func TestBodies_AreOnTheLayersTheirKindKeepsOut(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(6, 16, cellSize)
 	cell := func(x, y uint32) board.CellID { c, _ := grid.CellIndex(x, y); return c }
 	bw := newBodiesWorld(t, grid, 6*cellSize, 16*cellSize, func(brd *board.Board) {
@@ -476,24 +475,24 @@ func TestBodies_CollideOnTheLayersTheirKindKeepsOut(t *testing.T) {
 	}, []mover{{cell: cell(1, 1)}})
 	bw.tick()
 
-	var collider goke.Comp[collision.Collider]
+	var layers goke.Comp[world.Layers]
 	var base goke.Comp[world.Base]
 	var q *goke.Query
-	bw.ecs.RegSys(goke.SystemFn{OnInit: func(si *goke.SysInit) { q = si.NewQueryBuilder(&base, &collider).Build() }})
-	got := map[float64]uint8{}
+	bw.ecs.RegSys(goke.SystemFn{OnInit: func(si *goke.SysInit) { q = si.NewQueryBuilder(&base, &layers).Build() }})
+	got := map[float64]world.Layers{}
 	for q.All(); q.Next(); {
 		cur := q.Cursor()
 		for i, id := range cur.IDs {
 			if bw.isBody(id) {
-				got[base.Slice(cur)[i].Pos.TopLeft.Y] = collider.Slice(cur)[i].Layers
+				got[base.Slice(cur)[i].Pos.TopLeft.Y] = layers.Slice(cur)[i]
 			}
 		}
 	}
 	wall, rock := got[float64(3*cellSize)], got[float64(8*cellSize)]
-	if wall&uint8(board.Air) != 0 || wall&uint8(board.Land) == 0 || wall&uint8(board.Water) == 0 {
-		t.Errorf("the wall admitting Air collides on layers %08b, want every layer but Air", wall)
+	if wall&world.Layers(board.Air) != 0 || wall&world.Layers(board.Land) == 0 || wall&world.Layers(board.Water) == 0 {
+		t.Errorf("the wall admitting Air is on layers %08b, want every layer but Air", wall)
 	}
 	if rock != 0xFF {
-		t.Errorf("the rock admitting nobody collides on layers %08b, want all of them", rock)
+		t.Errorf("the rock admitting nobody is on layers %08b, want all of them", rock)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/plugins/effects"
 	"github.com/kjkrol/gram/plugins/vision"
+	"github.com/kjkrol/gram/plugins/world"
 )
 
 var _ goke.Module = (*module)(nil)
@@ -54,7 +55,7 @@ func (m *module) LoadComps() []goke.CompToken {
 		goke.LoadComp[effects.Active](), goke.LoadComp[effects.Idle](),
 	}
 	if m.bodies != nil {
-		tokens = append(tokens, goke.LoadComp[vision.Transparency]())
+		tokens = append(tokens, goke.LoadComp[vision.Transparency](), goke.LoadComp[world.Layers]())
 	}
 	return tokens
 }

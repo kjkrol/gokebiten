@@ -279,7 +279,8 @@ func (s *mainStage) defineKinds() {
 			kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }),
 			kind.Const(board.Mover{Domain: domain}),
 			kind.Tagged(s.selection.Tags().Selectable),
-			kind.Const(collision.Collider{Layers: uint8(domain)}),
+			kind.Const(collision.Collider{}),
+			kind.Const(world.Layers(domain)),
 			kind.Const(collision.Physics{}),
 		}
 		return append(base, extra...)

@@ -15,8 +15,11 @@
 // Every entity cuts sight unless it carries a [Transparency]: 1 as if absent, 0 cutting, in
 // between dimming — a ray spends its Radius as a budget and a stretch through an entity at τ costs
 // 1/τ per unit, so a forest at 0.4 is looked through at 0.4 of the reach. The board gives its
-// veiled terrain bodies one (1 - Veil). A Sight with Clear set looks over whatever only dims — a
-// flyer over the forest — and is still cut by what cuts.
+// veiled terrain bodies one (1 - Veil). Whatever the ray reaches within its budget is seen, a
+// forest looked into as much as a wall looked at. Sight.Blockers are the world.Layers that cut
+// or dim a Sight at all: an entity on none of them is looked over as if it were not there, and
+// still seen — a hawk with Blockers of Air looks over walls, forests and walkers, a walker with
+// Blockers of Land under the hawk. Zero Blockers make every entity count.
 //
 // # Sighting
 //

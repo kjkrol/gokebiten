@@ -16,9 +16,16 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
   entity per domain into a cell, so a flyer and a walker share one; `MultipleOccupancy` stays a
   stack of tokens. Navigation seeds it from `Cell` + `Mover` at Setup, fresh or loaded — the
   demos' spawn effects are gone. island-demo uses `SingleOccupancy`.
-- `collision.Collider.Layers`: two colliders touch only where their layer bits overlap (zero: every
-  layer); terrain bodies collide on the bits of the domains their kind keeps out, so a wall
-  admitting Air lets a flyer over, and the demos' hawk now carries `Physics` on the Air layer.
+- `world.Layers`, the planes an entity is on (one bit each; none, or no component: every plane),
+  read by collision and by sight. Two colliders touch only where their layers meet; terrain
+  bodies are on the bits of the domains their kind keeps out, so a wall admitting Air lets a flyer
+  over, and the demos' hawk carries `Physics` on the Air layer. `Collider.Layers` is gone.
+- `vision.Sight.Blockers` replaces `Clear`: the layers that cut or dim an observer at all (zero:
+  every entity). An entity on none of them is looked over as if absent and still seen, so a hawk
+  with `Blockers` of Air looks over walls, forests and walkers, and a walker with Land looks under
+  the hawk. `CellKind.Veils` says whom a veil dims (zero: everyone; the demos' forests veil Land).
+  Whatever a ray reaches within its budget is now seen, a forest looked into included (aabbworld
+  v1.7.0).
 - Routes and legs lose their footing when the terrain changes under them; a unit stuck where its
   domain may not keeps its order.
 - The camera pans in screen pixels at any zoom.

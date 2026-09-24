@@ -173,6 +173,9 @@ shows how much of it is boilerplate vs. real behavior.
   solver); every tick it does, `world.Each` behaviors of a `world.Leaving`
   registered on the world hear of it, and with none it is despawned; back inside
   it loses the mark.
+  `world.Layers` are the planes an entity is on, one bit each (none, or the component absent:
+  every plane); collision and vision read it, so a hawk on `Air` and a walker on `Land` neither
+  push nor block each other. A world without heights is a set of planes: that is the 2D model.
   `Base` — the one component every entity carries, holding its `Position`,
   `Velocity`, `TypeID` and `Caps` (the `aabbworld.Capability` bits the space
   indexes it under; `collision` writes them), so a host hands it to whatever it
@@ -206,7 +209,8 @@ shows how much of it is boilerplate vs. real behavior.
 - **`board`** — optional grid + terrain over `world`; its grids wrap per axis,
   following the world's `Edges` (`SetWrap(x, y)`). A `CellKind` says which `Domain`s it admits
   (`Land`, `Water`, `Air`, a game's own bits), whether it is `Solid` (a wall), how much it
-  `Veil`s sight (a forest at 0.6), and what it costs — `Costing(domain, cost)` prices it differently per domain, and
+  `Veil`s sight (a forest at 0.6) and whom it `Veils` (a forest veils `Land`, not `Air`), and
+  what it costs — `Costing(domain, cost)` prices it differently per domain, and
   `CostFor(domain)` is what a unit pays in the planner and in the Moving behavior board
   registers on the world (only entities carrying `Mover` are slowed); a unit's
   `Mover` says which domains it moves in (none: `Land`). Every tick, after
@@ -225,9 +229,9 @@ shows how much of it is boilerplate vs. real behavior.
   `kind.Const(collision.Collider{})`, or `Attach`/`Detach` mid-game. The `CollisionSystem`
   first settles every `Collider`'s `Base.Caps` (`CanCollide`, plus `Static` for an
   immovable `Physics`, `Sensor` for none) and rebuilds the space when any changed;
-  `Collider.Layers` are the bits it collides on (zero: all), two colliders touching only where
-  they share a bit — a board game uses `Domain` bits, walls the bits of whoever they keep out,
-  so a `Collider` counts from the tick it is carried. The tick is then one
+  two colliders touch only where their `world.Layers` meet — a board game uses `Domain` bits,
+  walls the bits of whoever they keep out — and a `Collider` counts from the tick it is carried.
+  The tick is then one
   `collide.Engine.Tick` (`github.com/kjkrol/aabbworld/collide` holds the contract —
   `Handler`, `Config`, `Engine`; the `CollisionSystem` builds the engine once with
   `space.CollideEngine(handler, collide.Config{Reach: world.StepReach, Iterations})`
@@ -299,8 +303,10 @@ shows how much of it is boilerplate vs. real behavior.
   space each tick fills its own `Sight.Seen` (who this entity can see, nearest first), and
   `SightOutline` on an entity gets its view's shape computed and drawn. An entity carrying
   `Transparency` dims sight instead of cutting it (board gives its veiled bodies 1 - `Veil`), a
-  ray spending its radius as a budget through it; `Sight.Clear` looks over the veils (a flyer)
-  and is still cut by what cuts. It
+  ray spending its radius as a budget through it; whatever the ray reaches is seen, a forest
+  looked into as much as a wall. `Sight.Blockers` are the `world.Layers` that cut or dim this
+  sight at all (zero: every entity): a hawk with `Blockers` of `Air` looks over walls, forests
+  and walkers and still sees them; a walker with `Land` looks under the hawk. It
   hosts `vision.Between(a, b, fn)` of a `Sighting` inside the scan's own pass: once
   a tick per observer carrying `a`, with everything in view carrying `b` — a
   directed pair, grouped by observer, empty included. A behavior tells its seen

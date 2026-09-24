@@ -13,12 +13,12 @@ import (
 
 type layered struct {
 	x      float64
-	layers uint8
+	layers world.Layers
 }
 
 // layersRun ticks two overlapping boxes on the given layers once and reports whether they met and
 // how far apart their left edges ended.
-func layersRun(t *testing.T, a, b uint8) (met bool, gap float64) {
+func layersRun(t *testing.T, a, b world.Layers) (met bool, gap float64) {
 	t.Helper()
 	w := world.NewPlugin(world.Config{
 		Space:    world.SpaceCfg{Width: 1000, Height: 1000},
@@ -38,7 +38,8 @@ func layersRun(t *testing.T, a, b uint8) (met bool, gap float64) {
 	boxes := kind.Define[layered](w.Kinds(), "box", kind.Spec{
 		kind.Load(func(b layered) world.Position { return posAt(b.x, 500, 10, 10) }),
 		kind.Const(world.Velocity{}),
-		kind.Load(func(b layered) collision.Collider { return collision.Collider{Layers: b.layers} }),
+		kind.Const(collision.Collider{}),
+		kind.Load(func(b layered) world.Layers { return b.layers }),
 		kind.Const(collision.Physics{}),
 	})
 	w.Seed(boxes.Entry(layered{x: 100, layers: a}), boxes.Entry(layered{x: 104, layers: b}))
@@ -71,7 +72,7 @@ func layersRun(t *testing.T, a, b uint8) (met bool, gap float64) {
 
 func TestLayers_TouchOnlyWhereTheyShareABit(t *testing.T) {
 	cases := map[string]struct {
-		a, b  uint8
+		a, b  world.Layers
 		touch bool
 	}{
 		"same layer":          {1, 1, true},

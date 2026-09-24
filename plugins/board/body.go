@@ -21,6 +21,7 @@ type bodyBox struct {
 	kind   Name
 	solid  bool
 	veil   float64
+	veils  Domain
 	allows Domain
 	count  int
 }
@@ -35,7 +36,7 @@ func terrainBoxes(brd *Board, dst []bodyBox) []bodyBox {
 	visit := func(c CellID, k CellKind) {
 		boxes = brd.CellBoxes(c, boxes[:0])
 		for _, b := range boxes {
-			dst = append(dst, bodyBox{box: b, kind: k.Name, solid: k.Solid, veil: k.Veil, allows: k.Allows})
+			dst = append(dst, bodyBox{box: b, kind: k.Name, solid: k.Solid, veil: k.Veil, veils: k.Veils, allows: k.Allows})
 		}
 	}
 	if embodied(brd.Default) {

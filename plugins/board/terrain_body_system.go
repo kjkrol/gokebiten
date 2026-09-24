@@ -34,6 +34,8 @@ type terrainBodySystem struct {
 	// Each factory gets columns of its own: a Comp handle serves one archetype.
 	solidMarks   goke.Comp[plugin.Tags[Family]]
 	veiledMarks  goke.Comp[plugin.Tags[Family]]
+	solidLayers  goke.Comp[world.Layers]
+	veiledLayers goke.Comp[world.Layers]
 	collider     goke.Comp[collision.Collider]
 	physics      goke.Comp[collision.Physics]
 	transparency goke.Comp[vision.Transparency]
@@ -42,6 +44,7 @@ type terrainBodySystem struct {
 	boxes  []bodyBox
 	planes []plane.AABB
 	veils  []float64
+	dims   []Domain
 	allows []Domain
 	ids    []uid.UID64
 }
@@ -51,8 +54,8 @@ func newTerrainBodySystem(brd *Board, worldPlugin *world.Plugin, typeID kind.ID,
 }
 
 func (s *terrainBodySystem) Init(si *goke.SysInit) {
-	s.solid = s.worldPlugin.NewBodies(si, s.typeID, &s.collider, &s.physics, &s.solidMarks)
-	s.veiled = s.worldPlugin.NewBodies(si, s.typeID, &s.veiledMarks, &s.transparency)
+	s.solid = s.worldPlugin.NewBodies(si, s.typeID, &s.collider, &s.physics, &s.solidMarks, &s.solidLayers)
+	s.veiled = s.worldPlugin.NewBodies(si, s.typeID, &s.veiledMarks, &s.transparency, &s.veiledLayers)
 	s.query = si.NewQueryBuilder(&s.base, &s.marks).Build()
 	if len(s.present()) == 0 {
 		s.spawn()
@@ -91,8 +94,9 @@ func (s *terrainBodySystem) spawn() {
 	tagged := plugin.Tags[Family](0).With(s.body)
 	n := 0
 	s.solid.Spawn(s.planesOf(true), func(i int, _ uid.UID64, cursor *goke.Cursor) {
-		// a body pushes whoever its kind does not admit: a wall admitting Air lets a flyer over
-		s.collider.Slice(cursor)[i] = collision.Collider{Layers: ^uint8(s.allows[n])}
+		// a body is on the planes of whoever its kind keeps out: a wall admitting Air lets a flyer over
+		s.collider.Slice(cursor)[i] = collision.Collider{}
+		s.solidLayers.Slice(cursor)[i] = world.Layers(^uint8(s.allows[n]))
 		s.physics.Slice(cursor)[i] = collision.Physics{Mass: math.Inf(1)}
 		s.solidMarks.Slice(cursor)[i] = tagged
 		n++
@@ -100,16 +104,17 @@ func (s *terrainBodySystem) spawn() {
 	n = 0
 	s.veiled.Spawn(s.planesOf(false), func(i int, _ uid.UID64, cursor *goke.Cursor) {
 		s.veiledMarks.Slice(cursor)[i] = tagged
+		s.veiledLayers.Slice(cursor)[i] = world.Layers(s.dims[n])
 		s.transparency.Slice(cursor)[i] = vision.Transparency{Value: 1 - min(s.veils[n], 1)}
 		n++
 	})
 	s.seen = s.brd.Version()
 }
 
-// planesOf lists the boxes of the solid or the veiled bodies as space rectangles, with their veils
-// and the domains their kind admits, in the same order.
+// planesOf lists the boxes of the solid or the veiled bodies as space rectangles, with their veils,
+// whom they veil and the domains their kind admits, in the same order.
 func (s *terrainBodySystem) planesOf(solid bool) []plane.AABB {
-	s.planes, s.veils, s.allows = s.planes[:0], s.veils[:0], s.allows[:0]
+	s.planes, s.veils, s.dims, s.allows = s.planes[:0], s.veils[:0], s.dims[:0], s.allows[:0]
 	for _, b := range s.boxes {
 		if b.solid != solid {
 			continue
@@ -117,6 +122,7 @@ func (s *terrainBodySystem) planesOf(solid bool) []plane.AABB {
 		size := b.box.BottomRight.Sub(b.box.TopLeft)
 		s.planes = append(s.planes, plane.NewAABB(b.box.TopLeft, size.X, size.Y))
 		s.veils = append(s.veils, b.veil)
+		s.dims = append(s.dims, b.veils)
 		s.allows = append(s.allows, b.allows)
 	}
 	return s.planes

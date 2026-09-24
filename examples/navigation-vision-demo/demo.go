@@ -106,7 +106,7 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	s.board.CellKindDict().Create(
 		board.CellKind{Name: board.Named("grass"), Cost: 2, Allows: board.Land | board.Air}.Costing(board.Air, 1),
 		board.CellKind{Name: board.Named("wall"), Cost: 1, Solid: true, Allows: board.Air},
-		board.CellKind{Name: board.Named("forest"), Cost: 3, Allows: board.Land | board.Air, Veil: 0.6}.Costing(board.Air, 1),
+		board.CellKind{Name: board.Named("forest"), Cost: 3, Allows: board.Land | board.Air, Veil: 0.6, Veils: board.Land}.Costing(board.Air, 1),
 		board.CellKind{Name: board.Named("road"), Cost: 1, Allows: board.Land | board.Air},
 	)
 	if err := ctx.Use(s.board); err != nil {
@@ -180,10 +180,11 @@ func (s *mainStage) defineKinds() {
 		kind.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
 		kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }),
 		kind.Tagged(s.selection.Tags().Selectable, s.selection.Tags().Selected),
-		kind.Const(collision.Collider{Layers: uint8(board.Land)}),
+		kind.Const(collision.Collider{}),
+		kind.Const(world.Layers(board.Land)),
 		kind.Const(collision.Physics{}),
 		kind.Const(board.Mover{Domain: board.Land}),
-		kind.Const(vision.Sight{Facing: geom.NewVec(1, 0), HalfAngle: sightHalf, Radius: sightRadius}),
+		kind.Const(vision.Sight{Facing: geom.NewVec(1, 0), HalfAngle: sightHalf, Radius: sightRadius, Blockers: world.Layers(board.Land)}),
 		kind.Const(vision.SightOutline{}),
 		kind.Tagged(s.unitTag),
 	}
@@ -194,8 +195,8 @@ func (s *mainStage) defineKinds() {
 	s.hawk = kind.Define[unit](s.world.Kinds(), "hawk", s.hawkSpec())
 }
 
-// hawkSpec is a flyer: it moves in Air, collides on the Air layer alone (walls and walkers pass
-// under it, other flyers push it) and its sight is Clear of veils.
+// hawkSpec is a flyer: it moves in Air and is on the Air layer alone, so walls and walkers pass
+// under it and cut none of its sight, while other flyers push it and block it.
 func (s *mainStage) hawkSpec() kind.Spec {
 	brd := s.board.Res.Logic.Board
 	return kind.Spec{
@@ -205,10 +206,11 @@ func (s *mainStage) hawkSpec() kind.Spec {
 		kind.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
 		kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }),
 		kind.Tagged(s.selection.Tags().Selectable),
-		kind.Const(collision.Collider{Layers: uint8(board.Air)}),
+		kind.Const(collision.Collider{}),
+		kind.Const(world.Layers(board.Air)),
 		kind.Const(collision.Physics{}),
 		kind.Const(board.Mover{Domain: board.Air}),
-		kind.Const(vision.Sight{Facing: geom.NewVec(1, 0), HalfAngle: sightHalf, Radius: sightRadius, Clear: true}),
+		kind.Const(vision.Sight{Facing: geom.NewVec(1, 0), HalfAngle: sightHalf, Radius: sightRadius, Blockers: world.Layers(board.Air)}),
 		kind.Const(vision.SightOutline{}),
 		kind.Tagged(s.unitTag),
 	}

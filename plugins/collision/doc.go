@@ -19,9 +19,9 @@
 //
 // [Collider] is all it takes to take part; it also holds what the entity struck the tick before
 // ([Collider.Contacts], at most [MaxContacts] recorded — extras are still separated, bounced and
-// reported to behaviors). Its Layers are the bits it collides on: two colliders touch only where
-// their Layers share a bit, and zero is every layer — a board game gives its units their Domain
-// bits and its walls the bits of whoever they keep out, so a flyer passes over both. [Physics] makes an entity take the physical side of a contact: pushed
+// reported to behaviors). Two colliders touch only where their world.Layers meet — a board game
+// gives its units their Domain bits and its walls the bits of whoever they keep out, so a flyer
+// passes over both. [Physics] makes an entity take the physical side of a contact: pushed
 // out of overlaps and bouncing, by Mass (non-positive weighs [DefaultMass], +Inf is a wall) and
 // Restitution (the share of approach speed given back, 0 to 1; a pair uses the lower). An entity
 // without Physics is only ever detected — a town, a trigger. Separation is always an even split.
