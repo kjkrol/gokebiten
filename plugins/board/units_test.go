@@ -25,7 +25,7 @@ func unitsWorld(t *testing.T, define func(units *board.Units[recruit]) kind.Of[r
 	c := collision.NewPlugin(w)
 	brd := board.NewPlugin(grid, &board.MultipleOccupancy{}, w)
 	brd.Res.Logic.Board.SetAll(board.CellKind{Cost: 1, Allows: board.Land | board.Water})
-	units := board.NewUnits[recruit](brd, 20, func(r recruit) geom.Vec { return grid.CellCenter(r.start) })
+	units := board.NewUnits[recruit](brd, board.Shape{Size: 20}, func(r recruit) geom.Vec { return grid.CellCenter(r.start) })
 	k := define(units)
 
 	ctx := &installCtx{ecs: goke.New()}
@@ -53,7 +53,7 @@ func unitsWorld(t *testing.T, define func(units *board.Units[recruit]) kind.Of[r
 
 func TestUnits_DeriveThePositionAndTheCellFromOnePoint(t *testing.T) {
 	ecs, _, grid := unitsWorld(t, func(units *board.Units[recruit]) kind.Of[recruit] {
-		return units.Define("recruit", board.Water, world.Steering{MaxSpeed: 10})
+		return units.Define("recruit", board.Mover{Domain: board.Water}, world.Steering{MaxSpeed: 10})
 	})
 	var base goke.Comp[world.Base]
 	var cell goke.Comp[board.Cell]
@@ -103,8 +103,8 @@ func TestUnits_AUnitOffTheBoardPanicsWhenSpawned(t *testing.T) {
 		Entities: world.EntitiesCfg{MaxCount: 4, MinSize: 20, MaxSize: 20},
 	})
 	brd := board.NewPlugin(grid, &board.MultipleOccupancy{}, w)
-	units := board.NewUnits[recruit](brd, 20, func(recruit) geom.Vec { return geom.NewVec(-50, -50) })
-	k := units.Define("stray", board.Land, world.Steering{})
+	units := board.NewUnits[recruit](brd, board.Shape{Size: 20}, func(recruit) geom.Vec { return geom.NewVec(-50, -50) })
+	k := units.Define("stray", board.Mover{Domain: board.Land}, world.Steering{})
 	ctx := &installCtx{ecs: goke.New()}
 	if err := w.Install(ctx); err != nil {
 		t.Fatal(err)

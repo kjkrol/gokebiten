@@ -6,6 +6,7 @@ import (
 
 	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gram/plugins/world"
 )
 
 var _ goke.Module = (*module)(nil)
@@ -16,8 +17,19 @@ type module struct {
 	runnable goke.Runnable
 }
 
-func newModule(space *aabbworld.Space, host *host.PairHost[Sighting]) *module {
-	return &module{sys: newScanSystem(space, host)}
+func newModule(space *aabbworld.Space, host *host.PairHost[Sighting], heights *heights) *module {
+	m := &module{sys: newScanSystem(space, host)}
+	if heights != nil {
+		m.sys.quasi3D, m.sys.groundOf, m.sys.step = true, heights.groundOf, heights.step
+	}
+	return m
+}
+
+// heights is what the scan needs of a Quasi3D world: where to find its Ground, and the step the
+// game asked for (0: the Ground's own).
+type heights struct {
+	groundOf func() world.Ground
+	step     float64
 }
 
 // =================================================================

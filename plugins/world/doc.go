@@ -16,6 +16,8 @@
 // package kind; world requires a Position and brings a Velocity. [Layers] are the planes an
 // entity is on, one bit each, read by collision and
 // sight: two entities meet only where they share a bit, and one carrying none is on every plane.
+// Config.Quasi3D gives the world heights: entities carry a [Z] (bottom and rise), the board sets
+// the world's [Ground] ([Plugin.SetGround]) and sight follows it; a flat world refuses a Z.
 // The Plugin exposes the shared [aabbworld.Space] ([Plugin.Space]) and the shared camera
 // ([Plugin.Camera]; the players plugin moves it through Pan and Zoom commands).
 //

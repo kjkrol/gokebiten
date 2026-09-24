@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kjkrol/aabbworld"
+	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/world"
@@ -24,17 +25,28 @@ type ScanSystem struct {
 	tau      func(uid.UID64) float64
 	blockers world.Layers
 
+	// In a Quasi3D world the cone has heights: elev answers an entity's band, groundAt the ground,
+	// step how far apart the ground is sampled; groundOf resolves the world's Ground at first use.
+	quasi3D  bool
+	elev     func(uid.UID64) (float64, float64)
+	groundOf func() world.Ground
+	groundAt func(geom.Vec) float64
+	step     float64
+	grounded bool
+
 	query   *goke.Query
 	sight   goke.Comp[Sight]
 	base    goke.Comp[world.Base]
 	steer   goke.OptComp[world.Steering]
 	outline goke.OptComp[SightOutline]
+	z       goke.OptComp[world.Z]
 
 	// lookup resolves a sighted id back to the entity and what it carries.
 	lookup     *goke.Query
 	lookupBase goke.Comp[world.Base]
 	lookupTau  goke.OptComp[Transparency]
 	lookupLay  goke.OptComp[world.Layers]
+	lookupZ    goke.OptComp[world.Z]
 	lookupHot  bool
 
 	// host runs the Between behaviors registered with the plugin, inside this pass.
@@ -62,12 +74,13 @@ func newScanSystem(space *aabbworld.Space, host *host.PairHost[Sighting]) *ScanS
 	s := &ScanSystem{space: space, host: host}
 	s.sightingOf = s.sighting
 	s.tau = s.transparency
+	s.elev = s.elevation
 	return s
 }
 
 func (s *ScanSystem) Init(si *goke.SysInit) {
-	walk := si.NewQueryBuilder(&s.sight, &s.base).Optional(&s.outline, &s.steer)
-	seek := si.NewQueryBuilder(&s.lookupBase).Optional(&s.lookupTau, &s.lookupLay)
+	walk := si.NewQueryBuilder(&s.sight, &s.base).Optional(&s.outline, &s.steer, &s.z)
+	seek := si.NewQueryBuilder(&s.lookupBase).Optional(&s.lookupTau, &s.lookupLay, &s.lookupZ)
 	s.host.Bind(walk, seek)
 	s.query, s.lookup = walk.Build(), seek.Build()
 }
@@ -89,10 +102,39 @@ func (s *ScanSystem) transparency(id uid.UID64) float64 {
 	return 0
 }
 
+// elevation is the band id spans in height: its Z, or the ground level at no height without one.
+func (s *ScanSystem) elevation(id uid.UID64) (bottom, top float64) {
+	if !s.lookup.Seek(id) {
+		return 0, 0
+	}
+	s.lookupHot = false
+	if z := s.lookupZ.At(s.lookup.Cursor()); z != nil {
+		return z.Altitude, z.Top()
+	}
+	return 0, 0
+}
+
+// ground binds the world's Ground once, when the board has had its say.
+func (s *ScanSystem) ground() {
+	s.grounded = true
+	if s.groundOf == nil {
+		return
+	}
+	if g := s.groundOf(); g != nil {
+		s.groundAt = g.At
+		if s.step == 0 {
+			s.step = g.Step()
+		}
+	}
+}
+
 func (s *ScanSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 	t := plugin.Tick{CmdBuf: cb, Now: time.Now(), Dt: d}
 	hosting := !s.host.Empty()
 	s.lookupHot = false
+	if s.quasi3D && !s.grounded {
+		s.ground()
+	}
 
 	s.query.All()
 	for s.query.Next() {
@@ -100,6 +142,7 @@ func (s *ScanSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 		sights := s.sight.Slice(cursor)
 		bases := s.base.Slice(cursor)
 		steers := s.steer.Slice(cursor)
+		zs := s.z.Slice(cursor)
 
 		var outlines []SightOutline
 		if s.outline.Present(cursor) {
@@ -109,7 +152,11 @@ func (s *ScanSystem) Update(cb *goke.CmdBuf, d time.Duration) {
 		for i, id := range cursor.IDs {
 			sight := &sights[i]
 			s.blockers = sight.Blockers
-			if s.space.Scan(id, s.cone(sight), &s.view) {
+			altitude := 0.0
+			if zs != nil {
+				altitude = zs[i].Altitude
+			}
+			if s.space.Scan(id, s.cone(sight, altitude), &s.view) {
 				record(&sight.Seen, &s.view)
 				if outlines != nil {
 					trace(&outlines[i], &s.view, sight)
@@ -160,9 +207,21 @@ func (s *ScanSystem) sighting(matched []int) Sighting {
 	return out
 }
 
-// cone is the query for one Sight, see-through as the entities are to it.
-func (s *ScanSystem) cone(sight *Sight) aabbworld.Cone {
-	return aabbworld.Cone{Direction: sight.Facing, HalfAngle: sight.HalfAngle, Radius: sight.Radius, Transparency: s.tau}
+// cone is the query for one Sight, see-through as the entities are to it and, in a Quasi3D world,
+// from an eye at altitude + Sight.Eye over the ground.
+func (s *ScanSystem) cone(sight *Sight, altitude float64) aabbworld.Cone {
+	c := aabbworld.Cone{Direction: sight.Facing, HalfAngle: sight.HalfAngle, Radius: sight.Radius, Transparency: s.tau}
+	if !s.quasi3D {
+		if sight.Eye != 0 {
+			panic("vision: Sight.Eye in a flat world; set world.Config.Quasi3D")
+		}
+		return c
+	}
+	if sight.Blockers != 0 {
+		panic("vision: Sight.Blockers in a Quasi3D world; layers cut sight only in a flat one")
+	}
+	c.Eye, c.Elevation, c.Ground, c.GroundStep = altitude+sight.Eye, s.elev, s.groundAt, s.step
+	return c
 }
 
 // record keeps the nearest MaxSeen entities of view.

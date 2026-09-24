@@ -10,8 +10,12 @@ const (
 	Air
 )
 
-// Mover says which domains an entity moves in; an entity on the board without it moves on Land.
-type Mover struct{ Domain Domain }
+// Mover says which domains an entity moves in and, in a Quasi3D world, how far above the ground
+// it keeps (Lift: a hawk 40, a walker 0); an entity on the board without it moves on Land.
+type Mover struct {
+	Domain Domain
+	Lift   float64
+}
 
 // DomainAt is the domain of the i-th entity of a chunk whose Mover column may be absent.
 func DomainAt(movers []Mover, i int) Domain {

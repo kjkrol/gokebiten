@@ -32,9 +32,13 @@ type Sight struct {
 	HalfAngle float64  // radians either side of Facing
 	Radius    float64  // world units
 	// Blockers are the world.Layers whose entities cut or dim this sight; one on none of them is
-	// looked over — a walker under a hawk — and still seen. Zero: every entity does.
+	// looked over — a walker under a hawk — and still seen. Zero: every entity does. A flat world's;
+	// a Quasi3D world refuses it.
 	Blockers world.Layers
-	Seen     Sighted // nearest first
+	// Eye is how high above the entity's bottom (its Z.Altitude) it looks from, in a Quasi3D world;
+	// a flat world refuses it.
+	Eye  float64
+	Seen Sighted // nearest first
 }
 
 // Transparency is how see-through an entity is to a Sight: 0 cuts sight as an entity without it

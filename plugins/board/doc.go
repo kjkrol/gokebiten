@@ -58,9 +58,21 @@
 //
 // The board requires of every unit a [Cell] (where it starts) and a [Mover] (the domains it moves
 // in) through the world's kind.Roster — and makes them itself in [Units]: a game binds its rows to
-// the board once ([NewUnits]: the unit's size, where a row says it stands) and defines each kind by
-// its domain and steering profile plus its own components; Position and Cell come from the one
-// point, Mover and Layers from the one domain.
+// the board once ([NewUnits]: the units' [Shape], where a row says a unit stands) and defines each
+// kind by its Mover and steering profile plus its own components; Position and Cell come from the
+// one point, Layers from the domain.
+//
+// # Heights
+//
+// In a Quasi3D world (world.Config.Quasi3D) a [CellKind] has an Altitude, its ground level, and a
+// Height, what stands on it. The [Board] keeps a raster of altitudes, one per cell (Grid.Ordinal),
+// rebuilt when the terrain's Version moves, and is the world's Ground ([Board.GroundAt],
+// [Board.Step]). Every tick the board writes each Z-carrying entity's Altitude: the ground under
+// its centre plus its Mover's Lift, so a unit never declares where it stands in height and a hawk
+// declares only how high it flies. Units get their Z from the Shape, terrain bodies from their
+// kind. A hill is a number in the raster and never a body, so the cost of sight does not depend
+// on how many a game has. A flat world refuses an Altitude, a Height or a Lift where it first
+// meets one.
 //
 // # Occupancy
 //

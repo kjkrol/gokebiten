@@ -260,13 +260,39 @@ heights are the next step, §14.
   eye, a hill, a tower seen over the wall — is §14's, the 2.5D world, which is a conscious
   choice in `world.Config` and costs the scan about three times as much.
 
-## 14. Heights — planned
+## 14. Heights — done for sight, open for collision
 
-The 2.5D world: `world.Config{Quasi3D: true}`, `Position.Altitude`/`Height`, `CellKind.Altitude`/
-`Height`, `Mover.Lift`, `Sight.Eye`, the board's height raster as aabbworld's `Cone.Ground`,
-collision vetoing pairs without overlap in Z. In a 2.5D world `Layers` and `Blockers` are an
-error, in a flat one the heights are: one model per world, chosen once. The plan is in the
-session notes; the raycast side is aabbworld v1.7.0.
+A world has heights when its game says so: `world.Config{Quasi3D: true}`. Nothing guesses the mode
+from the data — a flat game pays nothing for heights, and a game that wants them says it once.
+
+- **What carries height.** An entity's `world.Z{Altitude, Height}`: its bottom and its rise. A
+  flat world carries no `Z` at all (`Kinds.Register` refuses one), so saves of flat games do not
+  change. `Position` stays what it was, the box in XY.
+- **Where it comes from.** The game states shape and movement as facts of a kind, through
+  `board.NewUnits(brd, board.Shape{Size, Height}, at)` and `units.Define(name, board.Mover{Domain,
+  Lift}, …)`: the factory gives every unit a `Z{Height}`, and the board writes `Z.Altitude` every
+  tick — the ground under the unit's centre plus its `Mover.Lift` (`altitudeSystem`, Quasi3D only).
+  A unit standing on terrain never declares its altitude; a hawk declares only how high it flies.
+  Terrain kinds have an `Altitude` (the ground level) and a `Height` (what stands on the cell: a
+  wall 10, a forest 8); the board's bodies carry `Z{Altitude, Height}` of their kind.
+- **The ground is a raster, not bodies.** `Board` keeps one height per cell (`Grid.Ordinal`),
+  rebuilt when the terrain's `Version` moves, and is the world's `Ground` (`GroundAt`, `Step` = a
+  cell's shorter side). A hill is only a number in the raster — so the cost of a scan depends on
+  the radius and the step, never on how many hills a game has. This is the rule that decided
+  against modelling relief as bodies.
+- **Sight with heights.** aabbworld v1.7.0's `Cone.Eye/Elevation/Ground/GroundStep`: an entity is
+  seen when the line from the eye (`Z.Altitude + Sight.Eye`) to its top clears every nearer ground
+  sample and every nearer blocking band within the budget; the reach of an angle is the farthest
+  lit ground. A walker (eye 1.5) is stopped by a wall 10 tall and by a hill; a hawk 40 up looks
+  over both, and over the forest, which costs it nothing where its line passes above the band.
+  `Sight.Blockers` has no place here and a Quasi3D world refuses it, as a flat one refuses
+  `Sight.Eye`. The scan costs about three times the flat one at the same radius (~13 µs against
+  ~4 µs at radius 300, measured in aabbworld's ladder benchmark); `vision.Plugin.WithGroundStep`
+  trades ground samples for speed.
+- **Collision stays on planes — open.** Two entities meet where their `world.Layers` share a bit,
+  in both worlds; a hawk passes over a wall because it is on `Air`, not because it is 40 up. A veto
+  by Z overlap would make collision follow height too (a hawk landing, a projectile clearing a
+  wall) — a real change to the solver, left for when a game needs it.
 
 ## 13. Effects, tags and the profile — done
 

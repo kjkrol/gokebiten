@@ -32,6 +32,10 @@ type Grid interface {
 	CellsUnder(box geom.AABB, fn func(c CellID))
 	// EachCell calls fn for every cell of the grid.
 	EachCell(fn func(c CellID))
+	// Ordinal is c's index in a table with one slot per cell, below Cells; false for no cell.
+	Ordinal(c CellID) (int, bool)
+	// CellCount is how many cells the grid has.
+	CellCount() int
 }
 
 type wrapSetter interface {

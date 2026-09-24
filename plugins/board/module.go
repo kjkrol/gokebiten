@@ -15,10 +15,12 @@ var _ goke.Module = (*module)(nil)
 // when the plugin was built WithCollision, then the standing report.
 type module struct {
 	cells    *cellEntitySystem
+	altitude *altitudeSystem // Quasi3D only
 	standing *standingSystem
 	bodies   *terrainBodySystem
 
 	cellsRunnable    goke.Runnable
+	altitudeRunnable goke.Runnable
 	standingRunnable goke.Runnable
 	bodiesRunnable   goke.Runnable
 }
@@ -32,6 +34,9 @@ func (m *module) RegSystems(ecs *goke.ECS) {
 	if m.bodies != nil {
 		m.bodiesRunnable = ecs.RegSys(m.bodies)
 	}
+	if m.altitude != nil {
+		m.altitudeRunnable = ecs.RegSys(m.altitude)
+	}
 	m.standingRunnable = ecs.RegSys(m.standing)
 }
 
@@ -39,6 +44,9 @@ func (m *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	ctx.Run(m.cellsRunnable, d)
 	if m.bodies != nil {
 		ctx.Run(m.bodiesRunnable, d)
+	}
+	if m.altitude != nil {
+		ctx.Run(m.altitudeRunnable, d)
 	}
 	ctx.Run(m.standingRunnable, d)
 	ctx.Sync()

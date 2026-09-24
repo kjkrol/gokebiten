@@ -30,6 +30,20 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
   domain may not keeps its order.
 - The camera pans in screen pixels at any zoom.
 
+**Heights**
+- `world.Config{Quasi3D: true}` gives a world heights; the default is flat and no plugin guesses
+  the mode from the data. Entities carry `world.Z{Altitude, Height}`; a flat world refuses a Z.
+- Board: `CellKind.Altitude` (ground level) and `Height` (what stands on the cell), `Mover.Lift`,
+  `Shape{Size, Height}` for `NewUnits`, `Units.Define(name, board.Mover{Domain, Lift}, …)`. The
+  `Board` keeps a raster of altitudes (`Grid.Ordinal`, `GroundAt`) rebuilt when the terrain
+  changes and is the world's `Ground`; the board writes every `Z.Altitude` each tick from the
+  ground under the entity plus its `Lift`; terrain bodies carry their kind's `Z`.
+- Vision: `Sight.Eye`; in a Quasi3D world the cone has heights (aabbworld v1.7.0: eye, entity
+  bands, ground sampled every `Plugin.WithGroundStep`), so a hawk 40 up looks over a wall 10 tall,
+  a forest and a hill a walker's cone stops at. `Blockers` are refused in a Quasi3D world, `Eye`
+  in a flat one. Collision stays on `Layers` in both.
+- The vision demos run in a Quasi3D world with a hill; aabbworld is pinned to v1.7.0.
+
 **Kinds**
 - Package `kind/comp` holds what names one component of a Spec — `comp.Const`, `comp.Load`,
   `comp.Tagged`, `comp.Without` — and `kind` keeps the kinds: `Spec`, `Define`, `Of`, `Roster`.

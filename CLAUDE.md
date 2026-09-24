@@ -182,6 +182,11 @@ shows how much of it is boilerplate vs. real behavior.
   `world.Layers` are the planes an entity is on, one bit each (none, or the component absent:
   every plane); collision and vision read it, so a hawk on `Air` and a walker on `Land` neither
   push nor block each other. A world without heights is a set of planes: that is the 2D model.
+  `world.Config{Quasi3D: true}` gives the world heights: entities carry `world.Z{Altitude,
+  Height}`, the board sets the world's `Ground`, sight follows geometry (`Sight.Eye`) while
+  collision stays on planes. The dimension is the game's choice in `world.Config`; no plugin
+  guesses the mode from the data, and each refuses the other mode's facts where it first meets
+  them (a `Z` in a flat world, `Blockers` in a Quasi3D one).
   `Base` — the one component every entity carries, holding its `Position`,
   `Velocity`, `TypeID` and `Caps` (the `aabbworld.Capability` bits the space
   indexes it under; `collision` writes them), so a host hands it to whatever it
@@ -219,10 +224,17 @@ shows how much of it is boilerplate vs. real behavior.
   what it costs — `Costing(domain, cost)` prices it differently per domain, and
   `CostFor(domain)` is what a unit pays in the planner and in the Moving behavior board
   registers on the world (only entities carrying `Mover` are slowed); a unit's
-  `Mover` says which domains it moves in (none: `Land`). `board.NewUnits[Row](brd, size, at)` is
-  how a game defines its units: `units.Define(name, domain, steering, extra...)` derives
-  `Position` and `Cell` from the one point `at` reads off a row, `Mover` and `Layers` from the one
-  domain, runs the world's roster and `kind.Define`, and hands back the usual `kind.Of[Row]`.
+  `Mover` says which domains it moves in (none: `Land`) and, in a Quasi3D world, how high it
+  flies (`Lift`). `board.NewUnits[Row](brd, board.Shape{Size, Height}, at)` is how a game defines
+  its units: `units.Define(name, board.Mover{…}, steering, extra...)` derives `Position` and
+  `Cell` from the one point `at` reads off a row, `Layers` from the domain, in a Quasi3D world a
+  `world.Z{Height}` from the shape, runs the world's roster and `kind.Define`, and hands back the
+  usual `kind.Of[Row]`. In a Quasi3D world a `CellKind` also has an `Altitude` (its ground level)
+  and a `Height` (what stands on it); the `Board` keeps a raster of altitudes (`Grid.Ordinal`,
+  rebuilt when `Version` moves) and is the world's `Ground`; the `altitudeSystem` writes every
+  `Z.Altitude` each tick from the ground under the entity plus its `Lift`; terrain bodies carry
+  their kind's `Z`. A flat world refuses all of it at the first sight (`CellKindDict.Create`,
+  `NewUnits`, `Units.Define`, `Kinds.Register`).
   Every tick, after
   collision's `RunPlan`, `board.RunPlan` reports a `Standing` (cell under the centre and its kind) to
   `board.Each` behaviors registered on the board, naturally `board.Each[board.Mover]`;
@@ -316,7 +328,11 @@ shows how much of it is boilerplate vs. real behavior.
   ray spending its radius as a budget through it; whatever the ray reaches is seen, a forest
   looked into as much as a wall. `Sight.Blockers` are the `world.Layers` that cut or dim this
   sight at all (zero: every entity): a hawk with `Blockers` of `Air` looks over walls, forests
-  and walkers and still sees them; a walker with `Land` looks under the hawk. It
+  and walkers and still sees them; a walker with `Land` looks under the hawk. In a Quasi3D world
+  sight has heights instead: the cone's eye is `Z.Altitude + Sight.Eye`, every entity spans its
+  `Z`, the ground is the world's `Ground` sampled every `WithGroundStep` (default: a cell), and a
+  hawk 40 up looks over the wall, the forest and the hill a walker's cone stops at; `Blockers`
+  are refused there, `Eye` in a flat world. It
   hosts `vision.Between(a, b, fn)` of a `Sighting` inside the scan's own pass: once
   a tick per observer carrying `a`, with everything in view carrying `b` — a
   directed pair, grouped by observer, empty included. A behavior tells its seen

@@ -273,15 +273,15 @@ func (s *mainStage) onGround(t plugin.Tick, m *board.Mover, st board.Standing) {
 // defineKinds says what this game's entities are: the witch walks on land and water, the walker
 // on land, the boat on water.
 func (s *mainStage) defineKinds() {
-	units := board.NewUnits[unit](s.board, EntitySize, func(u unit) geom.Vec { return s.brd.CellCenter(u.start) })
+	units := board.NewUnits[unit](s.board, board.Shape{Size: EntitySize}, func(u unit) geom.Vec { return s.brd.CellCenter(u.start) })
 	profile := func(brake float64) world.Steering {
 		return world.Steering{MaxSpeed: UnitSpeed, Accel: UnitSpeed * 2, Brake: brake, V0: UnitSpeed / 2, TurnRate: 0.15}
 	}
 	sel := comp.Tagged(s.selection.Tags().Selectable)
 	order := comp.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} })
-	s.witch = units.Define("witch", board.Land|board.Water|Frost, profile(UnitSpeed*4), sel, order, comp.Const(witch{Power: 1}))
-	s.walker = units.Define("walker", board.Land, profile(UnitSpeed*4), sel)
-	s.boat = units.Define("boat", board.Water, profile(UnitSpeed/4), sel, order)
+	s.witch = units.Define("witch", board.Mover{Domain: board.Land | board.Water | Frost}, profile(UnitSpeed*4), sel, order, comp.Const(witch{Power: 1}))
+	s.walker = units.Define("walker", board.Mover{Domain: board.Land}, profile(UnitSpeed*4), sel)
+	s.boat = units.Define("boat", board.Mover{Domain: board.Water}, profile(UnitSpeed/4), sel, order)
 }
 
 // Spawn lays the lake and the road and puts the three of them in place.

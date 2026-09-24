@@ -104,6 +104,7 @@ func (w *module) LoadComps() []goke.CompToken {
 		goke.LoadComp[Steering](),
 		goke.LoadComp[Outside](),
 		goke.LoadComp[Layers](),
+		goke.LoadComp[Z](),
 	}, w.declared...)
 }
 

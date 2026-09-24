@@ -52,7 +52,7 @@ func panicsWith(t *testing.T, f func()) (msg string) {
 }
 
 func TestKinds_Define_AssignsSpriteIDsByOrder(t *testing.T) {
-	kinds := newKinds()
+	kinds := newKinds(false)
 	red := kind.Define[int](kinds, "red", statSpec())
 	overlay := kinds.NewSprite()
 	blue := kind.Define[int](kinds, "blue", statSpec())
@@ -72,7 +72,7 @@ func TestKinds_Define_NeedsOnePositionAndOneVelocity(t *testing.T) {
 		"two Positions": {comp.Const(spawnerTestPos()), comp.Const(spawnerTestPos()), comp.Const(Velocity{})},
 	} {
 		t.Run(name, func(t *testing.T) {
-			msg := panicsWith(t, func() { kind.Define[int](newKinds(), "unit", spec) })
+			msg := panicsWith(t, func() { kind.Define[int](newKinds(false), "unit", spec) })
 			if !strings.Contains(msg, `"unit"`) {
 				t.Errorf("panic %q does not name the kind", msg)
 			}
@@ -81,7 +81,7 @@ func TestKinds_Define_NeedsOnePositionAndOneVelocity(t *testing.T) {
 }
 
 func TestKinds_Define_RefusesANameTwice(t *testing.T) {
-	kinds := newKinds()
+	kinds := newKinds(false)
 	kind.Define[int](kinds, "unit", statSpec())
 
 	panicsWith(t, func() { kind.Define[int](kinds, "unit", statSpec()) })
@@ -198,7 +198,7 @@ func TestPopulate_KindsWithDifferentRowsAndComponents(t *testing.T) {
 func TestPlugin_Populate_EntryOfAKindThisWorldDoesNotHold_ErrorsWithoutSpawning(t *testing.T) {
 	p := testPlugin()
 	unit := kind.Define[int](p.Kinds(), "unit", statSpec())
-	stranger := kind.Define[int](newKinds(), "stranger", statSpec())
+	stranger := kind.Define[int](newKinds(false), "stranger", statSpec())
 	p.Seed(unit.Entry(1), stranger.Entry(1), kind.Entry{})
 
 	if err := p.Populate(); err == nil {
@@ -210,7 +210,7 @@ func TestPlugin_Populate_EntryOfAKindThisWorldDoesNotHold_ErrorsWithoutSpawning(
 }
 
 func TestKinds_LoadComps_ListsWhatItsKindsCarryEachOnce(t *testing.T) {
-	kinds := newKinds()
+	kinds := newKinds(false)
 	if got := kinds.LoadComps(); len(got) != 0 {
 		t.Fatalf("an empty registry lists %d component types, want none", len(got))
 	}
