@@ -35,7 +35,16 @@ type Renderer struct {
 	gridLines []gridLine
 	outline   []geom.Vec
 	visited   map[CellID]struct{}
+	// relief draws the sides of raised ground and of tall kinds: an isometric camera's view.
+	relief bool
 }
+
+// Shades of a block's faces against its top: the side facing down-right and the one facing
+// down-left, as if lit from the upper left.
+const (
+	shadeRight = 0.72
+	shadeLeft  = 0.55
+)
 
 type gridLine struct{ x0, y0, x1, y1 float32 }
 
@@ -50,8 +59,9 @@ var _ render.Submitter = (*Renderer)(nil)
 
 func newRenderer(cam camera.Camera, board *Board, atlas render.AtlasSource, state *RenderState) *Renderer {
 	w, h := board.CellBounds()
+	_, iso := cam.Projection().(camera.Isometric)
 	return &Renderer{board: board, camera: cam, atlas: atlas, cellW: w, cellH: h, state: state,
-		batch: render.NewQuadBatch(atlas, cam), visited: map[CellID]struct{}{}}
+		batch: render.NewQuadBatch(atlas, cam), visited: map[CellID]struct{}{}, relief: iso}
 }
 
 func (l *Renderer) Init(*goke.SysInit) {}
@@ -67,17 +77,38 @@ func (l *Renderer) Draw(screen *ebiten.Image) {
 	}
 }
 
-// Submit hands every visible cell to sink as one quad: its box at its altitude, at the depth of
-// its centre, so the entities standing on it follow it.
+// Submit hands every visible cell to sink at the depth of its centre, so the entities standing on
+// it follow it: its top at its altitude plus its kind's Height, and, through an isometric camera,
+// the two faces towards the viewer wherever the ground drops to a neighbour or the kind stands tall.
 func (l *Renderer) Submit(sink *render.Sink) {
 	l.eachVisible(func(c CellID) {
 		center := l.board.CellCenter(c)
+		kind := l.board.Kind(c)
 		alt := float32(l.board.Altitude(c))
+		top := alt + float32(kind.Height)
 		x0, y0 := float32(center.X-l.cellW/2), float32(center.Y-l.cellH/2)
 		x1, y1 := float32(center.X+l.cellW/2), float32(center.Y+l.cellH/2)
-		sink.Quad(l.camera.Depth(float32(center.X), float32(center.Y), alt), l.atlas, l.board.Kind(c).SpriteID,
-			l.corners(x0, y0, x1, y1, alt))
+		depth := l.camera.Depth(float32(center.X), float32(center.Y), alt)
+		if l.relief {
+			// the face along x = x1 shows down to the neighbour across it, the one along y = y1 likewise
+			if foot := l.neighbourAltitude(center.X+l.cellW, center.Y); foot < top {
+				sink.Shaded(depth, l.atlas, kind.SpriteID, l.face(x1, y0, x1, y1, top, foot), shadeRight)
+			}
+			if foot := l.neighbourAltitude(center.X, center.Y+l.cellH); foot < top {
+				sink.Shaded(depth, l.atlas, kind.SpriteID, l.face(x0, y1, x1, y1, top, foot), shadeLeft)
+			}
+		}
+		sink.Quad(depth, l.atlas, kind.SpriteID, l.corners(x0, y0, x1, y1, top))
 	})
+}
+
+// neighbourAltitude is the ground level of the cell at p, the sea level 0 off the board.
+func (l *Renderer) neighbourAltitude(x, y float64) float32 {
+	c, ok := l.board.CellAt(geom.NewVec(x, y))
+	if !ok {
+		return 0
+	}
+	return float32(l.board.Altitude(c))
 }
 
 // corners projects the four corners of a world box at height z.
@@ -86,6 +117,16 @@ func (l *Renderer) corners(x0, y0, x1, y1, z float32) render.Corners {
 	for i, p := range [4][2]float32{{x0, y0}, {x1, y0}, {x0, y1}, {x1, y1}} {
 		out[i][0], out[i][1] = l.camera.Project(p[0], p[1], z)
 	}
+	return out
+}
+
+// face projects a vertical wall from the edge (ax, ay)-(bx, by) between heights top and foot.
+func (l *Renderer) face(ax, ay, bx, by, top, foot float32) render.Corners {
+	var out render.Corners
+	out[0][0], out[0][1] = l.camera.Project(ax, ay, top)
+	out[1][0], out[1][1] = l.camera.Project(bx, by, top)
+	out[2][0], out[2][1] = l.camera.Project(ax, ay, foot)
+	out[3][0], out[3][1] = l.camera.Project(bx, by, foot)
 	return out
 }
 

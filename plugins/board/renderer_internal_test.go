@@ -24,8 +24,23 @@ func TestRenderer_Submit_OneQuadPerVisibleCellAtItsAltitude(t *testing.T) {
 
 	var sink render.Sink
 	r.Submit(&sink)
+	if sink.Len() != 18 {
+		t.Errorf("submitted %d quads, want the 16 cells and the hill's two faces towards the viewer", sink.Len())
+	}
+
+	wall, _ := grid.CellIndex(3, 3)
+	brd.Set(wall, CellKind{Cost: 1, Allows: Land, Solid: true, Height: 8})
+	sink = render.Sink{}
+	r.Submit(&sink)
+	if sink.Len() != 20 {
+		t.Errorf("submitted %d quads, want two more for the wall's faces down to the ground", sink.Len())
+	}
+
+	flat := newRenderer(camera.NewFromSpace(128, 128, 0), brd, flatAtlas{}, &RenderState{})
+	sink = render.Sink{}
+	flat.Submit(&sink)
 	if sink.Len() != 16 {
-		t.Errorf("submitted %d quads, want the 16 cells", sink.Len())
+		t.Errorf("top-down submitted %d quads, want the 16 cells alone: no faces from above", sink.Len())
 	}
 
 	// The hill's quad sits HeightUnit·10 above where its flat neighbour would be drawn.

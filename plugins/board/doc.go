@@ -86,5 +86,9 @@
 // # Renderer
 //
 // [Plugin.WithRenderer] builds the [Renderer] drawing each cell's sprite from an atlas; put it
-// under the entity layer. [RenderState] holds its live toggles, such as grid lines.
+// under the entity layer, or into a render.Sorted with the world's renderer. There it submits each
+// cell's top at its altitude plus its kind's Height and, through an isometric camera, the two faces
+// towards the viewer wherever the ground drops to a neighbour (a cliff, down to sea level 0 off the
+// board) or the kind stands tall (a wall), shaded as if lit from the upper left. [RenderState] holds
+// its live toggles, such as grid lines (drawn only in the plain layer).
 package board

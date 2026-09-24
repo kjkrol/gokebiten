@@ -38,6 +38,8 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
 - `render.Sorted` draws several `render.Submitter`s back to front by depth as one picture; the
   board's and the world's renderers submit their quads (cells at their altitude, entities at their
   `Z.Altitude`) besides drawing them as before.
+- Through an isometric camera the board's renderer draws relief: raised ground shows the faces
+  towards the viewer down to its lower neighbours, tall kinds (a wall, a forest) stand as blocks.
 
 **Heights**
 - `world.Config{Quasi3D: true}` gives a world heights; the default is flat and no plugin guesses
