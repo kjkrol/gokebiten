@@ -78,55 +78,78 @@ func (l *Renderer) Draw(screen *ebiten.Image) {
 }
 
 // Submit hands every visible cell to sink at the depth of its centre, so the entities standing on
-// it follow it: its top at its altitude plus its kind's Height, and, through an isometric camera,
-// the two faces towards the viewer wherever the ground drops to a neighbour or the kind stands tall.
+// it follow it: its top raised by its kind's Height over the ground, sloped between the corner
+// heights the board gives, and, through an isometric camera, the two faces towards the viewer
+// wherever that top stands above the neighbour's — a wall over grass, a raised edge over the sea.
 func (l *Renderer) Submit(sink *render.Sink) {
 	l.eachVisible(func(c CellID) {
 		center := l.board.CellCenter(c)
 		kind := l.board.Kind(c)
 		alt := float32(l.board.Altitude(c))
-		top := alt + float32(kind.Height)
+		top := l.tops(c)
 		x0, y0 := float32(center.X-l.cellW/2), float32(center.Y-l.cellH/2)
 		x1, y1 := float32(center.X+l.cellW/2), float32(center.Y+l.cellH/2)
 		depth := l.camera.Depth(float32(center.X), float32(center.Y), alt)
 		if l.relief {
-			// the face along x = x1 shows down to the neighbour across it, the one along y = y1 likewise
-			if foot := l.neighbourAltitude(center.X+l.cellW, center.Y); foot < top {
-				sink.Shaded(depth, l.atlas, kind.SpriteID, l.face(x1, y0, x1, y1, top, foot), shadeRight)
+			// the face along x = x1 shows down to the top of the neighbour across it, likewise y = y1
+			if fa, fb := l.neighbourTops(center.X+l.cellW, center.Y, 0, 2); top[1] > fa || top[3] > fb {
+				sink.Shaded(depth, l.atlas, kind.SpriteID, l.face(x1, y0, x1, y1, top[1], top[3], fa, fb), shadeRight)
 			}
-			if foot := l.neighbourAltitude(center.X, center.Y+l.cellH); foot < top {
-				sink.Shaded(depth, l.atlas, kind.SpriteID, l.face(x0, y1, x1, y1, top, foot), shadeLeft)
+			if fa, fb := l.neighbourTops(center.X, center.Y+l.cellH, 0, 1); top[2] > fa || top[3] > fb {
+				sink.Shaded(depth, l.atlas, kind.SpriteID, l.face(x0, y1, x1, y1, top[2], top[3], fa, fb), shadeLeft)
 			}
 		}
-		sink.Quad(depth, l.atlas, kind.SpriteID, l.corners(x0, y0, x1, y1, top))
+		sink.Quad(depth, l.atlas, kind.SpriteID, l.sloped(x0, y0, x1, y1, top))
 	})
 }
 
-// neighbourAltitude is the ground level of the cell at p, the sea level 0 off the board.
-func (l *Renderer) neighbourAltitude(x, y float64) float32 {
+// tops is the height of c's four corners with its kind standing on them: the ground's corners on a
+// sloped grid, its altitude everywhere on a flat one.
+func (l *Renderer) tops(c CellID) [4]float32 {
+	var out [4]float32
+	rise := float32(l.board.Kind(c).Height)
+	if hs, _, _, ok := l.board.Corners(c); ok {
+		for i := range out {
+			out[i] = float32(hs[i]) + rise
+		}
+		return out
+	}
+	alt := float32(l.board.Altitude(c)) + rise
+	return [4]float32{alt, alt, alt, alt}
+}
+
+// neighbourTops is the top of the cell at (x, y) at its corners a and b, the sea level 0 off the board.
+func (l *Renderer) neighbourTops(x, y float64, a, b int) (float32, float32) {
 	c, ok := l.board.CellAt(geom.NewVec(x, y))
 	if !ok {
-		return 0
+		return 0, 0
 	}
-	return float32(l.board.Altitude(c))
+	t := l.tops(c)
+	return t[a], t[b]
 }
 
 // corners projects the four corners of a world box at height z.
 func (l *Renderer) corners(x0, y0, x1, y1, z float32) render.Corners {
+	return l.sloped(x0, y0, x1, y1, [4]float32{z, z, z, z})
+}
+
+// sloped projects the four corners of a world box, each at its own height.
+func (l *Renderer) sloped(x0, y0, x1, y1 float32, z [4]float32) render.Corners {
 	var out render.Corners
 	for i, p := range [4][2]float32{{x0, y0}, {x1, y0}, {x0, y1}, {x1, y1}} {
-		out[i][0], out[i][1] = l.camera.Project(p[0], p[1], z)
+		out[i][0], out[i][1] = l.camera.Project(p[0], p[1], z[i])
 	}
 	return out
 }
 
-// face projects a vertical wall from the edge (ax, ay)-(bx, by) between heights top and foot.
-func (l *Renderer) face(ax, ay, bx, by, top, foot float32) render.Corners {
+// face projects a wall from the edge (ax, ay)-(bx, by): tops topA and topB down to feet footA
+// and footB.
+func (l *Renderer) face(ax, ay, bx, by, topA, topB, footA, footB float32) render.Corners {
 	var out render.Corners
-	out[0][0], out[0][1] = l.camera.Project(ax, ay, top)
-	out[1][0], out[1][1] = l.camera.Project(bx, by, top)
-	out[2][0], out[2][1] = l.camera.Project(ax, ay, foot)
-	out[3][0], out[3][1] = l.camera.Project(bx, by, foot)
+	out[0][0], out[0][1] = l.camera.Project(ax, ay, topA)
+	out[1][0], out[1][1] = l.camera.Project(bx, by, topB)
+	out[2][0], out[2][1] = l.camera.Project(ax, ay, footA)
+	out[3][0], out[3][1] = l.camera.Project(bx, by, footB)
 	return out
 }
 

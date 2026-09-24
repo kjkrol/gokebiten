@@ -279,7 +279,10 @@ from the data — a flat game pays nothing for heights, and a game that wants th
   rebuilt when the terrain's `Version` moves, and is the world's `Ground` (`GroundAt`, `Step` = a
   cell's shorter side). A hill is only a number in the raster — so the cost of a scan depends on
   the radius and the step, never on how many hills a game has. This is the rule that decided
-  against modelling relief as bodies.
+  against modelling relief as bodies. On a square grid the ground slopes: each corner stands at
+  the mean of the cells meeting there (`Board.Corners`), `GroundAt` interpolates between a cell's
+  corners, so a hill is a smooth rise, a unit on its slope stands at the slope's height, and the
+  isometric tiles are drawn tilted — Transport Tycoon's terrain without its corner editing.
 - **Sight with heights.** aabbworld v1.7.0's `Cone.Eye/Elevation/Ground/GroundStep`: an entity is
   seen when the line from the eye (`Z.Altitude + Sight.Eye`) to its top clears every nearer ground
   sample and every nearer blocking band within the budget; the reach of an angle is the farthest

@@ -135,6 +135,11 @@ func (g *hexGrid) Ordinal(c CellID) (int, bool) {
 
 func (g *hexGrid) CellCount() int { return int(g.Width) * int(g.Height) }
 
+func (g *hexGrid) Coords(c CellID) (uint32, uint32, bool) {
+	q, r := unpackAxial(c)
+	return uint32(q), uint32(r), q >= 0 && r >= 0 && q < int32(g.Width) && r < int32(g.Height)
+}
+
 func (g *hexGrid) CellIndex(q, r uint32) (CellID, bool) {
 	fq, fr, ok := g.foldAxial(int32(q), int32(r))
 	if !ok {

@@ -24,15 +24,15 @@ func TestRenderer_Submit_OneQuadPerVisibleCellAtItsAltitude(t *testing.T) {
 
 	var sink render.Sink
 	r.Submit(&sink)
-	if sink.Len() != 18 {
-		t.Errorf("submitted %d quads, want the 16 cells and the hill's two faces towards the viewer", sink.Len())
+	if sink.Len() != 16 {
+		t.Errorf("submitted %d quads, want the 16 cells: the hill slopes into its neighbours, no faces", sink.Len())
 	}
 
-	wall, _ := grid.CellIndex(3, 3)
+	wall, _ := grid.CellIndex(2, 2)
 	brd.Set(wall, CellKind{Cost: 1, Allows: Land, Solid: true, Height: 8})
 	sink = render.Sink{}
 	r.Submit(&sink)
-	if sink.Len() != 20 {
+	if sink.Len() != 18 {
 		t.Errorf("submitted %d quads, want two more for the wall's faces down to the ground", sink.Len())
 	}
 
@@ -43,10 +43,10 @@ func TestRenderer_Submit_OneQuadPerVisibleCellAtItsAltitude(t *testing.T) {
 		t.Errorf("top-down submitted %d quads, want the 16 cells alone: no faces from above", sink.Len())
 	}
 
-	// The hill's quad sits HeightUnit·10 above where its flat neighbour would be drawn.
+	// A point 10 up is drawn HeightUnit·10 above the ground under it.
 	flatX, flatY := cam.Project(48, 48, 0)
 	hillX, hillY := cam.Project(48, 48, 10)
 	if hillX != flatX || hillY != flatY-10 {
-		t.Errorf("the hill's centre is drawn at (%v, %v), the ground under it at (%v, %v); want 10 higher", hillX, hillY, flatX, flatY)
+		t.Errorf("a point 10 up is drawn at (%v, %v), the ground under it at (%v, %v); want 10 higher", hillX, hillY, flatX, flatY)
 	}
 }

@@ -71,8 +71,12 @@
 // its centre plus its Mover's Lift, so a unit never declares where it stands in height and a hawk
 // declares only how high it flies. Units get their Z from the Shape, terrain bodies from their
 // kind. A hill is a number in the raster and never a body, so the cost of sight does not depend
-// on how many a game has. A flat world refuses an Altitude, a Height or a Lift where it first
-// meets one.
+// on how many a game has. On a square grid the ground runs smoothly between cells: each corner
+// stands at the mean altitude of the cells that meet there ([Board.Corners]), GroundAt reads
+// between a cell's corners, a hill has slopes and a unit on a slope stands at its height; the
+// renderer draws the tiles sloped and faces only where a top stands above its neighbour's — a
+// wall over grass, a raised edge over the sea. A flat world refuses an Altitude, a Height or a
+// Lift where it first meets one.
 //
 // # Occupancy
 //

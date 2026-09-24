@@ -114,6 +114,11 @@ func (g *squareGrid) Ordinal(c CellID) (int, bool) {
 
 func (g *squareGrid) CellCount() int { return int(g.Width) * int(g.Height) }
 
+func (g *squareGrid) Coords(c CellID) (uint32, uint32, bool) {
+	x, y := g.cellXY(c)
+	return x, y, x < g.Width && y < g.Height
+}
+
 func (g *squareGrid) CellIndex(col, row uint32) (CellID, bool) {
 	x, okX := foldAxis(int64(col), int64(g.Width), g.WrapX)
 	y, okY := foldAxis(int64(row), int64(g.Height), g.WrapY)

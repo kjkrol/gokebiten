@@ -27,8 +27,16 @@ func TestBoard_GroundAtReadsTheRasterAndFollowsTheTerrain(t *testing.T) {
 			c, _ := grid.CellIndex(2, 1)
 			brd.Set(c, hill)
 
-			if got := brd.GroundAt(grid.CellCenter(c)); got != 12 {
-				t.Errorf("ground on the hill = %v, want 12", got)
+			if got := brd.Altitude(c); got != 12 {
+				t.Errorf("the hill's altitude = %v, want 12", got)
+			}
+			// A lone hill on a square grid is smoothed to its corners' mean, 3; a hex cell stays flat.
+			want := 12.0
+			if name == "square" {
+				want = 3
+			}
+			if got := brd.GroundAt(grid.CellCenter(c)); got != want {
+				t.Errorf("ground at the hill's centre = %v, want %v", got, want)
 			}
 			other, _ := grid.CellIndex(0, 0)
 			if got := brd.GroundAt(grid.CellCenter(other)); got != 0 {
@@ -45,6 +53,37 @@ func TestBoard_GroundAtReadsTheRasterAndFollowsTheTerrain(t *testing.T) {
 				t.Errorf("Step = %v, want the cell's shorter side", brd.Step())
 			}
 		})
+	}
+}
+
+func TestBoard_GroundSlopesBetweenCellsOnASquareGrid(t *testing.T) {
+	grid := board.DefaultGrids{}.Square(6, 6, 32)
+	brd := board.NewBoard(grid, board.NewTerrainMap())
+	brd.SetAll(board.CellKind{Name: board.Named("grass"), Cost: 1, Allows: board.Land})
+	for y := uint32(2); y <= 4; y++ {
+		for x := uint32(2); x <= 4; x++ {
+			c, _ := grid.CellIndex(x, y)
+			brd.Set(c, hill)
+		}
+	}
+	centre, _ := grid.CellIndex(3, 3)
+	if got := brd.GroundAt(grid.CellCenter(centre)); got != 12 {
+		t.Errorf("the plateau's middle stands at %v, want the full 12", got)
+	}
+	corner, _ := grid.CellIndex(2, 2)
+	if got := brd.GroundAt(grid.CellCenter(corner)); got != 6.75 {
+		t.Errorf("the plateau's corner cell stands at %v, want 6.75, the mean of its corners 3, 6, 6 and 12", got)
+	}
+	last := -1.0
+	for x := 40.0; x <= 112; x += 8 { // walking east along row 3 up onto the plateau
+		if got := brd.GroundAt(geom.NewVec(x, 112)); got < last {
+			t.Errorf("the ground drops from %v to %v at x %v on the way up the slope", last, got, x)
+		} else {
+			last = got
+		}
+	}
+	if hs, x, y, ok := brd.Corners(centre); !ok || x != 3 || y != 3 || hs != [4]float64{12, 12, 12, 12} {
+		t.Errorf("Corners of the middle = %v at (%d, %d) ok %v, want four 12s at (3, 3)", hs, x, y, ok)
 	}
 }
 
@@ -147,11 +186,13 @@ func TestAltitude_IsTheGroundUnderTheUnitPlusItsLift(t *testing.T) {
 	for _, z := range zs[walker.ID()] {
 		alts[z.Altitude] = true
 	}
-	if !alts[12] || !alts[0] {
-		t.Errorf("walkers stand at %v, want one at 12 on the hill and one at 0 on the grass", alts)
+	onHill, _ := qw.grid.CellIndex(2, 1)
+	hillGround := qw.brd.Res.Logic.Board.GroundAt(qw.grid.CellCenter(onHill))
+	if hillGround <= 0 || !alts[hillGround] || !alts[0] {
+		t.Errorf("walkers stand at %v, want one at the hill's ground %v and one at 0 on the grass", alts, hillGround)
 	}
-	if got := zs[hawk.ID()]; len(got) != 1 || got[0].Altitude != 52 || got[0].Height != 2 {
-		t.Errorf("hawk's Z = %v, want altitude 52 (the hill plus its lift) and height 2", got)
+	if got := zs[hawk.ID()]; len(got) != 1 || got[0].Altitude != hillGround+40 || got[0].Height != 2 {
+		t.Errorf("hawk's Z = %v, want altitude %v (the hill plus its lift) and height 2", got, hillGround+40)
 	}
 }
 
