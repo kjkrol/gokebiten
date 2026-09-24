@@ -66,7 +66,7 @@ func detectTick(t *testing.T, things ...*thing) {
 		read = si.NewQueryBuilder(&base, &seen).Build()
 	}})
 
-	handle := ecs.RegSys(collision.NewDetector(space))
+	handle := ecs.RegSys(collision.NewCollisionSystem(space))
 	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(handle, d)
 		ctx.Sync()
@@ -322,7 +322,7 @@ func TestDetector_Contacts_DoNotSurviveTheNextTick(t *testing.T) {
 		q = si.NewQueryBuilder(&struck).Build()
 	}})
 
-	detect := ecs.RegSys(collision.NewDetector(space))
+	detect := ecs.RegSys(collision.NewCollisionSystem(space))
 	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(detect, d)
 		ctx.Sync()

@@ -21,10 +21,10 @@ type module struct {
 	pairs    *plugin.PairHost[Meeting]
 	entities *plugin.EachHost[Struck]
 
-	detector goke.Runnable
-	tracked  func(t plugin.Tick, id uid.UID64, inside bool)
-	shapes   ShapeTest
-	built    bool
+	system  goke.Runnable
+	tracked func(t plugin.Tick, id uid.UID64, inside bool)
+	shapes  ShapeTest
+	built   bool
 }
 
 // New builds the collision engine over space.
@@ -48,7 +48,7 @@ func (m *module) RegSystems(ecs *goke.ECS) {
 }
 
 func (m *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
-	ctx.Run(m.detector, d)
+	ctx.Run(m.system, d)
 	ctx.Sync()
 }
 
@@ -90,10 +90,10 @@ func host(pairs *plugin.PairHost[Meeting], entities *plugin.EachHost[Struck], be
 }
 
 func (m *module) build() {
-	detector := newDetector(m.space, m.pairs, m.entities, m.shapes)
+	system := newCollisionSystem(m.space, m.pairs, m.entities, m.shapes)
 	if m.tracked != nil {
-		detector.tracked = m.tracked
+		system.tracked = m.tracked
 	}
-	m.detector = m.ecs.RegSys(detector)
+	m.system = m.ecs.RegSys(system)
 	m.built = true
 }

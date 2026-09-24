@@ -213,19 +213,19 @@ shows how much of it is boilerplate vs. real behavior.
   `world.Bodies` under a kind from `Kinds.Reserve`, rebuilt when `TerrainMap.Version` moves and
   once after a load. Depends on `world`, and on `collision` for the bodies.
 - **`collision`** — optional collision detection over `world`'s space, one
-  `Detector` system a tick. An entity collides exactly while it carries `Collider` —
-  `kind.Const(collision.Collider{})`, or `Attach`/`Detach` mid-game. The `Detector`
+  `CollisionSystem` system a tick. An entity collides exactly while it carries `Collider` —
+  `kind.Const(collision.Collider{})`, or `Attach`/`Detach` mid-game. The `CollisionSystem`
   first settles every `Collider`'s `Base.Caps` (`CanCollide`, plus `Static` for an
   immovable `Physics`, `Sensor` for none) and rebuilds the space when any changed,
   so a `Collider` counts from the tick it is carried. The tick is then one
   `collide.Engine.Tick` (`github.com/kjkrol/aabbworld/collide` holds the contract —
-  `Handler`, `Config`, `Engine`; the `Detector` builds the engine once with
+  `Handler`, `Config`, `Engine`; the `CollisionSystem` builds the engine once with
   `space.CollideEngine(handler, collide.Config{Reach: world.StepReach, Iterations})`
   and is its `Handler`) over the space's items: the engine pairs up whoever carries
   `CanCollide` and may touch within a step, tests the pairs exactly, pushes the overlapping apart and reports each
-  pushed box (`Moved`), which the `Detector` writes back to `Base.Pos` by `Seek` —
+  pushed box (`Moved`), which the `CollisionSystem` writes back to `Base.Pos` by `Seek` —
   `Left()` names whoever it pushed out through an open edge. Every overlap first
-  passes the `Detector`'s `Touch`: both sides are resolved by `Seek`, and a side
+  passes the `CollisionSystem`'s `Touch`: both sides are resolved by `Seek`, and a side
   that lost its `Collider` since the last rebuild vetoes the pair, is marked
   `Plain`, and the space is rebuilt after the tick (so it partners nobody again); then
   the plugin's `ShapeTest` (`WithShapeTest`; `BoxesTouch` by default, at no cost),
@@ -235,7 +235,7 @@ shows how much of it is boilerplate vs. real behavior.
   bounces — the bounce is the engine's own, an infinite `Mass` is a wall; one without
   `Physics` is only ever detected (a town, a trigger). Separation is always an even
   split.
-  Reactions are behaviors hosted inside the `Detector`'s own pass:
+  Reactions are behaviors hosted inside the `CollisionSystem`'s own pass:
   `plugin.Between(a, b, fn)` of a `Meeting` per confirmed contact between two tags
   (`plugin.Any` as the wildcard), `plugin.Each[T]` of a `Struck` per entity per
   tick, with what it struck the tick before. A strategy exports a plain function of

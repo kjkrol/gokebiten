@@ -72,7 +72,7 @@ and a few system libraries; Ebitengine uses cgo on most platforms).
 | **Plugins and behaviors** | `plugin` | The one extension contract; `Between` and `Each` behaviors hosted in a plugin's own pass |
 | **World** | `plugins/world` | Every entity's `Base` (position, velocity, kind, capabilities); movement under stop, wrap or open edges; the shared spatial index and camera; spawning from kinds |
 | **Kinds** | `plugins/world/kind` | `Define` a kind from a `Spec` of `Const` and `Load` components; `Entry` rows onto the roster |
-| **Collisions** | `plugins/collision` | A `Detector` over the world's space: `Collider` to take part, `Physics` to bounce and be pushed apart, a `ShapeTest` to refine, `Meeting`/`Struck` for behaviors |
+| **Collisions** | `plugins/collision` | A `CollisionSystem` over the world's space: `Collider` to take part, `Physics` to bounce and be pushed apart, a `ShapeTest` to refine, `Meeting`/`Struck` for behaviors |
 | **Sight** | `plugins/vision` | A `Sight` cone scanned each tick into `Seen`, nearest first; `Sighting` behaviors per observer; drawn outlines |
 | **Board and navigation** | `plugins/board`, `plugins/navigation` | Square or hex grid with terrain and occupancy; `MoveOrder` paths that re-route when terrain changes |
 | **Selection** | `plugins/selection` | Click, marquee drag and shift-add into a `Selected` tag, with a highlight renderer |
@@ -332,7 +332,7 @@ effects, [`views.md`](doc/views.md) where players and networking are headed.
 | [`plugins/world/kind`](plugins/world/kind/doc.go) | What an entity is: `Spec`, `Const`/`Load`, `Define`, `Of`, `Registry` |
 | [`plugins/world`](plugins/world/doc.go) | The foundation: `Base`, the shared `Space` and camera, movement under the edge rules, kinds, `Seed`/`Populate`, `Attach`/`Detach`, the entity renderer |
 | [`game`](game/doc.go) | What a game implements and receives: `Game`, `Stage`, `Scene`, `Scenes`, `Composition`, `Initializer`, `Runtime`, `Persistence` |
-| [`plugins/collision`](plugins/collision/doc.go) | The `Detector` over the world's space; `Collider`, `Physics`, `ShapeTest`, `Meeting`, `Struck` |
+| [`plugins/collision`](plugins/collision/doc.go) | The `CollisionSystem` over the world's space; `Collider`, `Physics`, `ShapeTest`, `Meeting`, `Struck` |
 | [`plugins/collision/behavior`](plugins/collision/behavior/doc.go) | `CountContacts`, `ShowHits` with `HitOverlay`, `LogContacts` |
 | [`plugins/vision`](plugins/vision/doc.go) | `Sight` cones into `Seen`; `Sighting` behaviors; `SightOutline` drawn |
 | [`plugins/vision/behavior`](plugins/vision/behavior/doc.go) | `Flee`, `Chase`, and the `Predator`/`Prey`/`Skittish`/`Threat` tags |

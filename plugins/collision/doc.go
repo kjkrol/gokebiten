@@ -3,15 +3,15 @@
 // Physics is pushed apart and bounces. Reactions are behaviors: plugin.Between of a Meeting,
 // plugin.Each of a Struck, registered with Plugin.RegisterBehavior.
 //
-// # Plugin and Detector
+// # Plugin and CollisionSystem
 //
 // [Plugin] is built over a world plugin ([NewPlugin]) and installed with Use; it runs one
-// [Detector] system a tick. The Detector first settles every Collider's Base.Caps — CanCollide,
+// [CollisionSystem] system a tick. The CollisionSystem first settles every Collider's Base.Caps — CanCollide,
 // plus Static for an immovable Physics, Sensor for none — and rebuilds the space when any changed,
 // so a Collider counts from the tick it is carried. The tick is then one aabbworld collide.Engine
-// Tick over the space's items, with the Detector as its Handler: the engine pairs up whoever may
+// Tick over the space's items, with the CollisionSystem as its Handler: the engine pairs up whoever may
 // touch within a step, puts each overlapping pair to Touch, pushes the confirmed ones apart and
-// reports each pushed box, which the Detector writes back to Base.Pos; whoever it pushed out
+// reports each pushed box, which the CollisionSystem writes back to Base.Pos; whoever it pushed out
 // through an open edge is handed to the world's Tracked. A side that lost its Collider since the
 // last rebuild vetoes the pair, is marked Plain, and the space is rebuilt after the tick.
 //

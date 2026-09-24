@@ -13,15 +13,15 @@ import (
 	"github.com/kjkrol/uid"
 )
 
-var _ goke.System = (*Detector)(nil)
+var _ goke.System = (*CollisionSystem)(nil)
 var _ collide.Handler = (*handler)(nil)
 
 // solverIterations caps the passes one tick spends separating chained overlaps.
 const solverIterations = 16
 
-// Detector runs one tick of collisions: what each entity struck last tick, who really
+// CollisionSystem runs one tick of collisions: what each entity struck last tick, who really
 // overlaps now, the bounce, the push apart, and the contacts left behind for behaviors.
-type Detector struct {
+type CollisionSystem struct {
 	space  *aabbworld.Space
 	engine collide.Engine
 
@@ -60,31 +60,31 @@ type Detector struct {
 	stale bool
 }
 
-// handler is the Detector as the engine talks to it.
-type handler Detector
+// handler is the CollisionSystem as the engine talks to it.
+type handler CollisionSystem
 
 func (h *handler) Touch(a, b uid.UID64, pen geom.Vec) (geom.Vec, bool) {
-	return (*Detector)(h).resolve(a, b, pen)
+	return (*CollisionSystem)(h).resolve(a, b, pen)
 }
-func (h *handler) Contact(_, _ uid.UID64, pen geom.Vec) { (*Detector)(h).contact(pen) }
-func (h *handler) Moved(id uid.UID64, box plane.AABB)   { (*Detector)(h).moved(id, box) }
+func (h *handler) Contact(_, _ uid.UID64, pen geom.Vec) { (*CollisionSystem)(h).contact(pen) }
+func (h *handler) Moved(id uid.UID64, box plane.AABB)   { (*CollisionSystem)(h).moved(id, box) }
 
-// sought is the one query the detector offers its hosted behaviors.
+// sought is the one query the system offers its hosted behaviors.
 const sought = 0
 
-// NewDetector builds the collision detector over space.
-func NewDetector(space *aabbworld.Space) *Detector {
-	return newDetector(space, &plugin.PairHost[Meeting]{}, &plugin.EachHost[Struck]{}, nil)
+// NewCollisionSystem builds the collision system over space.
+func NewCollisionSystem(space *aabbworld.Space) *CollisionSystem {
+	return newCollisionSystem(space, &plugin.PairHost[Meeting]{}, &plugin.EachHost[Struck]{}, nil)
 }
 
-func newDetector(space *aabbworld.Space, between *plugin.PairHost[Meeting], each *plugin.EachHost[Struck], shapes ShapeTest) *Detector {
-	d := &Detector{space: space, between: between, each: each, shapes: shapes, tracked: func(plugin.Tick, uid.UID64, bool) {}}
+func newCollisionSystem(space *aabbworld.Space, between *plugin.PairHost[Meeting], each *plugin.EachHost[Struck], shapes ShapeTest) *CollisionSystem {
+	d := &CollisionSystem{space: space, between: between, each: each, shapes: shapes, tracked: func(plugin.Tick, uid.UID64, bool) {}}
 	d.engine = space.CollideEngine((*handler)(d), collide.Config{Reach: world.StepReach, Iterations: solverIterations})
 	d.struckAt = d.struck
 	return d
 }
 
-func (d *Detector) Init(si *goke.SysInit) {
+func (d *CollisionSystem) Init(si *goke.SysInit) {
 	qb := si.NewQueryBuilder(&d.base, &d.collider).Optional(&d.physics)
 	d.each.Bind(qb)
 	d.walk = qb.Build()
@@ -96,7 +96,7 @@ func (d *Detector) Init(si *goke.SysInit) {
 	d.lookup = seek.Build()
 }
 
-func (d *Detector) Update(cb *goke.CmdBuf, dt time.Duration) {
+func (d *CollisionSystem) Update(cb *goke.CmdBuf, dt time.Duration) {
 	d.tick = plugin.Tick{CmdBuf: cb, Now: time.Now(), Dt: dt}
 	if d.mark() {
 		d.rebuild()
@@ -121,7 +121,7 @@ func (d *Detector) Update(cb *goke.CmdBuf, dt time.Duration) {
 }
 
 // mark runs the Each behaviors over every Collider and settles its capabilities; true if changed.
-func (d *Detector) mark() bool {
+func (d *CollisionSystem) mark() bool {
 	changed := false
 	d.walk.All()
 	for d.walk.Next() {
@@ -148,7 +148,7 @@ func (d *Detector) mark() bool {
 }
 
 // rebuild hands the space every entity again, capabilities as they stand now.
-func (d *Detector) rebuild() {
+func (d *CollisionSystem) rebuild() {
 	d.items = d.items[:0]
 	d.all.All()
 	for d.all.Next() {
@@ -161,7 +161,7 @@ func (d *Detector) rebuild() {
 }
 
 // struck is what the hosted behaviors are told about the i-th entity of the chunk being walked.
-func (d *Detector) struck(i int) Struck {
+func (d *CollisionSystem) struck(i int) Struck {
 	return Struck{ID: d.walking.ids[i], Contacts: d.walking.colliders[i].Contacts()}
 }
 
@@ -186,7 +186,7 @@ type contactSide struct {
 }
 
 // resolve looks both sides of an overlapping pair up and asks the shapes; a lost Collider vetoes.
-func (d *Detector) resolve(a, b uid.UID64, pen geom.Vec) (geom.Vec, bool) {
+func (d *CollisionSystem) resolve(a, b uid.UID64, pen geom.Vec) (geom.Vec, bool) {
 	sideA, tagsA, ok := d.side(a)
 	if !ok {
 		return pen, false
@@ -203,7 +203,7 @@ func (d *Detector) resolve(a, b uid.UID64, pen geom.Vec) (geom.Vec, bool) {
 }
 
 // side looks one entity up, refusing one that no longer carries a Collider.
-func (d *Detector) side(id uid.UID64) (contactSide, plugin.Marks, bool) {
+func (d *CollisionSystem) side(id uid.UID64) (contactSide, plugin.Marks, bool) {
 	if !d.seek(id) {
 		if d.all.Seek(id) {
 			d.allBase.At(d.all.Cursor()).Caps, d.stale = aabbworld.Plain, true
@@ -217,7 +217,7 @@ func (d *Detector) side(id uid.UID64) (contactSide, plugin.Marks, bool) {
 	}, d.between.At(sought, cur), true
 }
 
-func (d *Detector) seek(id uid.UID64) bool {
+func (d *CollisionSystem) seek(id uid.UID64) bool {
 	ok := d.lookupHot && d.lookup.SeekH(id)
 	if !ok {
 		ok = d.lookup.Seek(id)
@@ -227,7 +227,7 @@ func (d *Detector) seek(id uid.UID64) bool {
 }
 
 // contact settles the pair resolve just confirmed: the bounce, and a Contact on each side.
-func (d *Detector) contact(pen geom.Vec) {
+func (d *CollisionSystem) contact(pen geom.Vec) {
 	sides := d.pair
 
 	normal, aligned := normalOf(pen)
@@ -243,7 +243,7 @@ func (d *Detector) contact(pen geom.Vec) {
 }
 
 // moved writes a box the engine pushed back to its entity.
-func (d *Detector) moved(id uid.UID64, box plane.AABB) {
+func (d *CollisionSystem) moved(id uid.UID64, box plane.AABB) {
 	if d.seek(id) {
 		d.lookupBase.At(d.lookup.Cursor()).Pos.AABB = box
 	}

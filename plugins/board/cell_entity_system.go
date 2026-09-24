@@ -28,7 +28,6 @@ type cellEntitySystem struct {
 	query  *goke.Query
 	cell   goke.Comp[Cell]
 	ground goke.Comp[Ground]
-	byCell map[CellID]uid.UID64
 
 	// The factory's own columns: a Comp handle serves one archetype or query, never two.
 	spawnCell   goke.Comp[Cell]
@@ -36,20 +35,12 @@ type cellEntitySystem struct {
 }
 
 func newCellEntitySystem(brd *Board, worldPlugin *world.Plugin, typeID kind.ID) *cellEntitySystem {
-	return &cellEntitySystem{brd: brd, worldPlugin: worldPlugin, typeID: typeID, byCell: map[CellID]uid.UID64{}}
+	return &cellEntitySystem{brd: brd, worldPlugin: worldPlugin, typeID: typeID}
 }
 
 func (s *cellEntitySystem) Init(si *goke.SysInit) {
 	s.bodies = s.worldPlugin.NewBodies(si, s.typeID, &s.spawnCell, &s.spawnGround)
 	s.query = si.NewQueryBuilder(&s.cell, &s.ground).Build()
-	// A load brings the entities back without the map: rebuild it.
-	s.query.All()
-	for s.query.Next() {
-		cursor := s.query.Cursor()
-		for i, id := range cursor.IDs {
-			s.byCell[s.cell.Slice(cursor)[i].ID] = id
-		}
-	}
 }
 
 func (s *cellEntitySystem) Update(*goke.CmdBuf, time.Duration) {
@@ -66,8 +57,14 @@ func (s *cellEntitySystem) Update(*goke.CmdBuf, time.Duration) {
 
 // entity finds the cell's entity or spawns one over the cell, carrying its terrain as Ground.
 func (s *cellEntitySystem) entity(c CellID) uid.UID64 {
-	if id, ok := s.byCell[c]; ok {
-		return id
+	s.query.All()
+	for s.query.Next() {
+		cursor := s.query.Cursor()
+		for i, id := range cursor.IDs {
+			if s.cell.Slice(cursor)[i].ID == c {
+				return id
+			}
+		}
 	}
 	w, h := s.brd.CellBounds()
 	center := s.brd.CellCenter(c)
@@ -78,22 +75,17 @@ func (s *cellEntitySystem) entity(c CellID) uid.UID64 {
 		s.spawnGround.Slice(cursor)[i] = Ground{Kind: s.brd.Kind(c)}
 		id = spawned
 	})
-	s.byCell[c] = id
 	return id
 }
 
 // drop writes a cell entity's Ground into the terrain one last time and despawns it — the
 // entity may be gone before the next copy, so the terrain keeps what its Ground last said.
+// Any other entity is left alone.
 func (s *cellEntitySystem) drop(cb *goke.CmdBuf, id uid.UID64) {
-	for c, held := range s.byCell {
-		if held != id {
-			continue
-		}
-		if s.query.Seek(id) {
-			s.brd.Set(c, s.ground.At(s.query.Cursor()).Kind)
-		}
-		delete(s.byCell, c)
-		s.bodies.Remove(cb, id)
+	if !s.query.Seek(id) {
 		return
 	}
+	cursor := s.query.Cursor()
+	s.brd.Set(s.cell.At(cursor).ID, s.ground.At(cursor).Kind)
+	s.bodies.Remove(cb, id)
 }

@@ -33,6 +33,7 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
 - `plugins/effects`: temporary changes to entities — `Grant` and `Alter` in a `Spec`, `Lasts`
   or until `Dispel`, `Cast`/`CastFor`/`Dispel`/`Has` by entity id, `Active` saved with the entity.
 - `plugins/world`: `Kinds.Reserve` and `Bodies` for kind-less entities; `Kinds.DefineTag`.
+- `collision.Detector` is `CollisionSystem` (`NewCollisionSystem`), as every system is named.
 - `vision`: sight through terrain — an entity carrying `Transparency` dims sight instead of
   cutting it (aabbworld v1.6.0: a ray spends its radius as a budget, a forest at 0.6 takes 2.5×
   its depth), `Sight.Clear` looks over the veils (a flyer), what cuts sight still cuts. A

@@ -75,7 +75,7 @@
 //	                                movement, kinds, Seed and Populate, Attach and Detach, Camera   (→ camera, control, plugin, kind, render)
 //	Layer 5   game                — what a game implements and receives: Game, Stage, Scene, Scenes,
 //	                                Composition, Initializer, Runtime, Persistence, Props, TPS       (→ camera, control, plugin, world, render)
-//	          plugins/collision   — the Detector over the world's Space; Collider, Physics, Meeting, Struck (→ world, …)
+//	          plugins/collision   — the CollisionSystem over the world's Space; Collider, Physics, Meeting, Struck (→ world, …)
 //	          plugins/selection   — mouse input into a Selected tag                                 (→ world, …)
 //	          plugins/vision      — a Sight cone into Seen, Sighting, SightOutline                   (→ world, …)
 //	          plugins/effects     — temporary changes to entities: Grant and Alter, cast anywhere    (→ world, …)

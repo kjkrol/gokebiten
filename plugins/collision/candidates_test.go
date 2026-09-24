@@ -96,7 +96,7 @@ func broadTick(t *testing.T, ticks int, seed func(si *goke.SysInit, space *aabbw
 	}})
 
 	move := ecs.RegSys(world.NewMoveSystem(space))
-	detect := ecs.RegSys(collision.NewDetector(space))
+	detect := ecs.RegSys(collision.NewCollisionSystem(space))
 	ecs.SetPlan(func(ctx goke.RunCtx, d time.Duration) {
 		ctx.Run(move, d)
 		ctx.Run(detect, d)
