@@ -54,7 +54,7 @@ func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) { p.module.RunPlan(ct
 
 // WithRenderer builds the cone renderer; atlas is unused, vision draws primitives.
 func (p *Plugin) WithRenderer(render.AtlasSource) {
-	p.renderer = NewRenderer(p.camera, p.worldPlugin.Space())
+	p.renderer = NewRenderer(p.camera, p.worldPlugin.Space()).WithGround(p.worldPlugin.Ground)
 	if p.style != nil {
 		p.renderer.WithStyle(p.style)
 	}

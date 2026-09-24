@@ -53,9 +53,11 @@ func (s *Renderer) Draw(screen *ebiten.Image) {
 	s.batch.flush(screen)
 }
 
-// Submit hands every drawn entity to sink: its box lifted to its altitude, at the depth of its
-// centre, a hair past the ground it stands on.
+// Submit hands every drawn entity to sink at the depth of its centre, a hair past the ground it
+// stands on: its box lifted to its altitude, or through an isometric camera a billboard the size
+// of its box standing on its centre.
 func (s *Renderer) Submit(sink *render.Sink) {
+	_, iso := s.camera.Projection().(camera.Isometric)
 	s.each(func(i int, alt float32, sprite render.SpriteID) {
 		box := s.bases[i].Pos.AABB
 		if !s.camera.Visible(box.AABB) {
@@ -63,11 +65,12 @@ func (s *Renderer) Submit(sink *render.Sink) {
 		}
 		x0, y0 := float32(box.TopLeft.X), float32(box.TopLeft.Y)
 		x1, y1 := float32(box.BottomRight.X), float32(box.BottomRight.Y)
-		var dst render.Corners
-		for k, p := range [4][2]float32{{x0, y0}, {x1, y0}, {x0, y1}, {x1, y1}} {
-			dst[k][0], dst[k][1] = s.camera.Project(p[0], p[1], alt)
+		cx, cy := (x0+x1)/2, (y0+y1)/2
+		dst := render.ProjectCorners(s.camera, x0, y0, x1, y1, alt)
+		if iso {
+			dst = render.Billboard(s.camera, cx, cy, alt, x1-x0, y1-y0)
 		}
-		sink.Quad(s.camera.Depth((x0+x1)/2, (y0+y1)/2, alt), s.atlas, sprite, dst)
+		sink.Quad(s.camera.Depth(cx, cy, alt), s.atlas, sprite, dst)
 	})
 }
 

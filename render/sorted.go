@@ -58,6 +58,9 @@ func (s *Sink) reset() { s.items, s.verts, s.order = s.items[:0], s.verts[:0], s
 // Len is how many quads have been submitted since the frame began.
 func (s *Sink) Len() int { return len(s.items) }
 
+// Vertices are the submitted quads' vertices, four per quad in submission order — for tests.
+func (s *Sink) Vertices() []ebiten.Vertex { return s.verts }
+
 // sorted is the items' indices back to front; ties keep submission order.
 func (s *Sink) sorted() []int {
 	s.order = s.order[:0]

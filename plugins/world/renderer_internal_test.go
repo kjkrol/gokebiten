@@ -116,3 +116,40 @@ func TestRenderer_Submit_HandsEveryEntityToTheSinkAtItsDepth(t *testing.T) {
 		t.Errorf("top-down depths %v, want the centres' y", depths)
 	}
 }
+
+func TestRenderer_Submit_StandsEntitiesUpThroughAnIsometricCamera(t *testing.T) {
+	view := &View{}
+	cam := camera.NewFromSpaceWithConfig(1000, 1000, 0, camera.Config{ViewportWidth: 800, ViewportHeight: 600, Projection: camera.Isometric{Cell: 32}})
+	cam.MoveTo(0, 0)
+	r := newRenderer(cam, flatAtlas{}, view, &host.EachHost[Drawing]{}, 1000, 1000)
+	var base goke.Comp[Base]
+	var appearance goke.Comp[Appearance]
+	ecs := goke.New()
+	ecs.Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		f := si.NewFactory(&base, &appearance)
+		f.Create(1)
+		for f.Next() {
+			base.Slice(&f.Cursor)[0].Pos = Position{AABB: plane.NewAABB(geom.NewVec(100, 100), 10, 10)}
+		}
+		r.Init(si)
+	}})
+	var sink render.Sink
+	r.Submit(&sink)
+	if sink.Len() != 1 {
+		t.Fatalf("submitted %d, want the one entity", sink.Len())
+	}
+	// A billboard is upright: its top edge is level, unlike a projected box, which is a diamond.
+	corners := sinkCorners(&sink)
+	if corners[0][1] != corners[1][1] || corners[2][1]-corners[0][1] != 10 {
+		t.Errorf("entity drawn at %v, want an upright 10-tall rectangle", corners)
+	}
+}
+
+// sinkCorners is the first submitted quad's screen corners.
+func sinkCorners(s *render.Sink) [4][2]float32 {
+	var out [4][2]float32
+	for i, v := range s.Vertices()[:4] {
+		out[i] = [2]float32{v.DstX, v.DstY}
+	}
+	return out
+}

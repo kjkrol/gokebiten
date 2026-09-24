@@ -42,6 +42,10 @@
 //
 // # SightOutline and Renderer
 //
+// The Renderer drapes each fan over the world's Ground when it has one ([Renderer.WithGround]):
+// the apex at the observer's altitude, the boundary on the ground under it, so through an
+// isometric camera a cone climbs a hill.
+//
 // An entity also carrying [SightOutline] has its view's shape computed: a reach per evenly spaced
 // angle across the cone. The [Renderer] draws it through the camera in a [ConeStyle]
 // ([DefaultConeStyle] strokes the boundary; [Plugin.WithStyle] or [ConeStyleFn] for another).

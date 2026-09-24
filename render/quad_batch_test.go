@@ -53,3 +53,23 @@ func TestQuadBatch_IndicesRestartPerChunk(t *testing.T) {
 		}
 	}
 }
+
+func TestQuadBatch_AppendCornersTakesTheScreenPointsAsGiven(t *testing.T) {
+	batch := NewQuadBatch(fakeAtlasSource{}, camera.NewFromSpace(1024, 1024, 0))
+	batch.AppendCorners(Corners{{10, 0}, {20, 5}, {0, 15}, {10, 20}}, 0)
+	if len(batch.vertices) != 4 || batch.vertices[1].DstX != 20 || batch.vertices[2].DstY != 15 || batch.vertices[3].SrcX != 1 {
+		t.Errorf("vertices %+v, want the four corners as given with the sprite's UV", batch.vertices)
+	}
+}
+
+func TestBillboard_StandsOnTheProjectedPoint(t *testing.T) {
+	cam := camera.NewFromSpaceWithConfig(640, 640, 0, camera.Config{ViewportWidth: 400, ViewportHeight: 300, Projection: camera.Isometric{Cell: 32}})
+	sx, sy := cam.Project(100, 100, 5)
+	c := Billboard(cam, 100, 100, 5, 20, 30)
+	if c[2][1] != sy || c[3][1] != sy || c[0][1] != sy-30 || c[1][0]-c[0][0] != 20 || (c[0][0]+c[1][0])/2 != sx {
+		t.Errorf("billboard %v, want 20 wide and 30 tall with its bottom edge centred on (%v, %v)", c, sx, sy)
+	}
+	if p := ProjectCorners(cam, 0, 0, 32, 32, 0); p[0][0] != p[3][0] || p[1][1] != p[2][1] {
+		t.Errorf("a cell projects to %v, want a diamond: top over bottom, left level with right", p)
+	}
+}

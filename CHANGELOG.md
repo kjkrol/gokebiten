@@ -40,6 +40,11 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
   `Z.Altitude`) besides drawing them as before.
 - Through an isometric camera the board's renderer draws relief: raised ground shows the faces
   towards the viewer down to its lower neighbours, tall kinds (a wall, a forest) stand as blocks.
+- Through an isometric camera entities are billboards standing on their projected centre; the
+  vision fan is draped over the ground (`vision.Renderer.WithGround`), path sprites lie on the
+  cells' diamonds and the selection highlight rounds the diamond under the unit
+  (`selection.HighlightStyle.Draw` takes the altitude). `render.QuadBatch.AppendCorners`,
+  `render.ProjectCorners`, `render.Billboard`.
 
 **Heights**
 - `world.Config{Quasi3D: true}` gives a world heights; the default is flat and no plugin guesses

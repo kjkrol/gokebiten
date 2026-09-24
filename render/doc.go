@@ -28,6 +28,8 @@
 // # QuadBatch
 //
 // A [QuadBatch] gathers textured quads from an AtlasSource, transformed through a camera.Camera,
-// into one DrawTriangles call. [VisitWrapImages] visits each image of a box on a wrapping world,
+// into one DrawTriangles call; AppendCorners takes four screen points already projected.
+// [ProjectCorners] projects a world box at a height through a camera, [Billboard] is a sprite
+// standing upright on a projected point — how an isometric view draws its entities. [VisitWrapImages] visits each image of a box on a wrapping world,
 // so a sprite straddling a seam is drawn on both sides.
 package render
