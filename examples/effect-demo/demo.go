@@ -127,11 +127,11 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	s.board = board.NewPlugin(grid, &board.SingleOccupancy{}, s.world).WithCollision(s.collision)
 	s.brd = s.board.Res.Logic.Board
 	s.board.CellKindDict().Create(
-		board.CellKind{Name: "grass", Cost: 2, Allows: board.Land},
-		board.CellKind{Name: "road", Cost: 1, Allows: board.Land},
-		board.CellKind{Name: "water", Cost: 1, Allows: board.Water},
-		board.CellKind{Name: "snow", Cost: 3, Allows: board.Land | Frost}.Costing(Frost, 0.5),
-		board.CellKind{Name: "ice", Cost: 2, Allows: board.Land | Frost}.Costing(Frost, 0.5),
+		board.CellKind{Name: board.Named("grass"), Cost: 2, Allows: board.Land},
+		board.CellKind{Name: board.Named("road"), Cost: 1, Allows: board.Land},
+		board.CellKind{Name: board.Named("water"), Cost: 1, Allows: board.Water},
+		board.CellKind{Name: board.Named("snow"), Cost: 3, Allows: board.Land | Frost}.Costing(Frost, 0.5),
+		board.CellKind{Name: board.Named("ice"), Cost: 2, Allows: board.Land | Frost}.Costing(Frost, 0.5),
 	)
 	s.snow, _ = s.board.CellKindDict().Get("snow")
 	s.ice, _ = s.board.CellKindDict().Get("ice")
@@ -163,7 +163,14 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	s.slip = s.effects.Define("slip", effects.Spec{
 		effects.Alter(func(st *world.Steering) { st.Brake = st.Accel / 8 }), // ice: brakes barely bite
 	})
-	s.world.RegisterSpeedModifier(&stillWhenFrozen{tag: s.frozenTag})
+	frozen := s.frozenTag
+	if err := s.world.RegisterBehavior(plugin.Each[plugin.Tags[chill]](func(_ plugin.Tick, marks *plugin.Tags[chill], m world.Moving) {
+		if marks.Has(frozen) {
+			m.Base.Vel.Value = 0 // frozen fast: whoever carries the tag does not move
+		}
+	})); err != nil {
+		return err
+	}
 	if err := ctx.Use(s.effects); err != nil {
 		return err
 	}
@@ -194,7 +201,7 @@ func (s *mainStage) Restore(game.Persistence) (bool, error) { return false, nil 
 
 // frozenKind is what the witch's frost makes of a kind of ground.
 func (s *mainStage) frozenKind(k board.CellKind) board.CellKind {
-	switch k.Name {
+	switch k.Name.String() {
 	case "grass", "road":
 		return s.snow
 	case "water":
@@ -251,21 +258,6 @@ func (s *mainStage) onGround(t plugin.Tick, m *board.Mover, st board.Standing) {
 	case !onIce && slipping:
 		s.effects.Dispel(st.ID, s.slip)
 	}
-}
-
-// stillWhenFrozen is a speed modifier: whoever carries the frozen tag does not move.
-type stillWhenFrozen struct {
-	tag   plugin.Tag[chill]
-	marks goke.OptComp[plugin.Tags[chill]]
-}
-
-func (m *stillWhenFrozen) Bind(qb *goke.QueryBuilder) { qb.Optional(&m.marks) }
-
-func (m *stillWhenFrozen) Apply(cur *goke.Cursor, i int, _ *world.Base, acc float64) float64 {
-	if marks := m.marks.Slice(cur); marks != nil && marks[i].Has(m.tag) {
-		return 0
-	}
-	return acc
 }
 
 // defineKinds says what this game's entities are: the witch walks on land and water, the walker

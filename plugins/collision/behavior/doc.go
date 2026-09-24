@@ -10,8 +10,8 @@
 // # ShowHits and HitOverlay
 //
 // [ShowHits] is a plugin.Each over [HitMark]: an entity that struck something shows a hit for its
-// own Duration, or the one given. [HitOverlay] is the world.AppearanceStrategy that draws an
-// overlay sprite on top of the entity while its HitMark is active — give it to the world renderer.
+// own Duration, or the one given. [HitOverlay] is a Drawing behavior for the world plugin: an
+// overlay sprite on top of the entity while its HitMark is active.
 //
 // # LogContacts
 //

@@ -232,9 +232,9 @@ func squareWorldWith(t *testing.T, behavior plugin.Behavior, units ...mover) (*b
 		behaviors = append(behaviors, behavior)
 	}
 	bw := newBodiesWorld(t, grid, 6*cellSize, 16*cellSize, func(brd *board.Board) {
-		brd.SetAll(board.CellKind{Name: "grass", Cost: 1, Allows: board.Land})
+		brd.SetAll(board.CellKind{Name: board.Named("grass"), Cost: 1, Allows: board.Land})
 		for y := uint32(1); y <= 14; y++ {
-			brd.Set(cell(3, y), board.CellKind{Name: "wall", Cost: 1, Solid: true})
+			brd.Set(cell(3, y), board.CellKind{Name: board.Named("wall"), Cost: 1, Solid: true})
 		}
 	}, units, behaviors...)
 	return bw, cell(3, 7)
@@ -280,8 +280,8 @@ func TestBodies_AHexIsCoveredAndKeepsAUnitOut(t *testing.T) {
 	hex, _ := grid.CellIndex(1, 1)
 	start, _ := grid.CellAt(geom.NewVec(20, grid.CellCenter(hex).Y))
 	bw := newBodiesWorld(t, grid, 320, 256, func(brd *board.Board) {
-		brd.SetAll(board.CellKind{Name: "grass", Cost: 1, Allows: board.Land})
-		brd.Set(hex, board.CellKind{Name: "rock", Solid: true})
+		brd.SetAll(board.CellKind{Name: board.Named("grass"), Cost: 1, Allows: board.Land})
+		brd.Set(hex, board.CellKind{Name: board.Named("rock"), Solid: true})
 	}, []mover{{cell: start, heading: east}})
 	bodies, _ := bw.snapshot()
 	if len(bodies) != 2*board.HexCapStrips+1 {
@@ -302,7 +302,7 @@ func TestBodies_AHexIsCoveredAndKeepsAUnitOut(t *testing.T) {
 func TestBodies_FollowTheTerrainAsItChanges(t *testing.T) {
 	bw, gap := squareWorld(t, mover{})
 	bw.tick()
-	bw.brd.Res.Logic.Board.Set(gap, board.CellKind{Name: "grass", Cost: 1, Allows: board.Land})
+	bw.brd.Res.Logic.Board.Set(gap, board.CellKind{Name: board.Named("grass"), Cost: 1, Allows: board.Land})
 	bw.tick()
 	bodies, units := bw.snapshot()
 	if len(bodies) != 2 {
@@ -326,7 +326,7 @@ func TestBodies_OccludeSight(t *testing.T) {
 	}
 
 	open := newBodiesWorld(t, grid, 6*cellSize, 16*cellSize, func(brd *board.Board) {
-		brd.SetAll(board.CellKind{Name: "grass", Cost: 1, Allows: board.Land})
+		brd.SetAll(board.CellKind{Name: board.Named("grass"), Cost: 1, Allows: board.Land})
 	}, []mover{observer, target})
 	open.tick()
 	if seen, ok := open.seen(); !ok || seen.Count != 1 {
@@ -338,9 +338,9 @@ func TestBodies_OccludeSight(t *testing.T) {
 func forestColumn(grid board.Grid, veil float64) func(*board.Board) {
 	cell := func(x, y uint32) board.CellID { c, _ := grid.CellIndex(x, y); return c }
 	return func(brd *board.Board) {
-		brd.SetAll(board.CellKind{Name: "grass", Cost: 1, Allows: board.Land})
+		brd.SetAll(board.CellKind{Name: board.Named("grass"), Cost: 1, Allows: board.Land})
 		for y := uint32(1); y <= 14; y++ {
-			brd.Set(cell(3, y), board.CellKind{Name: "forest", Cost: 1, Allows: board.Land, Veil: veil})
+			brd.Set(cell(3, y), board.CellKind{Name: board.Named("forest"), Cost: 1, Allows: board.Land, Veil: veil})
 		}
 	}
 }
@@ -428,7 +428,7 @@ func TestBodies_VeiledBodiesCarryTheirTransparency(t *testing.T) {
 	cell := func(x, y uint32) board.CellID { c, _ := grid.CellIndex(x, y); return c }
 	bw := newBodiesWorld(t, grid, 6*cellSize, 16*cellSize, func(brd *board.Board) {
 		forestColumn(grid, 0.6)(brd)
-		brd.Set(cell(3, 0), board.CellKind{Name: "wall", Cost: 1, Solid: true})
+		brd.Set(cell(3, 0), board.CellKind{Name: board.Named("wall"), Cost: 1, Solid: true})
 	}, []mover{{cell: cell(1, 7)}})
 	bw.tick()
 

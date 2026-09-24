@@ -16,10 +16,10 @@ import (
 func riverBoard() (board.Grid, *board.TerrainMap) {
 	grid := board.DefaultGrids{}.Square(5, 3, 10)
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Name: "grass", Cost: 1, Allows: board.Land})
+	terrain.SetAll(board.CellKind{Name: board.Named("grass"), Cost: 1, Allows: board.Land})
 	for x := uint32(0); x < 4; x++ {
 		c, _ := grid.CellIndex(x, 1)
-		terrain.Set(c, board.CellKind{Name: "water", Cost: 1, Allows: board.Water})
+		terrain.Set(c, board.CellKind{Name: board.Named("water"), Cost: 1, Allows: board.Water})
 	}
 	return grid, terrain
 }
@@ -34,7 +34,7 @@ func TestFindPath_KeepsEachDomainToItsOwnGround(t *testing.T) {
 		t.Fatal("a land unit found no way round the river")
 	}
 	for _, step := range path.Steps[:path.Length] {
-		if terrain.Kind(step).Name == "water" {
+		if terrain.Kind(step).Name.String() == "water" {
 			t.Fatalf("a land unit's route crosses water at %v", step)
 		}
 	}
@@ -62,7 +62,7 @@ func TestCommandSystem_Update_IgnoresATargetTheUnitsDomainMayNotEnter(t *testing
 	terrain.SetAll(board.CellKind{Cost: 1, Allows: board.Land})
 	start, _ := grid.CellIndex(0, 0)
 	lake, _ := grid.CellIndex(8, 0)
-	terrain.Set(lake, board.CellKind{Name: "water", Cost: 1, Allows: board.Water})
+	terrain.Set(lake, board.CellKind{Name: board.Named("water"), Cost: 1, Allows: board.Water})
 
 	cmdState := &Resources{}
 	cmds := newMoveCommandSystem(newPathFinder(grid, terrain, &board.SingleOccupancy{}), cmdState, selTags.Selected)
@@ -106,24 +106,24 @@ func TestFindPath_PricesTheRouteForTheUnitsDomain(t *testing.T) {
 	const frost = board.Domain(1 << 3)
 	grid := board.DefaultGrids{}.Square(3, 3, 10)
 	terrain := board.NewTerrainMap()
-	terrain.SetAll(board.CellKind{Name: "grass", Cost: 1, Allows: board.Land | frost})
+	terrain.SetAll(board.CellKind{Name: board.Named("grass"), Cost: 1, Allows: board.Land | frost})
 	at := func(x, y uint32) board.CellID { c, _ := grid.CellIndex(x, y); return c }
 	// The middle row is snow: slow for anyone on foot, a highway for the frost-born.
 	for x := range uint32(3) {
-		terrain.Set(at(x, 1), board.CellKind{Name: "snow", Cost: 5, Allows: board.Land | frost}.Costing(frost, 0.2))
+		terrain.Set(at(x, 1), board.CellKind{Name: board.Named("snow"), Cost: 5, Allows: board.Land | frost}.Costing(frost, 0.2))
 	}
 	pf := newPathFinder(grid, terrain, &board.MultipleOccupancy{})
 
 	walker, _ := pf.findPath(uid.UID64(1), board.Land, at(0, 0), at(2, 0))
 	for _, step := range walker.Steps[:walker.Length] {
-		if terrain.Kind(step).Name == "snow" {
+		if terrain.Kind(step).Name.String() == "snow" {
 			t.Fatalf("a walker's route dips into the snow at %v", step)
 		}
 	}
 	witch, _ := pf.findPath(uid.UID64(2), board.Land|frost, at(0, 0), at(2, 0))
 	onSnow := 0
 	for _, step := range witch.Steps[:witch.Length] {
-		if terrain.Kind(step).Name == "snow" {
+		if terrain.Kind(step).Name.String() == "snow" {
 			onSnow++
 		}
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/kjkrol/aabbworld/geom"
 	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/world/kind"
 )
 
@@ -197,13 +198,17 @@ func TestSteering_KeepsActingOnTheLastDecisionWhileReacting(t *testing.T) {
 	}
 }
 
-// speedTicks spawns one entity carrying st at vel, runs n ticks at 60 TPS with the given speed
-// modifiers, and reports the Steering's base speed and the entity's Velocity.Value after each.
-func speedTicks(t *testing.T, st Steering, vel Velocity, modifiers []SpeedModifier, n int) (speeds, values []float64) {
+// speedTicks spawns one entity carrying st at vel, runs n ticks at 60 TPS with the given Moving
+// behaviors, and reports the Steering's base speed and the entity's Velocity.Value after each.
+func speedTicks(t *testing.T, st Steering, vel Velocity, moving []plugin.Behavior, n int) (speeds, values []float64) {
 	t.Helper()
 
 	wm := testWorld()
-	wm.modifiers = modifiers
+	for _, b := range moving {
+		if err := wm.movers.Add(b); err != nil {
+			t.Fatal(err)
+		}
+	}
 	wm.populate(testKind(
 		Position{AABB: plane.NewAABB(geom.NewVec(500, 500), 10, 10)},
 		vel,
@@ -234,13 +239,8 @@ func speedTicks(t *testing.T, st Steering, vel Velocity, modifiers []SpeedModifi
 	return speeds, values
 }
 
-// halving is a SpeedModifier that halves whatever speed it is handed.
-type halving struct{}
-
-func (halving) Bind(*goke.QueryBuilder) {}
-func (halving) Apply(_ *goke.Cursor, _ int, _ *Base, acc float64) float64 {
-	return acc * 0.5
-}
+// halving is a Moving behavior that halves every entity's speed.
+var halving = plugin.Every(func(_ plugin.Tick, m Moving) { m.Base.Vel.Value *= 0.5 })
 
 func TestSteering_NoProfileLeavesSpeedAlone(t *testing.T) {
 	_, values := speedTicks(t, Steering{TurnRate: 0.5}, Velocity{Dir: east, Value: 60}, nil, 3)
@@ -322,7 +322,7 @@ func TestSteering_NoAccelChangesSpeedAtOnce(t *testing.T) {
 
 func TestSteering_RewritesTheBaseSpeedAheadOfModifiers(t *testing.T) {
 	st := Steering{MaxSpeed: 100, WantSpeed: 100}
-	speeds, values := speedTicks(t, st, Velocity{Dir: east}, []SpeedModifier{halving{}}, 3)
+	speeds, values := speedTicks(t, st, Velocity{Dir: east}, []plugin.Behavior{halving}, 3)
 	for tick := range values {
 		if got, want := values[tick], speeds[tick]*0.5; got != want {
 			t.Fatalf("tick %d: Velocity.Value = %v, want %v — the modifier compounds instead of scaling a fresh base speed", tick+1, got, want)

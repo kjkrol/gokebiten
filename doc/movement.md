@@ -45,9 +45,9 @@ Beside `TurnRate` and `Reflex`, `Steering` carries how the unit accelerates:
 Each tick the `SteeringSystem` turns `Vel.Dir` towards `Want` by at most `TurnRate`; from
 standing it jumps to `min(V0, WantSpeed)`, then moves `Speed` towards `WantSpeed` by `Accel·dt`,
 never past `MaxSpeed`; and it **writes `Vel.Value = Speed` afresh every tick**, before the
-`VelocitySystem` scales it by the speed modifiers (terrain). That last point repairs a fragility
-of today: `VelocitySystem` multiplies `Vel.Value` in place, so whoever owns the base speed must
-rewrite it every tick or the modifiers compound — navigation happens to, other units happen not to.
+`VelocitySystem` runs the `Moving` behaviors that scale it (terrain, a frozen tag). That last point
+repairs a fragility of old: the behaviors scale `Vel.Value` in place, so whoever owns the base speed
+must rewrite it every tick or they compound — navigation happened to, other units happened not to.
 
 Everything below follows from the profile. The turning radius is `Speed·dt / TurnRate`: wide arcs
 at full speed, tight ones when setting off. Braking follows `v = sqrt(2·Brake·d)`: navigation asks
@@ -104,7 +104,7 @@ writes its cells when it is built and restores them when it falls; an ice witch 
 over `Standing` that turns the cells under her `Box` (`Grid.CellsUnder`, exact on a square and on
 a hex) into snow and the water into ice (undoing it in time is the coming effects plugin's job). `Allows` and
 `Mover` alone decide who may plan where, and `CellKind.Costing` makes a kind cheaper for some
-domains (`CostFor` is what the planner and the speed modifier charge), so the witch is fast on her
+domains (`CostFor` is what the planner and the terrain's `Moving` behavior charge), so the witch is fast on her
 own snow and elves feel no forest; the solver keeps units out of whatever is solid.
 
 ## 6. Pushed onto forbidden ground — done
@@ -206,7 +206,7 @@ flying (§12).
 
 The tests that pin it: a smooth turn (the heading's angle changes monotonically and the speed
 never drops to zero at a bend); acceleration from `V0` to `MaxSpeed` by `Accel`; braking that
-ends on the goal's centre, with a weak brake too; a terrain modifier that does not compound
+ends on the goal's centre, with a weak brake too; a terrain behavior that does not compound
 across ticks; passing a waypoint by projection; entering a cell independently of waypoints; a
 push into a wall leaves no unit inside it, on a square and on a hex grid; a land unit driven onto
 a hole has fallen and a boat on water has not; an ice bridge melting ahead re-routes without a
@@ -243,7 +243,7 @@ Terrain limits sight by kind, not switching it off: a forest takes range, a hill
 Anything temporary about a unit is an **effect** (`plugins/effects`): a tag granted for a while,
 a component altered and restored — `Grant` and `Alter` in a `Spec`, `Lasts` or until `Dispel`,
 cast from anywhere by entity id, saved with the entity. What an effect means for movement is the
-reader's: a frozen unit carries a tag a speed modifier reads as "stand still"; a slipping unit has
+reader's: a frozen unit carries a tag a `Moving` behavior reads as "stand still"; a slipping unit has
 its `Brake` altered, so navigation brakes earlier before a goal and may not stop before ground
 that turned against it. Tags are bits of families (`plugin.Tags[F]`), one component per family,
 so granting one is a value write and the component budget stays for data.

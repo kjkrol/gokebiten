@@ -14,6 +14,7 @@ type spriteBatch struct {
 	camera camera.Camera
 	worldW float32
 	worldH float32
+	quads  int // gathered since the last reset
 }
 
 func newSpriteBatch(cam camera.Camera, atlas render.AtlasSource, worldW, worldH uint32) spriteBatch {
@@ -25,7 +26,7 @@ func newSpriteBatch(cam camera.Camera, atlas render.AtlasSource, worldW, worldH 
 	}
 }
 
-func (b *spriteBatch) reset() { b.batch.Reset() }
+func (b *spriteBatch) reset() { b.batch.Reset(); b.quads = 0 }
 
 func (b *spriteBatch) drawQuad(pos Position, id render.SpriteID) {
 	if !b.camera.Visible(pos.AABB.AABB) {
@@ -41,6 +42,7 @@ func (b *spriteBatch) drawQuad(pos Position, id render.SpriteID) {
 		u0, u1 := uvSpan(brx-tlx, sizeX, dx)
 		v0, v1 := uvSpan(bry-tly, sizeY, dy)
 		b.batch.AppendQuadUV(tlx, tly, brx, bry, id, u0, v0, u1, v1)
+		b.quads++
 		return true
 	})
 }

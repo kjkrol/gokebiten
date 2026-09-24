@@ -39,8 +39,8 @@ func newSeedTestPlugin(t *testing.T) (*Plugin, CellID) {
 	})
 	p := NewPlugin(grid, &SingleOccupancy{}, worldPlugin)
 	p.CellKindDict().Create(
-		CellKind{Name: "grass", Cost: 1, Allows: Land},
-		CellKind{Name: "wall", Cost: 1, Solid: true},
+		CellKind{Name: Named("grass"), Cost: 1, Allows: Land},
+		CellKind{Name: Named("wall"), Cost: 1, Solid: true},
 	)
 	cell, _ := grid.CellIndex(2, 2)
 	return p, cell
@@ -54,10 +54,10 @@ func TestPlugin_SeedPopulate_AppliesLayout(t *testing.T) {
 	if err := p.Populate(); err != nil {
 		t.Fatalf("Populate: %v", err)
 	}
-	if got := p.Res.Logic.Board.Kind(wallCell).Name; got != "wall" {
+	if got := p.Res.Logic.Board.Kind(wallCell).Name.String(); got != "wall" {
 		t.Errorf("Kind(wallCell) = %q, want %q", got, "wall")
 	}
-	if got := p.Res.Logic.Board.Kind(other).Name; got != "grass" {
+	if got := p.Res.Logic.Board.Kind(other).Name.String(); got != "grass" {
 		t.Errorf("Kind(other) = %q, want %q (Default)", got, "grass")
 	}
 }
@@ -69,7 +69,7 @@ func TestPlugin_Populate_UnknownKindChangesNothing(t *testing.T) {
 	if err := p.Populate(); err == nil {
 		t.Fatal("Populate: expected an error for unknown kind, got nil")
 	}
-	if got := p.Res.Logic.Board.Kind(cell).Name; got != "" {
+	if got := p.Res.Logic.Board.Kind(cell).Name.String(); got != "" {
 		t.Errorf("Kind(cell) = %q, want untouched terrain", got)
 	}
 }

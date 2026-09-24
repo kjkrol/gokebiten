@@ -103,10 +103,10 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	grid := board.DefaultGrids{}.Square(GridWidth, GridHeight, CellSize)
 	s.board = board.NewPlugin(grid, &board.SingleOccupancy{}, s.world).WithCollision(s.collision)
 	s.board.CellKindDict().Create(
-		board.CellKind{Name: "grass", Cost: 2, Allows: board.Land | board.Air}.Costing(board.Air, 1),
-		board.CellKind{Name: "wall", Cost: 1, Solid: true, Allows: board.Air},
-		board.CellKind{Name: "forest", Cost: 3, Allows: board.Land | board.Air, Veil: 0.6}.Costing(board.Air, 1),
-		board.CellKind{Name: "road", Cost: 1, Allows: board.Land | board.Air},
+		board.CellKind{Name: board.Named("grass"), Cost: 2, Allows: board.Land | board.Air}.Costing(board.Air, 1),
+		board.CellKind{Name: board.Named("wall"), Cost: 1, Solid: true, Allows: board.Air},
+		board.CellKind{Name: board.Named("forest"), Cost: 3, Allows: board.Land | board.Air, Veil: 0.6}.Costing(board.Air, 1),
+		board.CellKind{Name: board.Named("road"), Cost: 1, Allows: board.Land | board.Air},
 	)
 	if err := ctx.Use(s.board); err != nil {
 		return err

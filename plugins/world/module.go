@@ -12,9 +12,6 @@ import (
 	"github.com/kjkrol/uid"
 )
 
-// SpeedModifier contributes a factor to an entity's Velocity.Value each tick.
-type SpeedModifier = Modifier[float64]
-
 // module owns the world's topology, entities, and movement — the foundation
 // any Stage with moving, drawable entities builds on.
 type module struct {
@@ -38,8 +35,9 @@ type module struct {
 	behaviors         []Behavior
 	behaviorRunnables []goke.Runnable
 	leavers           *plugin.EachHost[Leaving]
+	movers            *plugin.EachHost[Moving]
+	drawers           *plugin.EachHost[Drawing]
 
-	modifiers        []SpeedModifier
 	steeringRunnable goke.Runnable
 	velocityRunnable goke.Runnable
 	moveRunnable     goke.Runnable
@@ -54,7 +52,8 @@ var _ goke.Module = (*module)(nil)
 
 // newModule builds the world's topology and spatial index from cfg.
 func newModule(cfg Config) *module {
-	return &module{config: cfg, space: buildSpace(cfg), despawned: make(map[uid.UID64]struct{}), leavers: &plugin.EachHost[Leaving]{}}
+	return &module{config: cfg, space: buildSpace(cfg), despawned: make(map[uid.UID64]struct{}),
+		leavers: &plugin.EachHost[Leaving]{}, movers: &plugin.EachHost[Moving]{}, drawers: &plugin.EachHost[Drawing]{}}
 }
 
 // =================================================================
@@ -70,13 +69,14 @@ func (w *module) RegSystems(ecs *goke.ECS) {
 		w.behaviorRunnables = append(w.behaviorRunnables, ecs.RegSys(b))
 	}
 	w.steeringRunnable = ecs.RegSys(NewSteeringSystem())
-	w.velocityRunnable = ecs.RegSys(NewVelocitySystem(w.modifiers))
+	w.velocityRunnable = ecs.RegSys(NewVelocitySystem(w.movers))
 	w.moveRunnable = ecs.RegSys(NewMoveSystem(w.space))
 	w.exitRunnable = ecs.RegSys(newExitSystem(w, w.leavers))
 	w.viewRunnable = ecs.RegSys(NewViewSystem(w.space, &w.views, w.config.Space.Width, w.config.Space.Height))
 }
 
-// RunPlan runs world's tick: decisions, speed modifiers, movement, then the leavers and the views.
+// RunPlan runs world's tick: decisions, steering, the Moving behaviors, movement, then the leavers
+// and the views.
 // The sync after movement lands the Outside marks, so a leaver is dealt with the tick it left.
 func (w *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
 	clear(w.despawned)
@@ -162,9 +162,6 @@ func (w *module) remapTypes(si *goke.SysInit) {
 // =================================================================
 // world-specific
 // =================================================================
-
-// RegisterSpeedModifier adds m to the factors folded into every entity's speed each tick.
-func (w *module) RegisterSpeedModifier(m SpeedModifier) { w.modifiers = append(w.modifiers, m) }
 
 // RegisterBehavior adds b to the decision pass that runs before movement.
 func (w *module) RegisterBehavior(b Behavior) { w.behaviors = append(w.behaviors, b) }

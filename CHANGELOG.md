@@ -24,6 +24,8 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
   its box; `Fell(domain)` says the entity is where it may not be.
 - `Grid.CellsUnder`, `CellBounds`, `CellOutline`; hex cells drawn as hexagons; `TerrainMap.Version`.
 - Cell entities (`CellEntity`, `Ground`) let an effect change terrain for a while.
+- `CellKind.Name` is a `board.Name`, `MaxNameLen` bytes (`board.Named("grass")`, `String()`), so a
+  `Ground` component is contiguous in memory; `CellKindDict.Get` and `Layout` keep taking strings.
 
 **Plugins**
 - Tags are bits of families: `plugin.Tags[F]` is one component per family, `Kinds.DefineTag`
@@ -38,6 +40,12 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
   marks it, `plugin.Each` behaviors of a `world.Leaving` registered on the world hear of it every
   tick it is out (despawned with none), and it is unmarked once back inside. `world.Plugin.OnExit`
   and `Tracked` are gone.
+- Two kinds of thing remain, behaviors and effects: `world.SpeedModifier`, `RegisterSpeedModifier`,
+  `AppearanceModifier`, `AppearanceStrategy` and the renderer's `With*` are gone. Speed is a
+  `plugin.Each`/`Every` of a `world.Moving` (board's terrain slows entities carrying `Mover`, and
+  only those), drawing a `plugin.Each`/`Every` of a `world.Drawing` (`world.Draw.Overlay[T]`,
+  `Draw.As[T]`, `Draw.With[T]`, `Draw.Facing`; `behavior.HitOverlay` is one), both registered on
+  the world plugin. `plugin.Every` is `Each` without a state component.
 - The end of an entity's last effect is a component, `effects.Idle`, on for one tick: `plugin.Each`
   behaviors of an `effects.Idling` registered on the effects plugin hear of it once, and the board
   drops a cell entity it finds so. `effects.Plugin.OnIdle` and `board.Plugin.WithEffects` are gone.

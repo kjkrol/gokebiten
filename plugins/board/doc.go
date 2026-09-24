@@ -10,8 +10,8 @@
 // Grid with its [TerrainMap], the one place to read the topology and read or write terrain.
 // [Plugin], built over a Grid, an [Occupancy] and the world plugin, seeds its terrain from a
 // [Layout] (a default kind for every cell, then per-cell overrides) when the Stage starts fresh,
-// saves it, and slows the world's entities by the terrain they stand on
-// ([TerrainSpeedModifier]).
+// saves it, and slows every entity carrying a [Mover] by the terrain under it (a Moving behavior
+// it registers on the world).
 //
 // # Cell, CellKind and Terrain
 //

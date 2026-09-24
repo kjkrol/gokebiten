@@ -20,7 +20,8 @@
 //
 // A [Behavior] is game logic a plugin runs inside its own pass, built with [Between] — react to
 // every pair the host meets where one entity carries tag a and the other b, [Any] standing for
-// either side — or [Each] — react on every entity the host visits that carries T. The payload
+// either side — or [Each] — react on every entity the host visits that carries T ([Every] for all
+// of them). The payload
 // type P is what says which plugin hosts it; a host refuses another's with [ErrUnhostedBehavior],
 // and one registered after the host's queries were built with [ErrHostBuilt]. Register before Use.
 //

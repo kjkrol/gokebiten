@@ -42,8 +42,8 @@ func TestHexGrid_CellBoxesCoverEveryVertexWithinTheBoundingBox(t *testing.T) {
 
 func wallBoard(w, h uint32, cells func(x, y uint32) bool) *Board {
 	brd := NewBoard(newSquareGrid(w, h, 10), NewTerrainMap())
-	brd.SetAll(CellKind{Name: "grass", Allows: Land})
-	wall := CellKind{Name: "wall", Solid: true}
+	brd.SetAll(CellKind{Name: Named("grass"), Allows: Land})
+	wall := CellKind{Name: Named("wall"), Solid: true}
 	for y := range h {
 		for x := range w {
 			if cells(x, y) {
@@ -80,9 +80,9 @@ func TestTerrainBoxes_CapsABodyAtMaxBodyCells(t *testing.T) {
 
 func TestTerrainBoxes_DefaultKindCountsWhenImpassable(t *testing.T) {
 	brd := NewBoard(newSquareGrid(4, 1, 10), NewTerrainMap())
-	brd.SetAll(CellKind{Name: "rock", Solid: true})
+	brd.SetAll(CellKind{Name: Named("rock"), Solid: true})
 	c, _ := brd.CellIndex(1, 0)
-	brd.Set(c, CellKind{Name: "grass", Allows: Land})
+	brd.Set(c, CellKind{Name: Named("grass"), Allows: Land})
 	got := terrainBoxes(brd, nil)
 	if len(got) != 2 {
 		t.Fatalf("%d bodies, want the rock either side of the grass", len(got))
@@ -98,7 +98,7 @@ func TestTerrainBoxes_NeverJoinsAcrossTheWrapSeamOrAcrossKinds(t *testing.T) {
 
 	brd = wallBoard(2, 1, func(x, y uint32) bool { return true })
 	c, _ := brd.CellIndex(1, 0)
-	brd.Set(c, CellKind{Name: "water", Solid: true})
+	brd.Set(c, CellKind{Name: Named("water"), Solid: true})
 	if got := terrainBoxes(brd, nil); len(got) != 2 {
 		t.Errorf("%d bodies of two kinds, want 2", len(got))
 	}
@@ -133,20 +133,20 @@ func TestHexGrid_CellOutlineAndBounds(t *testing.T) {
 func TestTerrainBoxes_VeiledCellsAreBodiesButNotSolid(t *testing.T) {
 	brd := wallBoard(3, 1, func(x, y uint32) bool { return x == 0 })
 	c, _ := brd.CellIndex(2, 0)
-	brd.Set(c, CellKind{Name: "forest", Allows: Land, Veil: 0.6})
+	brd.Set(c, CellKind{Name: Named("forest"), Allows: Land, Veil: 0.6})
 	got := terrainBoxes(brd, nil)
 	if len(got) != 2 {
 		t.Fatalf("%d bodies, want a wall and a forest", len(got))
 	}
 	solid := map[string]bool{}
 	for _, b := range got {
-		solid[b.kind] = b.solid
+		solid[b.kind.String()] = b.solid
 	}
 	if !solid["wall"] || solid["forest"] {
 		t.Errorf("solid by kind = %v, want wall solid and forest not", solid)
 	}
 	for _, b := range got {
-		if b.kind == "forest" && b.veil != 0.6 {
+		if b.kind.String() == "forest" && b.veil != 0.6 {
 			t.Errorf("forest body veil = %v, want 0.6", b.veil)
 		}
 	}
@@ -184,7 +184,7 @@ func TestCellsUnder_SquareAndHex(t *testing.T) {
 
 func TestTerrainMap_VersionMovesOnlyWhenTheKindChanges(t *testing.T) {
 	tm := NewTerrainMap()
-	grass := CellKind{Name: "grass", Allows: Land}
+	grass := CellKind{Name: Named("grass"), Allows: Land}
 	before := tm.Version()
 	tm.Set(1, grass)
 	tm.Set(1, grass)
@@ -192,7 +192,7 @@ func TestTerrainMap_VersionMovesOnlyWhenTheKindChanges(t *testing.T) {
 	if got := tm.Version() - before; got != 1 {
 		t.Errorf("version moved %d times for one real change, want 1", got)
 	}
-	tm.SetMany([]CellID{1, 2}, CellKind{Name: "snow", Allows: Land})
+	tm.SetMany([]CellID{1, 2}, CellKind{Name: Named("snow"), Allows: Land})
 	if got := tm.Version() - before; got != 2 {
 		t.Errorf("version moved %d times after a second change, want 2", got)
 	}
@@ -200,7 +200,7 @@ func TestTerrainMap_VersionMovesOnlyWhenTheKindChanges(t *testing.T) {
 
 func TestCellKind_CostForPicksTheCheapestOfTheEntitysAdmittedDomains(t *testing.T) {
 	const sylvan = Domain(1 << 3)
-	forest := CellKind{Name: "forest", Cost: 3, Allows: Land | sylvan}.Costing(sylvan, 1)
+	forest := CellKind{Name: Named("forest"), Cost: 3, Allows: Land | sylvan}.Costing(sylvan, 1)
 	for _, tc := range []struct {
 		d    Domain
 		want float64
@@ -211,7 +211,7 @@ func TestCellKind_CostForPicksTheCheapestOfTheEntitysAdmittedDomains(t *testing.
 			t.Errorf("CostFor(%08b) = %v, want %v", tc.d, got, tc.want)
 		}
 	}
-	snow := CellKind{Name: "snow", Cost: 3, Allows: Land}.Costing(Air, 1) // priced for Air, but not admitted
+	snow := CellKind{Name: Named("snow"), Cost: 3, Allows: Land}.Costing(Air, 1) // priced for Air, but not admitted
 	if got := snow.CostFor(Air); got != 3 {
 		t.Errorf("a domain the kind does not admit pays %v, want the plain Cost 3", got)
 	}

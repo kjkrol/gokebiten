@@ -1,6 +1,7 @@
 package board
 
 import (
+	"bytes"
 	"cmp"
 	"slices"
 
@@ -17,7 +18,7 @@ const MaxBodyCells = 16
 // or only veils sight, and how many pieces the current merge pass folded into it.
 type bodyBox struct {
 	box   geom.AABB
-	kind  string
+	kind  Name
 	solid bool
 	veil  float64
 	count int
@@ -68,7 +69,7 @@ func mergeAlong(in []bodyBox, alongX bool) []bodyBox {
 	slices.SortFunc(in, func(a, b bodyBox) int {
 		a1, a2, a3 := lo(a)
 		b1, b2, b3 := lo(b)
-		return cmp.Or(cmp.Compare(a.kind, b.kind), cmp.Compare(a1, b1), cmp.Compare(a2, b2), cmp.Compare(a3, b3))
+		return cmp.Or(bytes.Compare(a.kind[:], b.kind[:]), cmp.Compare(a1, b1), cmp.Compare(a2, b2), cmp.Compare(a3, b3))
 	})
 	out := in[:0]
 	for i := range in {

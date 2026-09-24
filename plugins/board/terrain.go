@@ -11,7 +11,7 @@ type Terrain interface {
 // sprite drawn for it. A wall is Solid; water Allows Water; a hole Allows nobody and is not
 // Solid; a forest Allows Land and has a Veil.
 type CellKind struct {
-	Name string
+	Name Name // Named("grass")
 	// Cost 1 is full speed and the baseline path weight; above 1 the cell slows an entity and costs
 	// more to plan through, below 1 is a boost — a game's choice, still capped by the move's step.
 	Cost float64
@@ -55,7 +55,8 @@ func (k CellKind) CostFor(d Domain) float64 {
 }
 
 // CellKindDict is a Plugin's registered set of CellKinds, keyed by Name —
-// reached via Plugin.CellKindDict, never built directly by the game.
+// reached via Plugin.CellKindDict, never built directly by the game. Names are strings here, as a
+// Layout spells them.
 type CellKindDict interface {
 	// Create registers kinds, assigning each one's SpriteID by call order.
 	Create(kinds ...CellKind)
@@ -66,11 +67,11 @@ type CellKindDict interface {
 }
 
 type cellKindDict struct {
-	entries map[string]CellKind
+	entries map[Name]CellKind
 	next    render.SpriteID
 }
 
-func newCellKindDict() *cellKindDict { return &cellKindDict{entries: make(map[string]CellKind)} }
+func newCellKindDict() *cellKindDict { return &cellKindDict{entries: make(map[Name]CellKind)} }
 
 func (d *cellKindDict) Create(kinds ...CellKind) {
 	for _, k := range kinds {
@@ -81,7 +82,11 @@ func (d *cellKindDict) Create(kinds ...CellKind) {
 }
 
 func (d *cellKindDict) Get(name string) (CellKind, bool) {
-	k, ok := d.entries[name]
+	n, ok := nameOf(name)
+	if !ok {
+		return CellKind{}, false
+	}
+	k, ok := d.entries[n]
 	return k, ok
 }
 

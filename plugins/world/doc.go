@@ -56,8 +56,8 @@
 //
 // [Plugin.RunPlan] runs the tick: every registered [Behavior] (a decision system, see
 // [Plugin.RegisterBehavior]), then [SteeringSystem] carries out [Steering] requests (heading, and base
-// speed for an entity with a motion profile), [VelocitySystem] folds every [SpeedModifier] into
-// that speed, then [MoveSystem] moves every box under the
+// speed for an entity with a motion profile), [VelocitySystem] runs the Each behaviors of a
+// [Moving] over every entity so they may scale that speed, then [MoveSystem] moves every box under the
 // edge rules and hands the space every Base as an aabbworld.Item — Space.Rebuild. The space keeps
 // no state of its own between ticks: Populate and PostLoad rebuild it too, so it is whole before
 // the first tick, and a despawned entity is gone from it on the next. Anything reading the space
@@ -67,9 +67,9 @@
 // # Appearance and Renderer
 //
 // [Appearance] is the sprite an entity is drawn from; [Plugin.WithRenderer] builds the entity
-// [Renderer] over an atlas, and each [AppearanceModifier] it is given ([Renderer.WithModifier],
-// WithOverlay, WithReplace, WithModify, [Facing]) resolves an entity's final draw layers in order.
-// An [AppearanceStrategy] folds one override component into those layers. The Renderer draws the
+// [Renderer] over an atlas, and the Each behaviors of a [Drawing] registered on the plugin settle
+// each entity's layers in order — [Draw].Overlay, Draw.As, Draw.With and Draw.Facing are the
+// ready-made ones. The Renderer draws the
 // entities in the camera's [View] and nothing else.
 //
 // # View and EntitySet

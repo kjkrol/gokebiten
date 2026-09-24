@@ -71,7 +71,7 @@ func (f *footing) react(_ plugin.Tick, m *board.Mover, st board.Standing) {
 // pitBoard is grass with a pit of kind pit down column 3.
 func pitBoard(grid board.Grid, pit board.CellKind) func(*board.Board) {
 	return func(brd *board.Board) {
-		brd.SetAll(board.CellKind{Name: "grass", Cost: 1, Allows: board.Land})
+		brd.SetAll(board.CellKind{Name: board.Named("grass"), Cost: 1, Allows: board.Land})
 		for y := uint32(1); y <= 14; y++ {
 			c, _ := grid.CellIndex(3, y)
 			brd.Set(c, pit)
@@ -83,7 +83,7 @@ func TestStanding_ALandUnitDrivenIntoAHoleFellAndKeepsFalling(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(6, 16, cellSize)
 	start, _ := grid.CellIndex(1, 7)
 	f := newFooting()
-	bw := newBodiesWorld(t, grid, 6*cellSize, 16*cellSize, pitBoard(grid, board.CellKind{Name: "hole", Cost: 1}),
+	bw := newBodiesWorld(t, grid, 6*cellSize, 16*cellSize, pitBoard(grid, board.CellKind{Name: board.Named("hole"), Cost: 1}),
 		[]mover{{cell: start, heading: east}}, plugin.Each[board.Mover](f.react))
 	if bodies, _ := bw.snapshot(); len(bodies) != 0 {
 		t.Fatalf("%d bodies, want none: a hole is not solid", len(bodies))
@@ -97,9 +97,9 @@ func TestStanding_ALandUnitDrivenIntoAHoleFellAndKeepsFalling(t *testing.T) {
 		over, _ := grid.CellAt(centre)
 		id := onlyID(f)
 		switch {
-		case bw.brd.Res.Logic.Board.Kind(over).Name == "hole" && !f.fell[id]:
+		case bw.brd.Res.Logic.Board.Kind(over).Name.String() == "hole" && !f.fell[id]:
 			t.Fatalf("tick %d: centre over the hole at %v, but the unit did not fall", tick, over)
-		case bw.brd.Res.Logic.Board.Kind(over).Name != "hole" && f.fell[id]:
+		case bw.brd.Res.Logic.Board.Kind(over).Name.String() != "hole" && f.fell[id]:
 			t.Fatalf("tick %d: centre over %s, but the unit fell", tick, f.last[id].Kind.Name)
 		case f.fell[id] && fellAt < 0:
 			fellAt = tick
@@ -117,11 +117,11 @@ func TestStanding_ABoatOnWaterHasNotFallen(t *testing.T) {
 	grid := board.DefaultGrids{}.Square(6, 16, cellSize)
 	start, _ := grid.CellIndex(3, 7)
 	f := newFooting()
-	bw := newBodiesWorld(t, grid, 6*cellSize, 16*cellSize, pitBoard(grid, board.CellKind{Name: "water", Cost: 1, Allows: board.Water}),
+	bw := newBodiesWorld(t, grid, 6*cellSize, 16*cellSize, pitBoard(grid, board.CellKind{Name: board.Named("water"), Cost: 1, Allows: board.Water}),
 		[]mover{{cell: start, domain: board.Water}}, plugin.Each[board.Mover](f.react))
 	bw.tick()
 	id := onlyID(f)
-	if f.last[id].Kind.Name != "water" || f.fell[id] {
+	if f.last[id].Kind.Name.String() != "water" || f.fell[id] {
 		t.Errorf("a boat on %s fell=%v, want water and no fall", f.last[id].Kind.Name, f.fell[id])
 	}
 }
@@ -138,7 +138,7 @@ func TestStanding_ReportsEveryUnitOnTheBoardAndNoBody(t *testing.T) {
 		if bw.isBody(id) {
 			t.Errorf("body %d got a Standing", id)
 		}
-		if st.Kind.Name != "grass" || f.fell[id] {
+		if st.Kind.Name.String() != "grass" || f.fell[id] {
 			t.Errorf("unit %d stands on %s, fell=%v; want grass, no fall", id, st.Kind.Name, f.fell[id])
 		}
 	}
@@ -151,7 +151,7 @@ func TestStanding_WorksWithoutCollision(t *testing.T) {
 		Entities: world.EntitiesCfg{MaxCount: 2, MinSize: unitSize, MaxSize: unitSize},
 	})
 	brd := board.NewPlugin(grid, &board.MultipleOccupancy{}, w)
-	brd.Res.Logic.Board.SetAll(board.CellKind{Name: "hole", Cost: 1})
+	brd.Res.Logic.Board.SetAll(board.CellKind{Name: board.Named("hole"), Cost: 1})
 	f := newFooting()
 	if err := brd.RegisterBehavior(plugin.Each[board.Mover](f.react)); err != nil {
 		t.Fatal(err)
@@ -220,14 +220,14 @@ func TestCellEntity_IsOnePerCellAndItsGroundWritesTheTerrain(t *testing.T) {
 	var ground goke.Comp[board.Ground]
 	var q *goke.Query
 	bw.ecs.RegSys(goke.SystemFn{OnInit: func(si *goke.SysInit) { q = si.NewQueryBuilder(&cell, &ground).Build() }})
-	snow := board.CellKind{Name: "snow", Cost: 3, Allows: board.Land}
+	snow := board.CellKind{Name: board.Named("snow"), Cost: 3, Allows: board.Land}
 	found := false
 	for q.All(); q.Next(); {
 		cur := q.Cursor()
 		for i, got := range cur.IDs {
 			if got == id {
 				found = true
-				if cell.Slice(cur)[i].ID != target || ground.Slice(cur)[i].Kind.Name != "grass" {
+				if cell.Slice(cur)[i].ID != target || ground.Slice(cur)[i].Kind.Name.String() != "grass" {
 					t.Errorf("cell entity holds %v / %q, want %v / grass", cell.Slice(cur)[i].ID, ground.Slice(cur)[i].Kind.Name, target)
 				}
 				ground.Slice(cur)[i].Kind = snow
@@ -267,7 +267,7 @@ func TestDropCellEntity_WritesItsGroundBeforeLettingGo(t *testing.T) {
 		}
 		ground.At(q.Cursor()).Kind = kind
 	}
-	snow := board.CellKind{Name: "snow", Cost: 3, Allows: board.Land}
+	snow := board.CellKind{Name: board.Named("snow"), Cost: 3, Allows: board.Land}
 	set(snow)
 	bw.tick()
 	if got := bw.brd.Res.Logic.Board.Kind(target); got != snow {

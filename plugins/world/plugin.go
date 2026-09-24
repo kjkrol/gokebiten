@@ -1,10 +1,12 @@
 package world
 
 import (
+	"errors"
 	"fmt"
-	"github.com/kjkrol/aabbworld/geom"
 	"reflect"
 	"time"
+
+	"github.com/kjkrol/aabbworld/geom"
 
 	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/goke/v3"
@@ -120,7 +122,7 @@ func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) {
 
 // WithRenderer builds this plugin's own entity renderer, drawing cam-relative sprites from atlas.
 func (p *Plugin) WithRenderer(atlas render.AtlasSource) {
-	p.renderer = newRenderer(p.Res.Camera, atlas, p.view, p.Res.Config.Space.Width, p.Res.Config.Space.Height)
+	p.renderer = newRenderer(p.Res.Camera, atlas, p.view, p.module.drawers, p.Res.Config.Space.Width, p.Res.Config.Space.Height)
 }
 
 // Renderer returns this plugin's own render.Renderer, or nil unless WithRenderer was called.
@@ -143,15 +145,22 @@ func (p *Plugin) EventHandler() control.EventHandler {
 func (p *Plugin) Serializable() plugin.Serializable { return &p.Res }
 
 // RegisterBehavior adds world.Behaviors to the decision pass run before movement, in order, and
-// hosts a plugin.Each of Leaving, run every tick for every entity Outside an open edge.
+// hosts plugin.Each and Every of a Moving (every entity, before it moves), a Leaving (every tick an
+// entity is Outside an open edge) and a Drawing (every entity about to be drawn). Call before Use.
 func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
 	for _, b := range behaviors {
 		if system, ok := b.(Behavior); ok {
 			p.module.RegisterBehavior(system)
 			continue
 		}
-		if err := p.module.leavers.Add(b); err != nil {
-			return fmt.Errorf("%w in %s — it takes a world.Behavior or Each for Leaving", err, p.Name())
+		var err error
+		for _, host := range []interface{ Add(plugin.Behavior) error }{p.module.movers, p.module.leavers, p.module.drawers} {
+			if err = host.Add(b); err == nil || !errors.Is(err, plugin.ErrUnhostedBehavior) {
+				break
+			}
+		}
+		if err != nil {
+			return fmt.Errorf("%w in %s — it takes a world.Behavior or Each/Every for Moving, Leaving or Drawing", err, p.Name())
 		}
 	}
 	return nil
@@ -218,12 +227,6 @@ func (p *Plugin) Despawn(cb *goke.CmdBuf, id uid.UID64) { p.module.despawn(cb, i
 
 // Space returns world's shared space, rebuilt from every entity each tick after movement.
 func (p *Plugin) Space() *aabbworld.Space { return p.module.space }
-
-// EntityRenderer returns the entity renderer for further chaining, or nil.
-func (p *Plugin) EntityRenderer() *Renderer { return p.renderer }
-
-// RegisterSpeedModifier adds m to the factors folded into every entity's speed each tick.
-func (p *Plugin) RegisterSpeedModifier(m SpeedModifier) { p.module.RegisterSpeedModifier(m) }
 
 // Kinds returns this Plugin's registry of entity kinds — what kind.Define registers with.
 func (p *Plugin) Kinds() *Kinds { return p.kinds }

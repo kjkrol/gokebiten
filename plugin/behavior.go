@@ -36,9 +36,15 @@ func Between[FA, FB, P any](a Tag[FA], b Tag[FB], react func(t Tick, pair P)) Be
 	}
 }
 
-// Each is a behavior run on every entity a host visits that carries T.
+// Each is a behavior run on every entity a host visits that carries T; T must not be a component
+// the host already requires of every entity (world.Base on world's hosts) — use Every for those.
 func Each[T, P any](react func(t Tick, state *T, about P)) Behavior {
 	return &each[T, P]{react: react}
+}
+
+// Every is a behavior run on every entity a host visits, with no state component of its own.
+func Every[P any](react func(t Tick, about P)) Behavior {
+	return &every[P]{react: react}
 }
 
 // MaxFamilies is how many tag families one host's behaviors may name between them.

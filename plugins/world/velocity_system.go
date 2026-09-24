@@ -4,43 +4,45 @@ import (
 	"time"
 
 	"github.com/kjkrol/goke/v3"
+	"github.com/kjkrol/gram/plugin"
+	"github.com/kjkrol/uid"
 )
 
 var _ goke.System = (*VelocitySystem)(nil)
 
-// VelocitySystem folds every registered SpeedModifier's factor into each entity's Velocity.Value.
+// VelocitySystem runs the Each behaviors of a Moving over every entity, after Steering wrote the
+// base speed and before movement, so each may scale Velocity.Value.
 type VelocitySystem struct {
-	modifiers []SpeedModifier
-	query     *goke.Query
-	base      goke.Comp[Base]
+	host  *plugin.EachHost[Moving]
+	query *goke.Query
+	base  goke.Comp[Base]
+
+	ids   []uid.UID64
+	bases []Base
 }
 
-func NewVelocitySystem(modifiers []SpeedModifier) *VelocitySystem {
-	return &VelocitySystem{modifiers: modifiers}
+func NewVelocitySystem(host *plugin.EachHost[Moving]) *VelocitySystem {
+	return &VelocitySystem{host: host}
 }
 
 func (s *VelocitySystem) Init(si *goke.SysInit) {
 	qb := si.NewQueryBuilder(&s.base)
-	for _, m := range s.modifiers {
-		m.Bind(qb)
-	}
+	s.host.Bind(qb)
 	s.query = qb.Build()
 }
 
-func (s *VelocitySystem) Update(_ *goke.CmdBuf, _ time.Duration) {
-	if len(s.modifiers) == 0 {
+func (s *VelocitySystem) Update(cb *goke.CmdBuf, d time.Duration) {
+	if s.host.Empty() {
 		return
 	}
+	tick := plugin.Tick{CmdBuf: cb, Now: time.Now(), Dt: d}
 	s.query.All()
 	for s.query.Next() {
 		cursor := s.query.Cursor()
-		bases := s.base.Slice(cursor)
-		for i := range cursor.IDs {
-			acc := 1.0
-			for _, m := range s.modifiers {
-				acc = m.Apply(cursor, i, &bases[i], acc)
-			}
-			bases[i].Vel.Value = bases[i].Vel.Value * acc
-		}
+		s.ids, s.bases = cursor.IDs, s.base.Slice(cursor)
+		s.host.Run(tick, cursor, s.at)
 	}
 }
+
+// at describes the i-th entity of the chunk being walked.
+func (s *VelocitySystem) at(i int) Moving { return Moving{ID: s.ids[i], Base: &s.bases[i]} }

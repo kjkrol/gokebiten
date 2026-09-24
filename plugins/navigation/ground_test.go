@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	water = board.CellKind{Name: "water", Cost: 1, Allows: board.Water}
-	ice   = board.CellKind{Name: "ice", Cost: 1, Allows: board.Land}
+	water = board.CellKind{Name: board.Named("water"), Cost: 1, Allows: board.Water}
+	ice   = board.CellKind{Name: board.Named("ice"), Cost: 1, Allows: board.Land}
 )
 
 // A land unit routed over an ice bridge that melts before it gets there stops short of the water
@@ -145,7 +145,7 @@ func TestNavigation_StuckOnForbiddenGroundKeepsTheOrder(t *testing.T) {
 		}
 		_ = vel
 	}
-	pw.terrain.Set(start, board.CellKind{Name: "grass", Cost: 1, Allows: board.Land})
+	pw.terrain.Set(start, board.CellKind{Name: board.Named("grass"), Cost: 1, Allows: board.Land})
 	for range 60 * 10 {
 		_, centre, ordered := pw.tick()
 		if !ordered {

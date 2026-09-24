@@ -183,7 +183,11 @@ shows how much of it is boilerplate vs. real behavior.
   sizes share a world without the smallest slowing the rest — and the shared `camera.Camera` (a
   root package, not a plugin of its own; it keeps its own window arithmetic —
   wrapping on a wrapping axis, held inside the world on any other) exposed via
-  `world.Plugin.Camera()`. The space keeps no state of its own between ticks:
+  `world.Plugin.Camera()`. World hosts three `plugin.Each`/`Every` behaviors, all through
+  `RegisterBehavior`: a `Moving` (every entity before it moves, to scale `Base.Vel.Value`;
+  board's terrain speed is one), a `Leaving` (every tick an entity is `Outside`) and a
+  `Drawing` (every entity about to be drawn; `world.Draw.Overlay[T]`, `Draw.As[T]`,
+  `Draw.With[T]`, `Draw.Facing` are ready-made). The space keeps no state of its own between ticks:
   `MoveSystem` moves every box under the edge rules (`Space.Move`), then hands
   the space every `Base` as an `aabbworld.Item` (`Space.Rebuild`) — `Query`,
   `Scan` and collisions read that grid until the next tick. After movement the `ViewSystem` refreshes every
@@ -201,7 +205,8 @@ shows how much of it is boilerplate vs. real behavior.
   following the world's `Edges` (`SetWrap(x, y)`). A `CellKind` says which `Domain`s it admits
   (`Land`, `Water`, `Air`, a game's own bits), whether it is `Solid` (a wall), how much it
   `Veil`s sight (a forest at 0.6), and what it costs — `Costing(domain, cost)` prices it differently per domain, and
-  `CostFor(domain)` is what a unit pays in the planner and in `TerrainSpeedModifier`; a unit's
+  `CostFor(domain)` is what a unit pays in the planner and in the Moving behavior board
+  registers on the world (only entities carrying `Mover` are slowed); a unit's
   `Mover` says which domains it moves in (none: `Land`). Every tick, after
   collision's `RunPlan`, `board.RunPlan` reports a `Standing` (cell under the centre and its kind) to
   `plugin.Each` behaviors registered on the board, naturally `Each[board.Mover]`;

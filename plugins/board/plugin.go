@@ -31,11 +31,10 @@ var _ plugin.Serializable = (*Resources)(nil)
 type Plugin struct {
 	Res Resources
 
-	terrainSpeed *TerrainSpeedModifier
-	occupancy    Occupancy
-	renderer     *Renderer
-	kinds        *cellKindDict
-	seeded       *Layout
+	occupancy Occupancy
+	renderer  *Renderer
+	kinds     *cellKindDict
+	seeded    *Layout
 
 	worldPlugin *world.Plugin
 	collision   *collision.Plugin
@@ -51,17 +50,18 @@ var _ plugin.Populator = (*Plugin)(nil)
 func NewPlugin(grid Grid, occupancy Occupancy, worldPlugin *world.Plugin) *Plugin {
 	terrain := NewTerrainMap()
 	p := &Plugin{
-		terrainSpeed: NewTerrainSpeedModifier(grid, terrain),
-		occupancy:    occupancy,
-		worldPlugin:  worldPlugin,
-		kinds:        newCellKindDict(),
+		occupancy:   occupancy,
+		worldPlugin: worldPlugin,
+		kinds:       newCellKindDict(),
 	}
 	p.Res.Logic.Board = NewBoard(grid, terrain)
 	if ws, ok := p.Res.Logic.Board.Grid.(wrapSetter); ok {
 		edges := worldPlugin.Res.Config.Space.Edges
 		ws.SetWrap(edges.WrapsX(), edges.WrapsY())
 	}
-	worldPlugin.RegisterSpeedModifier(p.terrainSpeed)
+	if err := worldPlugin.RegisterBehavior(terrainSpeed(grid, terrain)); err != nil {
+		panic(err)
+	}
 	return p
 }
 

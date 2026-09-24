@@ -29,7 +29,17 @@ func (e *each[T, P]) run(t Tick, cursor *goke.Cursor, about func(i int) P) {
 	}
 }
 
-// EachHost runs the Each behaviors made for payload P inside a host's own walk
+type every[P any] struct{ react func(Tick, P) }
+
+func (e *every[P]) bind(*goke.QueryBuilder) {}
+
+func (e *every[P]) run(t Tick, cursor *goke.Cursor, about func(i int) P) {
+	for i := range cursor.IDs {
+		e.react(t, about(i))
+	}
+}
+
+// EachHost runs the Each and Every behaviors made for payload P inside a host's own walk
 // over its entities.
 type EachHost[P any] struct {
 	runners []eachRunner[P]
@@ -39,7 +49,7 @@ type EachHost[P any] struct {
 // Empty reports whether no behavior was added.
 func (h *EachHost[P]) Empty() bool { return len(h.runners) == 0 }
 
-// Add takes an Each behavior for P; ErrUnhostedBehavior for another, ErrHostBuilt after Bind.
+// Add takes an Each or Every behavior for P; ErrUnhostedBehavior for another, ErrHostBuilt after Bind.
 func (h *EachHost[P]) Add(b Behavior) error {
 	runner, ok := b.(eachRunner[P])
 	if !ok {

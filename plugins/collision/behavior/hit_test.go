@@ -104,16 +104,43 @@ func TestShowHits_NoContact_ClearsALapsedMark(t *testing.T) {
 	}
 }
 
+// drawn runs HitOverlay(flash) over one entity carrying mark and returns its layers, base first.
+func drawn(t *testing.T, mark behavior.HitMark, base, flash world.Appearance) []world.Appearance {
+	t.Helper()
+	host := &plugin.EachHost[world.Drawing]{}
+	if err := host.Add(behavior.HitOverlay(flash)); err != nil {
+		t.Fatal(err)
+	}
+	layers := []world.Appearance{base}
+	var b goke.Comp[world.Base]
+	var m goke.Comp[behavior.HitMark]
+	goke.New().Setup(goke.SystemFn{OnInit: func(si *goke.SysInit) {
+		qb := si.NewQueryBuilder(&b)
+		host.Bind(qb)
+		q := qb.Build()
+		f := si.NewFactory(&b, &m)
+		f.Create(1)
+		for f.Next() {
+			m.Slice(&f.Cursor)[0] = mark
+		}
+		for q.All(); q.Next(); {
+			cur := q.Cursor()
+			bases := b.Slice(cur)
+			host.Run(plugin.Tick{}, cur, func(i int) world.Drawing { return world.Drawing{ID: cur.IDs[i], Base: &bases[i], Layers: &layers} })
+		}
+	}})
+	return layers
+}
+
 func TestHitOverlay_DrawsOnlyWhileTheMarkIsActive(t *testing.T) {
 	base := world.Appearance{SpriteID: 1}
 	flash := world.Appearance{SpriteID: 2}
-	overlay := behavior.HitOverlay(flash)
 
-	active := overlay.Resolve([]world.Appearance{base}, behavior.HitMark{ExpiresAtNano: 1})
+	active := drawn(t, behavior.HitMark{ExpiresAtNano: 1}, base, flash)
 	if len(active) != 2 || active[1] != flash {
 		t.Errorf("layers while active = %v, want the flash on top of %v", active, base)
 	}
-	idle := overlay.Resolve([]world.Appearance{base}, behavior.HitMark{})
+	idle := drawn(t, behavior.HitMark{}, base, flash)
 	if len(idle) != 1 || idle[0] != base {
 		t.Errorf("layers while idle = %v, want just %v", idle, base)
 	}

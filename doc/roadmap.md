@@ -38,6 +38,5 @@ behind each item lives in [movement.md](movement.md) and [views.md](views.md).
    a tick, a client without an ECS — [views §3](views.md).
 6. **Turn-based movement** and **arbitration** — when a game needs them — [movement §9, §10](movement.md).
 
-Also on the list: `CellKind` without a string in `Ground` (goke warns about the locality of a
-component holding one); saves written before tag families do not load, to be noted at the next
-tag; that tag, v0.3.0, once this state has been reviewed.
+Also on the list: saves written before tag families do not load, to be noted at the next tag; that
+tag, v0.3.0, once this state has been reviewed.

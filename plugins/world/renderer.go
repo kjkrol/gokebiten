@@ -1,59 +1,70 @@
 package world
 
 import (
+	"time"
+
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/camera"
+	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/render"
+	"github.com/kjkrol/uid"
 )
 
 var _ render.Renderer = (*Renderer)(nil)
 
 // Renderer draws the Position+Appearance entities in the world's View — what the camera sees
-// this tick — running each AppearanceModifier in order to resolve their final draw layers. A Stage
-// that has not ticked yet sees everything.
+// this tick — running the Each behaviors of a Drawing over each chunk to settle their layers. A
+// Stage that has not ticked yet sees everything.
 type Renderer struct {
 	renderQuery *goke.Query
 	base        goke.Comp[Base]
 	appearance  goke.Comp[Appearance]
-	modifiers   []AppearanceModifier
-	layers      []Appearance
+	host        *plugin.EachHost[Drawing]
+	layers      [][]Appearance // one per entity of the chunk being drawn
 	batch       spriteBatch
 	view        *View
+
+	ids   []uid.UID64
+	bases []Base
 }
 
-func newRenderer(cam camera.Camera, atlas render.AtlasSource, view *View, worldW, worldH uint32) *Renderer {
-	return &Renderer{batch: newSpriteBatch(cam, atlas, worldW, worldH), view: view}
+func newRenderer(cam camera.Camera, atlas render.AtlasSource, view *View, host *plugin.EachHost[Drawing], worldW, worldH uint32) *Renderer {
+	return &Renderer{batch: newSpriteBatch(cam, atlas, worldW, worldH), view: view, host: host}
 }
 
 func (s *Renderer) Init(si *goke.SysInit) {
 	qb := si.NewQueryBuilder(&s.base, &s.appearance)
-	for _, m := range s.modifiers {
-		m.Bind(qb)
-	}
+	s.host.Bind(qb)
 	s.renderQuery = qb.Build()
 }
 
 // Draw draws this frame; a nil screen gathers the quads and draws nothing, for measuring.
 func (s *Renderer) Draw(screen *ebiten.Image) {
 	s.batch.reset()
+	tick := plugin.Tick{Now: time.Now()}
 
 	s.renderQuery.All()
 	for s.renderQuery.Next() {
 		cursor := s.renderQuery.Cursor()
-		bases := s.base.Slice(cursor)
+		s.ids, s.bases = cursor.IDs, s.base.Slice(cursor)
 		appearances := s.appearance.Slice(cursor)
 
-		for i, id := range cursor.IDs {
+		for len(s.layers) < len(s.ids) {
+			s.layers = append(s.layers, nil)
+		}
+		for i := range s.ids {
+			s.layers[i] = append(s.layers[i][:0], appearances[i])
+		}
+		if !s.host.Empty() {
+			s.host.Run(tick, cursor, s.at)
+		}
+		for i, id := range s.ids {
 			if !s.view.Contains(id) {
 				continue
 			}
-			s.layers = append(s.layers[:0], appearances[i])
-			for _, m := range s.modifiers {
-				s.layers = m.Apply(cursor, i, &bases[i], s.layers)
-			}
-			for _, l := range s.layers {
-				s.batch.drawQuad(bases[i].Pos, l.SpriteID)
+			for _, l := range s.layers[i] {
+				s.batch.drawQuad(s.bases[i].Pos, l.SpriteID)
 			}
 		}
 	}
@@ -61,28 +72,7 @@ func (s *Renderer) Draw(screen *ebiten.Image) {
 	s.batch.flush(screen)
 }
 
-// WithReplace adds a modifier replacing dst[0] with with, for every entity carrying T.
-func (s *Renderer) WithReplace[T any](with Appearance) *Renderer {
-	return s.WithStrategy(replace[T](with))
-}
-
-// WithOverlay adds a modifier appending with on top, for every entity carrying T.
-func (s *Renderer) WithOverlay[T any](with Appearance) *Renderer {
-	return s.WithStrategy(overlay[T](with))
-}
-
-// WithModify adds a modifier transforming dst[0] via f, for every entity carrying T.
-func (s *Renderer) WithModify[T any](f func(Appearance, T) Appearance) *Renderer {
-	return s.WithStrategy(modify[T](f))
-}
-
-// WithStrategy adds a modifier running strategy for every entity carrying T.
-func (s *Renderer) WithStrategy[T any](strategy AppearanceStrategy[T]) *Renderer {
-	return s.WithModifier(&conditionalApperanceStrategy[T]{Strategy: strategy})
-}
-
-// WithModifier appends m to the modifiers run, in order, for every entity.
-func (s *Renderer) WithModifier(m AppearanceModifier) *Renderer {
-	s.modifiers = append(s.modifiers, m)
-	return s
+// at describes the i-th entity of the chunk being drawn.
+func (s *Renderer) at(i int) Drawing {
+	return Drawing{ID: s.ids[i], Base: &s.bases[i], Layers: &s.layers[i]}
 }

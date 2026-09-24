@@ -39,12 +39,12 @@ func (m HitMark) lasting(fallback time.Duration) time.Duration {
 	return fallback
 }
 
-// HitOverlay draws with on top of whatever an entity looks like, while its HitMark is active.
-func HitOverlay(with world.Appearance) world.AppearanceStrategy[HitMark] {
-	return world.AppearanceStrategyFn[HitMark](func(dst []world.Appearance, m HitMark) []world.Appearance {
-		if !m.Active() {
-			return dst
+// HitOverlay is a Drawing behavior for the world plugin: with is drawn on top of an entity while
+// its HitMark is active.
+func HitOverlay(with world.Appearance) plugin.Behavior {
+	return plugin.Each[HitMark](func(_ plugin.Tick, m *HitMark, d world.Drawing) {
+		if m.Active() {
+			d.Overlay(with)
 		}
-		return append(dst, with)
 	})
 }

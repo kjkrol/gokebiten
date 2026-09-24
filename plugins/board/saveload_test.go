@@ -67,7 +67,7 @@ func (g oneStageGame) Stages() (map[string]game.Stage, string) {
 func TestPlugin_SaveLoad_TerrainRoundTrip(t *testing.T) {
 	basePath := t.TempDir() + "/save"
 	grid := board.DefaultGrids{}.Square(5, 5, 10)
-	wall := board.CellKind{Name: "wall", Cost: 1, Solid: true}
+	wall := board.CellKind{Name: board.Named("wall"), Cost: 1, Solid: true}
 	cell, ok := grid.CellAt(geom.NewVec(21.0, 21.0))
 	if !ok {
 		t.Fatal("expected (21,21) to land inside the 5x5 grid")

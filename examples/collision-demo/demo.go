@@ -95,7 +95,8 @@ type mainStage struct {
 	collision *collision.Plugin
 
 	// kinds is one kind per color and shape; hitSprite is the overlay's atlas slot, no kind's.
-	kinds [entityColors][entityShapes]kind.Of[body]
+	kinds     [entityColors][entityShapes]kind.Of[body]
+	hitSprite render.SpriteID
 
 	state          *State
 	collisionStats behavior.ContactStats
@@ -115,6 +116,10 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 		Entities: world.EntitiesCfg{MaxCount: EntityCount, MinSize: RectSize, MaxSize: RectSize},
 	})
 	s.defineKinds()
+	s.hitSprite = s.world.Kinds().NewSprite()
+	if err := s.world.RegisterBehavior(behavior.HitOverlay(world.Appearance{SpriteID: s.hitSprite})); err != nil {
+		return err
+	}
 
 	s.collision = collision.NewPlugin(s.world)
 	if err := s.collision.RegisterBehavior(
@@ -213,7 +218,6 @@ func (m *mainScene) Layers() []render.Renderer {
 		{R: 60, G: 160, B: 150, A: 255},
 		{R: 220, G: 40, B: 40, A: 255},
 	}
-	hitSprite := s.world.Kinds().NewSprite()
 	atlas := render.NewAtlas()
 	shapes := [entityShapes]func(color.RGBA) render.SpriteDrawer{render.Solid, render.Border, render.Diamond, render.Cross}
 	for ci, c := range palette[:entityColors] {
@@ -222,7 +226,7 @@ func (m *mainScene) Layers() []render.Renderer {
 		}
 	}
 
-	atlas.RegisterAt(hitSprite, int(RectSize), render.Solid(palette[entityColors]))
+	atlas.RegisterAt(s.hitSprite, int(RectSize), render.Solid(palette[entityColors]))
 	atlas.Close()
 	s.world.WithRenderer(atlas)
 
@@ -232,7 +236,7 @@ func (m *mainScene) Layers() []render.Renderer {
 			render.SolidBackground{Color: color.RGBA{R: 50, G: 50, B: 50, A: 255}},
 			ScreenWidth, ScreenHeight,
 		),
-		s.world.EntityRenderer().WithStrategy(behavior.HitOverlay(world.Appearance{SpriteID: hitSprite})),
+		s.world.Renderer(),
 		render.NewTelemetryRenderer(&m.tps.Ticks, entityCount, &s.collisionStats.Counter),
 	}
 }

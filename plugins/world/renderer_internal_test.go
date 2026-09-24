@@ -8,6 +8,7 @@ import (
 	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/camera"
+	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/render"
 	"github.com/kjkrol/uid"
 )
@@ -18,25 +19,18 @@ type flatAtlas struct{}
 func (flatAtlas) Atlas() *ebiten.Image                            { return nil }
 func (flatAtlas) UV(render.SpriteID) (sx0, sy0, sx1, sy1 float32) { return 0, 0, 1, 1 }
 
-// countingModifier counts the entities the renderer resolved layers for.
-type countingModifier struct{ n int }
-
-func (*countingModifier) Bind(*goke.QueryBuilder) {}
-func (m *countingModifier) Apply(_ *goke.Cursor, _ int, _ *Base, acc []Appearance) []Appearance {
-	m.n++
-	return acc
-}
-
 // drawThrough spawns one 10x10 entity per position, lets pick say which of them the View holds
-// (nil: the zero View, which sees everything), draws once and returns how many entities had
-// their layers resolved.
-func drawThrough(t *testing.T, pick func(ids []uid.UID64, v *View), at ...geom.Vec) int {
+// (nil: the zero View, which sees everything), draws once and returns how many quads were drawn
+// and how many entities the Drawing behaviors were run for.
+func drawThrough(t *testing.T, pick func(ids []uid.UID64, v *View), at ...geom.Vec) (drawn, visited int) {
 	t.Helper()
 	view := &View{}
 	cam := camera.NewFromSpace(1000, 1000, 0)
-	r := newRenderer(cam, flatAtlas{}, view, 1000, 1000)
-	counter := &countingModifier{}
-	r.WithModifier(counter)
+	host := &plugin.EachHost[Drawing]{}
+	if err := host.Add(plugin.Every(func(plugin.Tick, Drawing) { visited++ })); err != nil {
+		t.Fatal(err)
+	}
+	r := newRenderer(cam, flatAtlas{}, view, host, 1000, 1000)
 
 	var base goke.Comp[Base]
 	var appearance goke.Comp[Appearance]
@@ -61,20 +55,20 @@ func drawThrough(t *testing.T, pick func(ids []uid.UID64, v *View), at ...geom.V
 	}})
 
 	r.Draw(nil)
-	return counter.n
+	return r.batch.quads, visited
 }
 
-func TestRenderer_Draw_ResolvesOnlyWhatTheViewContains(t *testing.T) {
+func TestRenderer_Draw_DrawsOnlyWhatTheViewContains(t *testing.T) {
 	quarters := []geom.Vec{geom.NewVec(100, 100), geom.NewVec(700, 100), geom.NewVec(100, 700), geom.NewVec(700, 700)}
 
 	firstOnly := func(ids []uid.UID64, v *View) {
 		v.Culled = true
 		v.In.Add(ids[0])
 	}
-	if n := drawThrough(t, firstOnly, quarters...); n != 1 {
-		t.Errorf("a View holding one entity had %d resolved, want 1", n)
+	if drawn, visited := drawThrough(t, firstOnly, quarters...); drawn != 1 || visited != 4 {
+		t.Errorf("a View holding one entity drew %d and visited %d, want 1 drawn of 4 visited", drawn, visited)
 	}
-	if n := drawThrough(t, nil, quarters...); n != 4 {
-		t.Errorf("the zero View had %d entities resolved, want all 4", n)
+	if drawn, _ := drawThrough(t, nil, quarters...); drawn != 4 {
+		t.Errorf("the zero View drew %d entities, want all 4", drawn)
 	}
 }

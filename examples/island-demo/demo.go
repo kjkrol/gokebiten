@@ -100,12 +100,12 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	grid := board.DefaultGrids{}.Square(GridWidth, GridHeight, CellSize)
 	s.board = board.NewPlugin(grid, &board.MultipleOccupancy{}, s.world).WithCollision(s.collision)
 	s.board.CellKindDict().Create(
-		board.CellKind{Name: "water", Cost: 1, Allows: board.Water},
-		board.CellKind{Name: "field", Cost: 1.5, Allows: board.Land},
-		board.CellKind{Name: "forest", Cost: 3, Allows: board.Land, Veil: 0.6},
-		board.CellKind{Name: "hills", Cost: 4, Allows: board.Land},
-		board.CellKind{Name: "mountain", Cost: 8, Allows: board.Land},
-		board.CellKind{Name: "road", Cost: 1, Allows: board.Land},
+		board.CellKind{Name: board.Named("water"), Cost: 1, Allows: board.Water},
+		board.CellKind{Name: board.Named("field"), Cost: 1.5, Allows: board.Land},
+		board.CellKind{Name: board.Named("forest"), Cost: 3, Allows: board.Land, Veil: 0.6},
+		board.CellKind{Name: board.Named("hills"), Cost: 4, Allows: board.Land},
+		board.CellKind{Name: board.Named("mountain"), Cost: 8, Allows: board.Land},
+		board.CellKind{Name: board.Named("road"), Cost: 1, Allows: board.Land},
 	)
 	if err := s.board.RegisterBehavior(plugin.Each[board.Mover](s.drown)); err != nil {
 		return err

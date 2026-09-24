@@ -37,8 +37,8 @@ func newCellWorld(t *testing.T, boardFirst bool) *cellWorld {
 	})
 	cw.fx = effects.NewPlugin(w)
 	cw.brd = board.NewPlugin(grid, &board.MultipleOccupancy{}, w)
-	cw.grass = board.CellKind{Name: "grass", Cost: 1, Allows: board.Land}
-	cw.snow = board.CellKind{Name: "snow", Cost: 3, Allows: board.Land}
+	cw.grass = board.CellKind{Name: board.Named("grass"), Cost: 1, Allows: board.Land}
+	cw.snow = board.CellKind{Name: board.Named("snow"), Cost: 3, Allows: board.Land}
 	cw.brd.Res.Logic.Board.SetAll(cw.grass)
 	snow := cw.snow
 	cw.frost = cw.fx.Define("frost", effects.Spec{effects.Lasts(2 * cellTick), effects.Alter(func(g *board.Ground) { g.Kind = snow })})
