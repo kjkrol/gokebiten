@@ -76,13 +76,13 @@ func (p *Plugin) Name() string { return "gram.board" }
 // Install wires the standing report and, WithCollision, the terrain bodies.
 func (p *Plugin) Install(ctx plugin.Installer) error {
 	p.module = &module{
-		cells:    newCellEntities(p.Res.Logic.Board, p.worldPlugin, p.worldPlugin.Kinds().Reserve("board.cell")),
+		cells:    newCellEntitySystem(p.Res.Logic.Board, p.worldPlugin, p.worldPlugin.Kinds().Reserve("board.cell")),
 		standing: newStandingSystem(p.Res.Logic.Board, &p.standing),
 	}
 	if p.collision != nil {
 		typeID := p.worldPlugin.Kinds().Reserve("board.terrain")
 		p.body = p.worldPlugin.Kinds().DefineTag[Family]("board.body")
-		p.module.bodies = newTerrainBodies(p.Res.Logic.Board, p.worldPlugin, typeID, p.body)
+		p.module.bodies = newTerrainBodySystem(p.Res.Logic.Board, p.worldPlugin, typeID, p.body)
 	}
 	if p.effects != nil {
 		p.effects.OnIdle(func(t plugin.Tick, id uid.UID64) { p.DropCellEntity(t.CmdBuf, id) })
@@ -130,9 +130,9 @@ func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
 // board-specific
 // =================================================================
 
-// WithCollision makes terrain physical: every run of impassable cells becomes an immovable [Body]
-// in the world, pushed against by c and occluding sight, and every run of Opaque cells a Body
-// that only occludes. Call before Use.
+// WithCollision makes terrain physical: every run of Solid cells becomes an immovable body in the
+// world, pushed against by c and cutting sight, and every run of veiled cells a body carrying a
+// vision.Transparency of 1 - Veil, dimming it. Call before Use.
 func (p *Plugin) WithCollision(c *collision.Plugin) *Plugin {
 	if c == nil {
 		panic("board: WithCollision needs the collision plugin")

@@ -137,9 +137,8 @@ decision (`board.CellKind`). Walls, holes and water are done; sight through terr
   **centre**) to `plugin.Each` behaviors — `Each[board.Mover]`, so the reaction holds the unit's
   domain — and `Standing.Fell(domain)` says the unit stands where its domain may not. It is a state, not an event, because `Each` runs for every entity the host
   walks — as `Struck` does in collision. The reaction is the game's: despawn, teleport, damage.
-- **A forest — an interim step.** `CellKind.Opaque` makes a passable cell a body without a
-  `Collider`: it occludes and nothing else. Every entry in the space occludes completely today, so
-  a unit inside a forest sees nothing until §12 lands.
+- **A forest.** `CellKind.Veil` makes a passable cell a body without a `Collider`: it dims sight
+  and nothing else — how much is §12's business.
 - **After a push, and after the ground changes.** The existing re-plan on being knocked off a
   `Leg` covers it, and covers being pushed onto a passable cell off the route as well. When the
   terrain's version moves, every route is checked against `Admits` and dropped at the first step
@@ -213,24 +212,31 @@ push into a wall leaves no unit inside it, on a square and on a hex grid; a land
 a hole has fallen and a boat on water has not; an ice bridge melting ahead re-routes without a
 step into the water; a unit stuck where it may not be keeps its order.
 
-## 12. Sight through terrain, sight range and flying units — open
+## 12. Sight through terrain, sight range and flying units — done
 
-Terrain should limit sight by kind, not switch it off: a forest takes a few cells of range, a hill
-none, a wall all. That needs three things, in this order.
+Terrain limits sight by kind, not switching it off: a forest takes range, a hill none, a wall all.
 
-- **Transparency per kind.** `CellKind.Transparency` in 0..1 replaces the binary `Opaque`: the
-  range a ray has left shrinks by the cell's share as it crosses. The raycast in aabbworld knows
-  only hit or miss, so `Space.Scan` grows an optional per-entry attenuation — a function of the
-  entry's id, or a capability bit "translucent" plus the depth crossed — and vision maps a terrain
-  body's `TypeID` (each kind of body has its own, from `Kinds.Reserve`) to the attenuation of its
-  kind. Terrain bodies then get one `TypeID` per `CellKind`, not one for the whole board.
-- **Range is the unit's.** `Sight.Radius` already is; `vision.MaxSightRadius` caps it at 300 for
-  the outline buffers and moves into configuration or grows with the largest radius defined.
-- **Flying units.** `board.Mover{Domain: Air}` already keeps the planner on cells admitting Air
-  (a game admits Air over walls and water alike); what is left is collision's `Touch` vetoing its
-  pairs with `Solid` terrain bodies the way it vetoes a lost `Collider`, vision not attenuating
-  its sight, and terrain cost not slowing it. Order of work: transparency first (it needs
-  aabbworld's raycast to attenuate, a change tagged there), flying after.
+- **A budget, not a switch.** aabbworld v1.6.0's `Cone.Transparency` gives each entry a τ. A ray
+  starts with the cone's radius as a budget: an empty stretch costs its length, a stretch through
+  an entry costs its length divided by τ, an entry at τ ≤ 0 cuts. A forest at τ = 0.4 takes 2.5×
+  its depth; a see-through entry dims but is never "seen" (the game knows where its forests are);
+  `Depths` and `Outline` show the shortened reach, so a cone fades into a forest instead of
+  stopping at its edge. The choice of a budget over a multiplied attenuation is what keeps the
+  sweep exact for walls and cheap for forests: the opaque-only scan measures the same as before,
+  a scene with three entries in ten see-through costs about 8% more.
+- **Veil per kind, transparency per body.** `CellKind.Veil` in 0..1 replaces `Opaque`; a veiled
+  body carries a `vision.Transparency` of 1 - Veil, and the scan reads it off the entity it is
+  about to cross — nothing else carries one, so walls and units still cut. The transparency is
+  ECS state on the body, not a table beside it, and the terrain bodies did not need a `TypeID`
+  per kind after all.
+- **Range is the unit's.** `Sight.Radius`; `MaxSightRadius` only sizes the outline buffer, a
+  longer sight sees as far as it says with a coarser outline.
+- **Flying is a convention.** `Mover{Domain: Air}` keeps the planner on cells admitting `Air` (the
+  demos admit it over the wall and the forest); a `Collider` without `Physics` makes the flyer a
+  sensor nothing pushes, so the terrain bodies do not stop it — no veto in collision was needed;
+  `Costing(Air, 1)` keeps the forest from slowing it; `Sight{Clear: true}` looks over the veils:
+  what only dims is lifted, what cuts still cuts, so a hawk sees through the forest and not through
+  the wall.
 
 ## 13. Effects, tags and the profile — done
 

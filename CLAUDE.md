@@ -31,7 +31,7 @@ go test ./plugins/world/... -run TestName -v                     # a single test
 make demo-collision                                                # go mod tidy && run examples/collision-demo
 make demo-navigation                                               # go mod tidy && run examples/navigation-demo
 make demo-navigation-hex                                           # the same on a hex board
-make demo-navigation-vision                                        # board + navigation + vision: walls and forests occlude
+make demo-navigation-vision                                        # board + navigation + vision: walls cut sight, forests dim it, a hawk flies over
 make demo-navigation-vision-hex                                    # the same on a hex board
 make demo-effect                                                   # an ice witch: frost and frozen as effects
 make demo-island                                                   # a map larger than the window under a moving camera
@@ -144,6 +144,16 @@ only what callers need. A `module` never also implements `goke.System`
 directly — per-tick logic lives in its own dedicated type/file (e.g.
 `selection.SelectionSystem`), which `module.RegSystems` constructs.
 
+### Systems stay inside their plugin
+
+A type implementing `goke.System` is named with the `System` suffix
+(`ScanSystem`, `terrainBodySystem`, `cellEntitySystem`) and never leaks out of
+its plugin: no `Plugin` method hands out a system's state, and no plugin takes a
+callback from the game that reaches into another plugin's system. A system
+keeps no table beside the ECS — what it knows about an entity is a component on
+that entity (`vision.Transparency` on a veiled terrain body, not a map of id →
+value), and whoever needs it reads the component through its own query.
+
 Each `plugin.go`/`module.go` groups methods under banner comments — contract
 methods first, then everything plugin/module-specific — so a file's shape
 shows how much of it is boilerplate vs. real behavior.
@@ -188,8 +198,8 @@ shows how much of it is boilerplate vs. real behavior.
   sees the boxes as they were after the last rebuild.
 - **`board`** — optional grid + terrain over `world`; its grids wrap per axis,
   following the world's `Edges` (`SetWrap(x, y)`). A `CellKind` says which `Domain`s it admits
-  (`Land`, `Water`, `Air`, a game's own bits), whether it is `Solid` (a wall) and `Opaque` (a
-  forest), and what it costs — `Costing(domain, cost)` prices it differently per domain, and
+  (`Land`, `Water`, `Air`, a game's own bits), whether it is `Solid` (a wall), how much it
+  `Veil`s sight (a forest at 0.6), and what it costs — `Costing(domain, cost)` prices it differently per domain, and
   `CostFor(domain)` is what a unit pays in the planner and in `TerrainSpeedModifier`; a unit's
   `Mover` says which domains it moves in (none: `Land`). Every tick, after
   collision's `RunPlan`, `board.RunPlan` reports a `Standing` (cell under the centre and its kind) to
@@ -252,7 +262,10 @@ shows how much of it is boilerplate vs. real behavior.
   `kind.Tagged`; terrain bodies never do); a bit flip, seen the same tick. Depends on `world`.
 - **`vision`** — narrowed perception: a `Sight` cone scanned against `world`'s
   space each tick fills its own `Sight.Seen` (who this entity can see, nearest first), and
-  `SightOutline` on an entity gets its view's shape computed and drawn. It
+  `SightOutline` on an entity gets its view's shape computed and drawn. An entity carrying
+  `Transparency` dims sight instead of cutting it (board gives its veiled bodies 1 - `Veil`), a
+  ray spending its radius as a budget through it; `Sight.Clear` looks over the veils (a flyer)
+  and is still cut by what cuts. It
   hosts `plugin.Between(a, b, fn)` of a `Sighting` inside the scan's own pass: once
   a tick per observer carrying `a`, with everything in view carrying `b` — a
   directed pair, grouped by observer, empty included. A behavior tells its seen

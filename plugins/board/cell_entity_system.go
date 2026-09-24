@@ -15,11 +15,11 @@ import (
 // Plugin.CellEntity; while the entity exists its Ground is what the TerrainMap shows.
 type Ground struct{ Kind CellKind }
 
-var _ goke.System = (*cellEntities)(nil)
+var _ goke.System = (*cellEntitySystem)(nil)
 
-// cellEntities spawns an entity per cell on request and copies each one's Ground into the
+// cellEntitySystem spawns an entity per cell on request and copies each one's Ground into the
 // terrain every tick, so a change to the component is a change to the board.
-type cellEntities struct {
+type cellEntitySystem struct {
 	brd         *Board
 	worldPlugin *world.Plugin
 	typeID      kind.ID
@@ -35,11 +35,11 @@ type cellEntities struct {
 	spawnGround goke.Comp[Ground]
 }
 
-func newCellEntities(brd *Board, worldPlugin *world.Plugin, typeID kind.ID) *cellEntities {
-	return &cellEntities{brd: brd, worldPlugin: worldPlugin, typeID: typeID, byCell: map[CellID]uid.UID64{}}
+func newCellEntitySystem(brd *Board, worldPlugin *world.Plugin, typeID kind.ID) *cellEntitySystem {
+	return &cellEntitySystem{brd: brd, worldPlugin: worldPlugin, typeID: typeID, byCell: map[CellID]uid.UID64{}}
 }
 
-func (s *cellEntities) Init(si *goke.SysInit) {
+func (s *cellEntitySystem) Init(si *goke.SysInit) {
 	s.bodies = s.worldPlugin.NewBodies(si, s.typeID, &s.spawnCell, &s.spawnGround)
 	s.query = si.NewQueryBuilder(&s.cell, &s.ground).Build()
 	// A load brings the entities back without the map: rebuild it.
@@ -52,7 +52,7 @@ func (s *cellEntities) Init(si *goke.SysInit) {
 	}
 }
 
-func (s *cellEntities) Update(*goke.CmdBuf, time.Duration) {
+func (s *cellEntitySystem) Update(*goke.CmdBuf, time.Duration) {
 	s.query.All()
 	for s.query.Next() {
 		cursor := s.query.Cursor()
@@ -65,7 +65,7 @@ func (s *cellEntities) Update(*goke.CmdBuf, time.Duration) {
 }
 
 // entity finds the cell's entity or spawns one over the cell, carrying its terrain as Ground.
-func (s *cellEntities) entity(c CellID) uid.UID64 {
+func (s *cellEntitySystem) entity(c CellID) uid.UID64 {
 	if id, ok := s.byCell[c]; ok {
 		return id
 	}
@@ -84,7 +84,7 @@ func (s *cellEntities) entity(c CellID) uid.UID64 {
 
 // drop writes a cell entity's Ground into the terrain one last time and despawns it — the
 // entity may be gone before the next copy, so the terrain keeps what its Ground last said.
-func (s *cellEntities) drop(cb *goke.CmdBuf, id uid.UID64) {
+func (s *cellEntitySystem) drop(cb *goke.CmdBuf, id uid.UID64) {
 	for c, held := range s.byCell {
 		if held != id {
 			continue

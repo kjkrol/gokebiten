@@ -9,7 +9,7 @@ type Terrain interface {
 
 // CellKind is a named terrain kind: whom it admits, what it does to movement and sight, and the
 // sprite drawn for it. A wall is Solid; water Allows Water; a hole Allows nobody and is not
-// Solid; a forest Allows Land and is Opaque.
+// Solid; a forest Allows Land and has a Veil.
 type CellKind struct {
 	Name string
 	// Cost 1 is full speed and the baseline path weight; above 1 the cell slows an entity and costs
@@ -20,8 +20,9 @@ type CellKind struct {
 	Allows Domain
 	// Solid makes the cell a physical obstacle — a body pushing everyone; see Plugin.WithCollision.
 	Solid bool
-	// Opaque blocks sight without blocking movement — a forest; see Plugin.WithCollision.
-	Opaque   bool
+	// Veil dims sight without blocking movement, 0 clear to 1 cutting it: a forest at 0.6 is looked
+	// through at 0.4 of the reach; see Plugin.WithCollision.
+	Veil     float64
 	SpriteID render.SpriteID
 	// Costs overrides Cost for entities moving in a domain — Costs[i] for the domain bit i, when
 	// set; see Costing and CostFor.

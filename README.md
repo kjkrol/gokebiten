@@ -265,8 +265,8 @@ colliding boxes at a fixed 120 TPS, with save and load on F5.
 | [`scenes-demo`](examples/scenes-demo) | A menu Stage switching into a gameplay Stage, a modal Scene over the ticking world, a non-focusable HUD | `make demo-scenes` |
 | [`navigation-demo`](examples/navigation-demo) | A board with terrain, units selected by click and marquee, right-click move orders along re-routing paths, holes the planner avoids and H opens under the units | `make demo-navigation` |
 | [`navigation-hex-demo`](examples/navigation-hex-demo) | The same on a hex board: hex cells and route arrows at 60°, a wall of merged hex bodies | `make demo-navigation-hex` |
-| [`navigation-vision-demo`](examples/navigation-vision-demo) | Navigated units with sight cones that stop at walls and forests | `make demo-navigation-vision` |
-| [`navigation-vision-hex-demo`](examples/navigation-vision-hex-demo) | The same sight cones on a hex board | `make demo-navigation-vision-hex` |
+| [`navigation-vision-demo`](examples/navigation-vision-demo) | Navigated units with sight cones that stop at walls and fade in forests, and a hawk that flies over both and sees through the forest | `make demo-navigation-vision` |
+| [`navigation-vision-hex-demo`](examples/navigation-vision-hex-demo) | The same sight cones and hawk on a hex board | `make demo-navigation-vision-hex` |
 | [`island-demo`](examples/island-demo) | An island of fields, forests, slow hills and slower mountains in a sea that drowns whoever is pushed in, larger than the window, under a zooming, panning camera | `make demo-island` |
 | [`effect-demo`](examples/effect-demo) | An ice witch under orders turns the ground round her into snow and the lake into ice, fast on her own snow; it thaws behind her, a walker follows her trail while it lasts and slips on it, a boat with weak brakes sails onto the ice it saw coming and is frozen still and pale until it melts — all of it effects | `make demo-effect` |
 | [`vision-demo`](examples/vision-demo) | Entities keeping out of each other's way by sight, and a hunter living off the ones that fail | `make demo-vision` |

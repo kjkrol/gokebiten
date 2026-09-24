@@ -16,8 +16,8 @@
 // # Cell, CellKind and Terrain
 //
 // A [CellID] names one cell; [Cell] is an entity's current one. A [CellKind] is a named terrain:
-// its movement cost, the [Domain]s it admits, whether it is solid (a wall) or opaque (a forest:
-// sight stops at it), and the sprite drawn for it; kinds are created
+// its movement cost, the [Domain]s it admits, whether it is solid (a wall) or how much it veils
+// sight (a forest), and the sprite drawn for it; kinds are created
 // through the Plugin's [CellKindDict]. Cost 1 is full speed and the baseline path weight; above 1
 // slows and costs more to plan through; below 1 is a boost a game may choose to offer.
 // [CellKind.Costing] prices a kind differently for some domains — elves through a forest, a
@@ -47,8 +47,9 @@
 //
 // Built [Plugin.WithCollision], the board makes its Solid terrain physical: every run of solid
 // cells becomes an immovable entity in the world — tagged [Plugin.Body] in board's tag [Family], with a collider and an
-// infinite mass, no sprite, no kind — so no unit ends a tick inside a wall and walls occlude sight;
-// a run of opaque cells becomes a body without a collider, occluding only.
+// infinite mass, no sprite, no kind — so no unit ends a tick inside a wall and walls cut sight;
+// a run of veiled cells becomes a body without a collider carrying a vision.Transparency of
+// 1 - Veil, so a cone fades through it; a flying observer looks over the veils with Sight.Clear.
 // A body is made of the boxes the grid gives for each cell ([Grid.CellBoxes]: one for a square,
 // [HexCapStrips] strips over each cap of a hex, covering it from outside), merged along both axes
 // up to [MaxBodyCells] a side. The bodies follow [TerrainMap.Version]; call [Plugin.RunPlan] after

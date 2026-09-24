@@ -14,12 +14,12 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
 - The camera pans in screen pixels at any zoom.
 
 **Board**
-- Terrain kinds say whom they admit (`Allows`, a bitset of `Domain`s), whether they are `Solid`
-  and `Opaque`, and what they cost per domain (`Costing`, `CostFor`); a unit's `Mover` says how it
-  moves. `Passable` is gone.
+- Terrain kinds say whom they admit (`Allows`, a bitset of `Domain`s), whether they are `Solid`,
+  how much they `Veil` sight (0 clear, 1 cutting; a forest 0.6), and what they cost per domain
+  (`Costing`, `CostFor`); a unit's `Mover` says how it moves. `Passable` is gone.
 - `WithCollision`: solid terrain becomes immovable bodies built from `Grid.CellBoxes` — one box
-  for a square, capped strips for a hex — merged up to `MaxBodyCells` a side; opaque terrain
-  occludes sight only.
+  for a square, capped strips for a hex — merged up to `MaxBodyCells` a side; veiled terrain
+  becomes bodies carrying a `vision.Transparency` of 1 - Veil, dimming sight only.
 - `Standing`, reported every tick to `plugin.Each` behaviors: the cell under an entity, its kind,
   its box; `Fell(domain)` says the entity is where it may not be.
 - `Grid.CellsUnder`, `CellBounds`, `CellOutline`; hex cells drawn as hexagons; `TerrainMap.Version`.
@@ -33,12 +33,19 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
 - `plugins/effects`: temporary changes to entities — `Grant` and `Alter` in a `Spec`, `Lasts`
   or until `Dispel`, `Cast`/`CastFor`/`Dispel`/`Has` by entity id, `Active` saved with the entity.
 - `plugins/world`: `Kinds.Reserve` and `Bodies` for kind-less entities; `Kinds.DefineTag`.
+- `vision`: sight through terrain — an entity carrying `Transparency` dims sight instead of
+  cutting it (aabbworld v1.6.0: a ray spends its radius as a budget, a forest at 0.6 takes 2.5×
+  its depth), `Sight.Clear` looks over the veils (a flyer), what cuts sight still cuts. A
+  `Sight.Radius` above `MaxSightRadius` works; only the outline is coarser.
+- Flying is a convention, not a feature: `Mover{Domain: Air}` on kinds that admit `Air`, a
+  `Collider` without `Physics` so nothing pushes the flyer, `Costing(Air, 1)`, `Sight{Clear: true}`.
 - `navigation`: route arrows every 15°, so hex steps draw true.
 - `render`: `Hexagon`; `QuadBatch` draws in chunks under the 16-bit index limit.
 
 **Demos**
 - `navigation-hex-demo`, `navigation-vision-demo`, `navigation-vision-hex-demo`, `island-demo`,
-  `effect-demo`.
+  `effect-demo`. The two vision demos have a hawk that flies over the wall and the forest and sees
+  through the forest, whose veil fades the other units' cones.
 
 ## v0.2.0 — 2026-09-22
 

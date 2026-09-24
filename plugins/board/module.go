@@ -1,6 +1,7 @@
 package board
 
 import (
+	"github.com/kjkrol/gram/plugins/vision"
 	"time"
 
 	"github.com/kjkrol/goke/v3"
@@ -11,9 +12,9 @@ var _ goke.Module = (*module)(nil)
 // module runs, every tick, the cell entities' Ground into the terrain, then the terrain bodies
 // when the plugin was built WithCollision, then the standing report.
 type module struct {
-	cells    *cellEntities
+	cells    *cellEntitySystem
 	standing *standingSystem
-	bodies   *terrainBodies
+	bodies   *terrainBodySystem
 
 	cellsRunnable    goke.Runnable
 	standingRunnable goke.Runnable
@@ -44,7 +45,12 @@ func (m *module) RunPlan(ctx goke.RunCtx, d time.Duration) {
 // SetupSystems is empty — the bodies build themselves in their own Init.
 func (m *module) SetupSystems() []goke.System { return nil }
 
-// LoadComps lists the component types board owns — see [goke.CompProvider].
+// LoadComps lists the component types board writes, so a save loads without the vision plugin —
+// see [goke.CompProvider].
 func (m *module) LoadComps() []goke.CompToken {
-	return []goke.CompToken{goke.LoadComp[Cell](), goke.LoadComp[Mover](), goke.LoadComp[Ground]()}
+	tokens := []goke.CompToken{goke.LoadComp[Cell](), goke.LoadComp[Mover](), goke.LoadComp[Ground]()}
+	if m.bodies != nil {
+		tokens = append(tokens, goke.LoadComp[vision.Transparency]())
+	}
+	return tokens
 }

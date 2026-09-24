@@ -8,54 +8,57 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/collision"
+	"github.com/kjkrol/gram/plugins/vision"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
 	"github.com/kjkrol/uid"
 )
 
-var _ goke.System = (*terrainBodies)(nil)
+var _ goke.System = (*terrainBodySystem)(nil)
 
-// terrainBodies keeps one Body per merged run of impassable cells (immovable) or opaque cells
+// terrainBodySystem keeps one Body per merged run of impassable cells (immovable) or veiled cells
 // (sight only), rebuilt whenever the terrain's version moves — including once after a load, where
 // the saved bodies are replaced.
-type terrainBodies struct {
+type terrainBodySystem struct {
 	brd         *Board
 	worldPlugin *world.Plugin
 	typeID      kind.ID
 
 	body   plugin.Tag[Family]
 	solid  *world.Bodies
-	opaque *world.Bodies
+	veiled *world.Bodies
 	query  *goke.Query
 	base   goke.Comp[world.Base]
 	marks  goke.Comp[plugin.Tags[Family]]
 
 	// Each factory gets columns of its own: a Comp handle serves one archetype.
-	solidMarks  goke.Comp[plugin.Tags[Family]]
-	opaqueMarks goke.Comp[plugin.Tags[Family]]
-	collider    goke.Comp[collision.Collider]
-	physics     goke.Comp[collision.Physics]
+	solidMarks   goke.Comp[plugin.Tags[Family]]
+	veiledMarks  goke.Comp[plugin.Tags[Family]]
+	collider     goke.Comp[collision.Collider]
+	physics      goke.Comp[collision.Physics]
+	transparency goke.Comp[vision.Transparency]
 
 	seen   uint64
 	boxes  []bodyBox
 	planes []plane.AABB
+	veils  []float64
 	ids    []uid.UID64
 }
 
-func newTerrainBodies(brd *Board, worldPlugin *world.Plugin, typeID kind.ID, body plugin.Tag[Family]) *terrainBodies {
-	return &terrainBodies{brd: brd, worldPlugin: worldPlugin, typeID: typeID, body: body, seen: math.MaxUint64}
+func newTerrainBodySystem(brd *Board, worldPlugin *world.Plugin, typeID kind.ID, body plugin.Tag[Family]) *terrainBodySystem {
+	return &terrainBodySystem{brd: brd, worldPlugin: worldPlugin, typeID: typeID, body: body, seen: math.MaxUint64}
 }
 
-func (s *terrainBodies) Init(si *goke.SysInit) {
+func (s *terrainBodySystem) Init(si *goke.SysInit) {
 	s.solid = s.worldPlugin.NewBodies(si, s.typeID, &s.collider, &s.physics, &s.solidMarks)
-	s.opaque = s.worldPlugin.NewBodies(si, s.typeID, &s.opaqueMarks)
+	s.veiled = s.worldPlugin.NewBodies(si, s.typeID, &s.veiledMarks, &s.transparency)
 	s.query = si.NewQueryBuilder(&s.base, &s.marks).Build()
 	if len(s.present()) == 0 {
 		s.spawn()
 	}
 }
 
-func (s *terrainBodies) Update(cb *goke.CmdBuf, _ time.Duration) {
+func (s *terrainBodySystem) Update(cb *goke.CmdBuf, _ time.Duration) {
 	if s.brd.Version() == s.seen {
 		return
 	}
@@ -66,7 +69,7 @@ func (s *terrainBodies) Update(cb *goke.CmdBuf, _ time.Duration) {
 }
 
 // present lists every body there is right now.
-func (s *terrainBodies) present() []uid.UID64 {
+func (s *terrainBodySystem) present() []uid.UID64 {
 	s.ids = s.ids[:0]
 	s.query.All()
 	for s.query.Next() {
@@ -82,7 +85,7 @@ func (s *terrainBodies) present() []uid.UID64 {
 }
 
 // spawn materializes the terrain as it stands and remembers which version that was.
-func (s *terrainBodies) spawn() {
+func (s *terrainBodySystem) spawn() {
 	s.boxes = terrainBoxes(s.brd, s.boxes)
 	tagged := plugin.Tags[Family](0).With(s.body)
 	s.solid.Spawn(s.planesOf(true), func(i int, _ uid.UID64, cursor *goke.Cursor) {
@@ -90,19 +93,25 @@ func (s *terrainBodies) spawn() {
 		s.physics.Slice(cursor)[i] = collision.Physics{Mass: math.Inf(1)}
 		s.solidMarks.Slice(cursor)[i] = tagged
 	})
-	s.opaque.Spawn(s.planesOf(false), func(i int, _ uid.UID64, cursor *goke.Cursor) { s.opaqueMarks.Slice(cursor)[i] = tagged })
+	n := 0
+	s.veiled.Spawn(s.planesOf(false), func(i int, _ uid.UID64, cursor *goke.Cursor) {
+		s.veiledMarks.Slice(cursor)[i] = tagged
+		s.transparency.Slice(cursor)[i] = vision.Transparency{Value: 1 - min(s.veils[n], 1)}
+		n++
+	})
 	s.seen = s.brd.Version()
 }
 
-// planesOf lists the boxes of the solid or the opaque bodies as space rectangles.
-func (s *terrainBodies) planesOf(solid bool) []plane.AABB {
-	s.planes = s.planes[:0]
+// planesOf lists the boxes of the solid or the veiled bodies as space rectangles, with their veils.
+func (s *terrainBodySystem) planesOf(solid bool) []plane.AABB {
+	s.planes, s.veils = s.planes[:0], s.veils[:0]
 	for _, b := range s.boxes {
 		if b.solid != solid {
 			continue
 		}
 		size := b.box.BottomRight.Sub(b.box.TopLeft)
 		s.planes = append(s.planes, plane.NewAABB(b.box.TopLeft, size.X, size.Y))
+		s.veils = append(s.veils, b.veil)
 	}
 	return s.planes
 }

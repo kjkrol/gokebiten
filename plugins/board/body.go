@@ -14,16 +14,17 @@ type Family struct{}
 const MaxBodyCells = 16
 
 // bodyBox is one body in the making: its box, the terrain kind it is made of, whether it is solid
-// or only blocks sight, and how many pieces the current merge pass folded into it.
+// or only veils sight, and how many pieces the current merge pass folded into it.
 type bodyBox struct {
 	box   geom.AABB
 	kind  string
 	solid bool
+	veil  float64
 	count int
 }
 
-// embodied reports whether cells of k become bodies: solid ones push, opaque ones block sight.
-func embodied(k CellKind) bool { return k.Solid || k.Opaque }
+// embodied reports whether cells of k become bodies: solid ones push, veiled ones dim sight.
+func embodied(k CellKind) bool { return k.Solid || k.Veil > 0 }
 
 // terrainBoxes lists every embodied cell's boxes merged into as few bodies as MaxBodyCells allows.
 func terrainBoxes(brd *Board, dst []bodyBox) []bodyBox {
@@ -32,7 +33,7 @@ func terrainBoxes(brd *Board, dst []bodyBox) []bodyBox {
 	visit := func(c CellID, k CellKind) {
 		boxes = brd.CellBoxes(c, boxes[:0])
 		for _, b := range boxes {
-			dst = append(dst, bodyBox{box: b, kind: k.Name, solid: k.Solid})
+			dst = append(dst, bodyBox{box: b, kind: k.Name, solid: k.Solid, veil: k.Veil})
 		}
 	}
 	if embodied(brd.Default) {

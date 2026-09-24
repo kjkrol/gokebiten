@@ -58,6 +58,7 @@ type bodiesWorld struct {
 	base  goke.Comp[world.Base]
 	body  goke.OptComp[plugin.Tags[board.Family]]
 	sight goke.OptComp[vision.Sight]
+	tau   goke.OptComp[vision.Transparency]
 	q     *goke.Query
 }
 
@@ -129,7 +130,7 @@ func newBodiesWorld(t *testing.T, grid board.Grid, width, height uint32, terrain
 		systems = append(systems, produce()...)
 	}
 	systems = append(systems, goke.SystemFn{OnInit: func(si *goke.SysInit) {
-		bw.q = si.NewQueryBuilder(&bw.base).Optional(&bw.body).Optional(&bw.sight).Build()
+		bw.q = si.NewQueryBuilder(&bw.base).Optional(&bw.body).Optional(&bw.sight).Optional(&bw.tau).Build()
 	}})
 	ctx.ecs.Setup(systems...)
 	ctx.ecs.SetPlan(func(rc goke.RunCtx, d time.Duration) {
@@ -333,15 +334,21 @@ func TestBodies_OccludeSight(t *testing.T) {
 	}
 }
 
-func TestBodies_AnOpaqueCellOnlyBlocksSight(t *testing.T) {
-	grid := board.DefaultGrids{}.Square(6, 16, cellSize)
+// forestColumn is grass with a forest down column 3, veiling sight by veil.
+func forestColumn(grid board.Grid, veil float64) func(*board.Board) {
 	cell := func(x, y uint32) board.CellID { c, _ := grid.CellIndex(x, y); return c }
-	forest := func(brd *board.Board) {
+	return func(brd *board.Board) {
 		brd.SetAll(board.CellKind{Name: "grass", Cost: 1, Allows: board.Land})
 		for y := uint32(1); y <= 14; y++ {
-			brd.Set(cell(3, y), board.CellKind{Name: "forest", Cost: 1, Allows: board.Land, Opaque: true})
+			brd.Set(cell(3, y), board.CellKind{Name: "forest", Cost: 1, Allows: board.Land, Veil: veil})
 		}
 	}
+}
+
+func TestBodies_AFullyVeiledCellOnlyBlocksSight(t *testing.T) {
+	grid := board.DefaultGrids{}.Square(6, 16, cellSize)
+	cell := func(x, y uint32) board.CellID { c, _ := grid.CellIndex(x, y); return c }
+	forest := forestColumn(grid, 1)
 	observer := mover{cell: cell(1, 7), sight: &vision.Sight{Facing: east, HalfAngle: math.Pi / 8, Radius: 300}}
 	target := mover{cell: cell(5, 7)}
 	bw := newBodiesWorld(t, grid, 6*cellSize, 16*cellSize, forest, []mover{observer, target})
@@ -366,5 +373,94 @@ func TestBodies_AnOpaqueCellOnlyBlocksSight(t *testing.T) {
 	}
 	if _, units := walker.snapshot(); units[0].TopLeft.X < float64(4*cellSize) {
 		t.Errorf("unit ends at %v, want it past the forest column", units[0])
+	}
+}
+
+// A forest column one cell (32) thick at Veil 0.6 costs 80 of reach: the target two cells past it
+// is 165 away in budget terms and 117 as the crow flies.
+func TestBodies_AVeilDimsSightByItsDepth(t *testing.T) {
+	grid := board.DefaultGrids{}.Square(6, 16, cellSize)
+	cell := func(x, y uint32) board.CellID { c, _ := grid.CellIndex(x, y); return c }
+	forest := forestColumn(grid, 0.6)
+	target := mover{cell: cell(5, 7)}
+	look := func(radius float64, clear bool) vision.Sighted {
+		observer := mover{cell: cell(1, 7), sight: &vision.Sight{Facing: east, HalfAngle: math.Pi / 8, Radius: radius, Clear: clear}}
+		bw := newBodiesWorld(t, grid, 6*cellSize, 16*cellSize, forest, []mover{observer, target})
+		bw.tick()
+		seen, ok := bw.seen()
+		if !ok {
+			t.Fatal("no observer")
+		}
+		for _, id := range seen.IDs[:seen.Count] {
+			if bw.isBody(id) {
+				t.Errorf("radius %v: the forest %d is listed as seen", radius, id)
+			}
+		}
+		return seen
+	}
+
+	if seen := look(160, false); seen.Count != 0 {
+		t.Errorf("at 160 through the forest saw %v, want nothing", seen.IDs[:seen.Count])
+	}
+	if seen := look(170, false); seen.Count != 1 {
+		t.Errorf("at 170 through the forest saw %d, want the target", seen.Count)
+	}
+	if seen := look(160, true); seen.Count != 1 {
+		t.Errorf("at 160 looking over the forest saw %d, want the target", seen.Count)
+	}
+}
+
+func TestBodies_AWallCutsSightWhateverTheVeils(t *testing.T) {
+	grid := board.DefaultGrids{}.Square(6, 16, cellSize)
+	cell := func(x, y uint32) board.CellID { c, _ := grid.CellIndex(x, y); return c }
+	for _, clear := range []bool{false, true} {
+		observer := mover{cell: cell(1, 7), sight: &vision.Sight{Facing: east, HalfAngle: math.Pi / 8, Radius: 300, Clear: clear}}
+		bw, _ := squareWorld(t, observer, mover{cell: cell(5, 7)})
+		bw.tick()
+		if seen, ok := bw.seen(); !ok || seen.Count != 1 || !bw.isBody(seen.IDs[0]) {
+			t.Errorf("clear %v: saw %v through the wall, want the wall alone", clear, seen.IDs[:seen.Count])
+		}
+	}
+}
+
+func TestBodies_VeiledBodiesCarryTheirTransparency(t *testing.T) {
+	grid := board.DefaultGrids{}.Square(6, 16, cellSize)
+	cell := func(x, y uint32) board.CellID { c, _ := grid.CellIndex(x, y); return c }
+	bw := newBodiesWorld(t, grid, 6*cellSize, 16*cellSize, func(brd *board.Board) {
+		forestColumn(grid, 0.6)(brd)
+		brd.Set(cell(3, 0), board.CellKind{Name: "wall", Cost: 1, Solid: true})
+	}, []mover{{cell: cell(1, 7)}})
+	bw.tick()
+
+	walls, forests, units := 0, 0, 0
+	for bw.q.All(); bw.q.Next(); {
+		cur := bw.q.Cursor()
+		bases, marks := bw.base.Slice(cur), bw.body.Slice(cur)
+		for i, id := range cur.IDs {
+			var tau *vision.Transparency
+			if bw.tau.Present(cur) {
+				tau = &bw.tau.Slice(cur)[i]
+			}
+			switch {
+			case marks == nil || !marks[i].Has(bw.brd.Body()):
+				units++
+				if tau != nil {
+					t.Errorf("unit %d carries a Transparency", id)
+				}
+			case bases[i].Caps&aabbworld.CanCollide != 0:
+				walls++
+				if tau != nil {
+					t.Errorf("wall %d carries a Transparency %v, want none: it cuts", id, tau.Value)
+				}
+			default:
+				forests++
+				if tau == nil || math.Abs(tau.Value-0.4) > 1e-9 {
+					t.Errorf("forest %d carries %v, want a Transparency of 0.4", id, tau)
+				}
+			}
+		}
+	}
+	if walls != 1 || forests < 1 || units != 1 {
+		t.Errorf("found %d walls, %d forests, %d units; want 1, some, 1", walls, forests, units)
 	}
 }

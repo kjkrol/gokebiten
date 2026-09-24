@@ -10,7 +10,8 @@ const MaxSeen = 8
 
 // Sizing of the outline buffer: the first three decide MaxSamples.
 const (
-	// MaxSightRadius is the longest range the outline is sized for.
+	// MaxSightRadius is the longest range the outline is sized for; a longer Radius still sees,
+	// its outline is only coarser.
 	MaxSightRadius = 300
 	// MaxHalfAngleMilli is the widest half-angle the sizing assumes, in milliradians (pi/6).
 	MaxHalfAngleMilli = 524
@@ -29,8 +30,14 @@ type Sight struct {
 	Facing    geom.Vec // unit vector
 	HalfAngle float64  // radians either side of Facing
 	Radius    float64  // world units
-	Seen      Sighted  // nearest first
+	// Clear looks over whatever only dims sight — a flyer over a forest; what cuts sight still does.
+	Clear bool
+	Seen  Sighted // nearest first
 }
+
+// Transparency is how see-through an entity is to a Sight: 0 cuts sight as an entity without it
+// does, 1 is as if absent, between them a ray through it spends 1/Value of its reach per unit.
+type Transparency struct{ Value float64 }
 
 // Sighted is what one scan found, nearest first. Count says how many of the
 // arrays are in use.

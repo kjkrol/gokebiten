@@ -130,10 +130,10 @@ func TestHexGrid_CellOutlineAndBounds(t *testing.T) {
 	}
 }
 
-func TestTerrainBoxes_OpaqueCellsAreBodiesButNotSolid(t *testing.T) {
+func TestTerrainBoxes_VeiledCellsAreBodiesButNotSolid(t *testing.T) {
 	brd := wallBoard(3, 1, func(x, y uint32) bool { return x == 0 })
 	c, _ := brd.CellIndex(2, 0)
-	brd.Set(c, CellKind{Name: "forest", Allows: Land, Opaque: true})
+	brd.Set(c, CellKind{Name: "forest", Allows: Land, Veil: 0.6})
 	got := terrainBoxes(brd, nil)
 	if len(got) != 2 {
 		t.Fatalf("%d bodies, want a wall and a forest", len(got))
@@ -144,6 +144,11 @@ func TestTerrainBoxes_OpaqueCellsAreBodiesButNotSolid(t *testing.T) {
 	}
 	if !solid["wall"] || solid["forest"] {
 		t.Errorf("solid by kind = %v, want wall solid and forest not", solid)
+	}
+	for _, b := range got {
+		if b.kind == "forest" && b.veil != 0.6 {
+			t.Errorf("forest body veil = %v, want 0.6", b.veil)
+		}
 	}
 }
 

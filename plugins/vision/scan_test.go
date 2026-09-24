@@ -35,15 +35,22 @@ func (c *installCtx) Setup(providers ...goke.SetupProvider) {
 func (c *installCtx) RegSys(factory func() goke.System) goke.Runnable { return c.ecs.RegSys(factory()) }
 func (c *installCtx) ECS() *goke.ECS                                  { return c.ecs }
 
-// spawn describes one entity the fixture puts in the world.
+// spawn describes one entity the fixture puts in the world: a 10×10 box unless size says
+// otherwise, cutting sight unless tau says how see-through it is.
 type spawn struct {
 	x, y    float64
+	size    float64
+	tau     float64
 	sight   *vision.Sight // nil for something that is merely seen
 	outline bool
 }
 
-func at(x, y float64) world.Position {
-	return world.Position{AABB: plane.NewAABB(geom.NewVec(x, y), 10, 10)}
+func at(d spawn) world.Position {
+	size := d.size
+	if size == 0 {
+		size = 10
+	}
+	return world.Position{AABB: plane.NewAABB(geom.NewVec(d.x, d.y), size, size)}
 }
 
 // scene installs world+vision, spawns everything, ticks once; returns observers and what they saw.
@@ -66,8 +73,11 @@ func scene(t *testing.T, spawns ...spawn) ([]uid.UID64, []vision.Sighted, []visi
 
 	for i, s := range spawns {
 		spec := kind.Spec{
-			kind.Load(func(d spawn) world.Position { return at(d.x, d.y) }),
+			kind.Load(at),
 			kind.Const(world.Velocity{}),
+		}
+		if s.tau > 0 {
+			spec = append(spec, kind.Const(vision.Transparency{Value: s.tau}))
 		}
 		if s.sight != nil {
 			spec = append(spec, kind.Const(*s.sight))

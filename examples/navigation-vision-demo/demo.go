@@ -1,5 +1,6 @@
-// Command navigation-vision-demo puts sight on navigated units: their cones stop at the wall
-// and at the forest, both terrain bodies the board made solid or opaque.
+// Command navigation-vision-demo puts sight on navigated units: their cones stop at the wall and
+// fade in the forest, both terrain bodies the board made; a hawk flies over both and sees through
+// the forest.
 package main
 
 import (
@@ -51,7 +52,7 @@ func NewDemo() *Demo { return &Demo{stage: &mainStage{}} }
 
 func (d *Demo) Props() game.Props {
 	return game.Props{
-		Title:       "gram — sight across a board: walls and forests occlude",
+		Title:       "gram — sight across a board: walls cut, forests dim, a hawk flies over",
 		ScreenWidth: ScreenWidth, ScreenHeight: ScreenHeight,
 		TargetTPS: TPS,
 	}
@@ -76,6 +77,7 @@ type mainStage struct {
 	vision    *vision.Plugin
 	unitTag   plugin.Tag[units]
 	kinds     []kind.Of[unit]
+	hawk      kind.Of[unit]
 	noticed   map[[2]uid.UID64]bool
 	stack     game.Scenes
 }
@@ -101,10 +103,10 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	grid := board.DefaultGrids{}.Square(GridWidth, GridHeight, CellSize)
 	s.board = board.NewPlugin(grid, &board.SingleOccupancy{}, s.world).WithCollision(s.collision)
 	s.board.CellKindDict().Create(
-		board.CellKind{Name: "grass", Cost: 2, Allows: board.Land},
-		board.CellKind{Name: "wall", Cost: 1, Solid: true},
-		board.CellKind{Name: "forest", Cost: 3, Allows: board.Land, Opaque: true},
-		board.CellKind{Name: "road", Cost: 1, Allows: board.Land},
+		board.CellKind{Name: "grass", Cost: 2, Allows: board.Land | board.Air}.Costing(board.Air, 1),
+		board.CellKind{Name: "wall", Cost: 1, Solid: true, Allows: board.Air},
+		board.CellKind{Name: "forest", Cost: 3, Allows: board.Land | board.Air, Veil: 0.6}.Costing(board.Air, 1),
+		board.CellKind{Name: "road", Cost: 1, Allows: board.Land | board.Air},
 	)
 	if err := ctx.Use(s.board); err != nil {
 		return err
@@ -157,7 +159,9 @@ var unitColors = []color.RGBA{
 	{R: 230, G: 200, B: 80, A: 255},
 }
 
-// defineKinds says what this game's entities are: one kind per colour, all scouts.
+var hawkColor = color.RGBA{R: 120, G: 130, B: 60, A: 255}
+
+// defineKinds says what this game's entities are: one kind per colour, all scouts, and a hawk.
 func (s *mainStage) defineKinds() {
 	brd := s.board.Res.Logic.Board
 	occupancy := s.board.Occupancy()
@@ -179,6 +183,28 @@ func (s *mainStage) defineKinds() {
 	names := []string{"red", "blue", "yellow"}
 	for _, name := range names {
 		s.kinds = append(s.kinds, kind.Define[unit](s.world.Kinds(), name, spec))
+	}
+	s.hawk = kind.Define[unit](s.world.Kinds(), "hawk", s.hawkSpec())
+}
+
+// hawkSpec is a flyer: it moves in Air, nothing pushes it (a Collider without Physics) and its
+// sight is Clear of veils.
+func (s *mainStage) hawkSpec() kind.Spec {
+	brd := s.board.Res.Logic.Board
+	occupancy := s.board.Occupancy()
+	return kind.Spec{
+		kind.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(brd, u.start, EntitySize)} }),
+		kind.Const(world.Velocity{}),
+		kind.Const(world.Steering{MaxSpeed: UnitSpeed * 1.5, Accel: UnitSpeed * 2, Brake: UnitSpeed * 4, V0: UnitSpeed / 2, TurnRate: 0.1}),
+		kind.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
+		kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }).
+			WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id) }),
+		kind.Tagged(s.selection.Tags().Selectable),
+		kind.Const(collision.Collider{}),
+		kind.Const(board.Mover{Domain: board.Air}),
+		kind.Const(vision.Sight{Facing: geom.NewVec(1, 0), HalfAngle: sightHalf, Radius: sightRadius, Clear: true}),
+		kind.Const(vision.SightOutline{}),
+		kind.Tagged(s.unitTag),
 	}
 }
 
@@ -215,6 +241,8 @@ func (s *mainStage) Spawn() error {
 		s.kinds[0].Entry(unit{start: cell(2, 4), target: cell(GridWidth-3, 4)}),
 		s.kinds[1].Entry(unit{start: cell(2, 12), target: cell(GridWidth-3, 12)}),
 		s.kinds[2].Entry(unit{start: cell(GridWidth-3, gapRow), target: cell(2, gapRow)}),
+		// The hawk crosses the wall and the second forest head-on.
+		s.hawk.Entry(unit{start: cell(1, 11), target: cell(GridWidth-2, 11)}),
 	)
 	return nil
 }
@@ -262,6 +290,7 @@ func (m *mainScene) Layers() []render.Renderer {
 	for i, k := range s.kinds {
 		worldAtlas.RegisterAt(k.SpriteID(), EntitySize, render.Solid(unitColors[i]))
 	}
+	worldAtlas.RegisterAt(s.hawk.SpriteID(), EntitySize, render.Diamond(hawkColor))
 	worldAtlas.Close()
 	s.world.WithRenderer(worldAtlas)
 

@@ -102,7 +102,7 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	s.board.CellKindDict().Create(
 		board.CellKind{Name: "water", Cost: 1, Allows: board.Water},
 		board.CellKind{Name: "field", Cost: 1.5, Allows: board.Land},
-		board.CellKind{Name: "forest", Cost: 3, Allows: board.Land, Opaque: true},
+		board.CellKind{Name: "forest", Cost: 3, Allows: board.Land, Veil: 0.6},
 		board.CellKind{Name: "hills", Cost: 4, Allows: board.Land},
 		board.CellKind{Name: "mountain", Cost: 8, Allows: board.Land},
 		board.CellKind{Name: "road", Cost: 1, Allows: board.Land},
