@@ -13,6 +13,19 @@ type flatAtlas struct{}
 func (flatAtlas) Atlas() *ebiten.Image                            { return nil }
 func (flatAtlas) UV(render.SpriteID) (sx0, sy0, sx1, sy1 float32) { return 0, 0, 1, 1 }
 
+func TestSlopeShade_LightsTheTileFromTheUpperLeft(t *testing.T) {
+	level := slopeShade([4]float32{5, 5, 5, 5})
+	if level != shadeLevel {
+		t.Errorf("a level tile is shaded %v, want %v", level, shadeLevel)
+	}
+	if rising := slopeShade([4]float32{0, 10, 0, 10}); rising >= level { // rises towards the right, away from the light
+		t.Errorf("a tile rising to the right is shaded %v, want darker than level %v", rising, level)
+	}
+	if facing := slopeShade([4]float32{10, 0, 10, 0}); facing <= level { // rises towards the left, into the light
+		t.Errorf("a tile rising to the left is shaded %v, want brighter than level %v", facing, level)
+	}
+}
+
 func TestRenderer_Submit_OneQuadPerVisibleCellAtItsAltitude(t *testing.T) {
 	grid := DefaultGrids{}.Square(4, 4, 32)
 	brd := NewBoard(grid, NewTerrainMap())

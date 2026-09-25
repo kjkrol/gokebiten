@@ -51,7 +51,8 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
   gains sight cones and the hawk on the Air plane.
 - On a square grid the ground slopes between cells: `Board.Corners` (each corner the mean of the
   cells meeting there), `GroundAt` interpolated, tiles drawn tilted, faces only where a top stands
-  above its neighbour's. `Grid.Coords` inverts `CellIndex`.
+  above its neighbour's, lit from the upper left: a slope rising towards the light is brighter, one
+  falling away darker. `Grid.Coords` inverts `CellIndex`.
 
 **Heights**
 - `world.Config{Quasi3D: true}` gives a world heights; the default is flat and no plugin guesses

@@ -40,10 +40,14 @@ type Renderer struct {
 }
 
 // Shades of a block's faces against its top: the side facing down-right and the one facing
-// down-left, as if lit from the upper left.
+// down-left, as if lit from the upper left; a level tile is drawn at shadeLevel, so a slope
+// rising towards the light can be brighter and one falling away darker (shadePerUnit per world
+// unit of rise across the cell).
 const (
-	shadeRight = 0.72
-	shadeLeft  = 0.55
+	shadeRight   = 0.72
+	shadeLeft    = 0.55
+	shadeLevel   = 0.92
+	shadePerUnit = 0.012
 )
 
 type gridLine struct{ x0, y0, x1, y1 float32 }
@@ -100,8 +104,20 @@ func (l *Renderer) Submit(sink *render.Sink) {
 				sink.Shaded(depth, l.atlas, kind.SpriteID, l.face(x0, y1, x1, y1, top[2], top[3], fa, fb), shadeLeft)
 			}
 		}
-		sink.Quad(depth, l.atlas, kind.SpriteID, l.sloped(x0, y0, x1, y1, top))
+		shade := float32(1)
+		if l.relief {
+			shade = slopeShade(top)
+		}
+		sink.Shaded(depth, l.atlas, kind.SpriteID, l.sloped(x0, y0, x1, y1, top), shade)
 	})
+}
+
+// slopeShade lights a tile from the upper left: level at shadeLevel, brighter where it rises
+// towards the light (up and to the left), darker where it falls away.
+func slopeShade(top [4]float32) float32 {
+	rise := (top[1] + top[3] - top[0] - top[2]) / 2 // along x, towards the right
+	rise += (top[2] + top[3] - top[0] - top[1]) / 2 // along y, downwards
+	return min(max(shadeLevel-shadePerUnit*rise, 0.45), 1)
 }
 
 // Overlay strokes the grid over a sorted picture, each cell's outline on the ground at its corner

@@ -74,8 +74,8 @@
 // on how many a game has. On a square grid the ground runs smoothly between cells: each corner
 // stands at the mean altitude of the cells that meet there ([Board.Corners]), GroundAt reads
 // between a cell's corners, a hill has slopes and a unit on a slope stands at its height; the
-// renderer draws the tiles sloped and faces only where a top stands above its neighbour's — a
-// wall over grass, a raised edge over the sea. A flat world refuses an Altitude, a Height or a
+// renderer draws the tiles sloped, lit from the upper left so the relief reads, and faces only
+// where a top stands above its neighbour's — a wall over grass, a raised edge over the sea. A flat world refuses an Altitude, a Height or a
 // Lift where it first meets one.
 //
 // # Occupancy

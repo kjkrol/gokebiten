@@ -277,7 +277,7 @@ func (m *mainScene) Layers() []render.Renderer {
 	}
 	boardAtlas.Close()
 	s.board.WithRenderer(boardAtlas)
-	s.board.Res.Render.ShowGridLines = false
+	s.board.Res.Render.ShowGridLines = true // B toggles it; the grid shows the relief best
 
 	pathAtlas, pathSprites := navigation.RegisterDefaultPathSprites(CellSize, 2, color.RGBA{R: 255, G: 140, B: 0, A: 255})
 	s.nav.SetPathSprites(pathSprites)
