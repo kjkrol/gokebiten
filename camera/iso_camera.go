@@ -46,6 +46,10 @@ func newIsoCamera(proj Isometric, world geom.Vec, viewport AABB, edges aabbworld
 
 func (c *isoCamera) Projection() Projection { return c.proj }
 
+func (c *isoCamera) Viewport() (float32, float32) {
+	return float32(c.viewportSize.X), float32(c.viewportSize.Y)
+}
+
 func (c *isoCamera) Project(x, y, z float32) (float32, float32) {
 	sx, sy := c.proj.Project(x, y, z)
 	return sx*c.zoom + float32(c.pan.X), sy*c.zoom + float32(c.pan.Y)

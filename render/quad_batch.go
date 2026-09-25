@@ -61,7 +61,7 @@ func (b *QuadBatch) AppendQuad(x0, y0, x1, y1 float32, id SpriteID) {
 // AppendCorners appends the sprite over four screen corners already projected — top-left,
 // top-right, bottom-left, bottom-right — for a quad that is no rectangle on screen.
 func (b *QuadBatch) AppendCorners(dst Corners, id SpriteID) {
-	sx0, sy0, sx1, sy1 := b.atlas.UV(id)
+	sx0, sy0, sx1, sy1 := inset(b.atlas.UV(id))
 	if len(b.vertices)-b.chunk == chunkVertices {
 		b.chunk = len(b.vertices)
 	}

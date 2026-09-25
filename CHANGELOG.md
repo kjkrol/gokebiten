@@ -34,7 +34,8 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
 - `camera.Projection`: `TopDown` (the default, unchanged) and `Isometric` (Transport Tycoon's 2:1
   diamonds, heights lifting a point); `Camera.Project/Unproject/Depth` and `Projection()`,
   `camera.Config.Projection`. An isometric camera keeps a screen window over the projected world
-  and refuses a wrapping one.
+  and refuses a wrapping one. `Camera.Viewport` is the screen in pixels; players read it for edge
+  scrolling instead of deriving it from the world bounds.
 - `render.Sorted` draws several `render.Submitter`s back to front by depth as one picture; the
   board's and the world's renderers submit their quads (cells at their altitude, entities at their
   `Z.Altitude`) besides drawing them as before.

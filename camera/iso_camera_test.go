@@ -53,6 +53,18 @@ func isoCamera(t *testing.T, edges aabbworld.Edges) camera.Camera {
 	return camera.NewFromSpaceWithConfig(640, 640, edges, camera.Config{ViewportWidth: 400, ViewportHeight: 300, Projection: iso})
 }
 
+func TestCameras_ReportTheirViewportInPixels(t *testing.T) {
+	for name, cam := range map[string]camera.Camera{
+		"isometric": isoCamera(t, 0),
+		"top-down":  camera.NewFromSpaceWithConfig(640, 640, 0, camera.Config{ViewportWidth: 400, ViewportHeight: 300}),
+	} {
+		cam.ZoomIn(2, 320, 320)
+		if w, h := cam.Viewport(); w != 400 || h != 300 {
+			t.Errorf("%s: Viewport = %v x %v after zooming, want the 400 x 300 screen", name, w, h)
+		}
+	}
+}
+
 func TestIsoCamera_RefusesAWrappingWorld(t *testing.T) {
 	defer func() {
 		if recover() == nil {

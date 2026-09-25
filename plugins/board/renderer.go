@@ -56,6 +56,7 @@ func abs32(v float32) float32 {
 }
 
 var _ render.Submitter = (*Renderer)(nil)
+var _ render.Overlayer = (*Renderer)(nil)
 
 func newRenderer(cam camera.Camera, board *Board, atlas render.AtlasSource, state *RenderState) *Renderer {
 	w, h := board.CellBounds()
@@ -100,6 +101,32 @@ func (l *Renderer) Submit(sink *render.Sink) {
 			}
 		}
 		sink.Quad(depth, l.atlas, kind.SpriteID, l.sloped(x0, y0, x1, y1, top))
+	})
+}
+
+// Overlay strokes the grid over a sorted picture, each cell's outline on the ground at its corner
+// heights, when ShowGridLines is on.
+func (l *Renderer) Overlay(screen *ebiten.Image) {
+	if !l.state.ShowGridLines {
+		return
+	}
+	l.eachVisible(func(c CellID) {
+		center := l.board.CellCenter(c)
+		x0, y0 := float32(center.X-l.cellW/2), float32(center.Y-l.cellH/2)
+		x1, y1 := float32(center.X+l.cellW/2), float32(center.Y+l.cellH/2)
+		var z [4]float32
+		if hs, _, _, ok := l.board.Corners(c); ok {
+			for i := range z {
+				z[i] = float32(hs[i])
+			}
+		} else {
+			alt := float32(l.board.Altitude(c))
+			z = [4]float32{alt, alt, alt, alt}
+		}
+		p := l.sloped(x0, y0, x1, y1, z)
+		// the two edges towards the viewer; the neighbours draw the other two
+		vector.StrokeLine(screen, p[1][0], p[1][1], p[3][0], p[3][1], 1, colorGridLine, false)
+		vector.StrokeLine(screen, p[2][0], p[2][1], p[3][0], p[3][1], 1, colorGridLine, false)
 	})
 }
 

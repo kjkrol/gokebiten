@@ -39,7 +39,7 @@ func (s *Sink) Quad(depth float32, atlas AtlasSource, id SpriteID, dst Corners) 
 
 // Shaded is Quad with the colour scaled by shade (1 as drawn, 0.5 half as bright): a cliff face.
 func (s *Sink) Shaded(depth float32, atlas AtlasSource, id SpriteID, dst Corners, shade float32) {
-	u0, v0, u1, v1 := atlas.UV(id)
+	u0, v0, u1, v1 := inset(atlas.UV(id))
 	s.items = append(s.items, item{depth: depth, atlas: atlas.Atlas(), first: len(s.verts)})
 	for i, c := range dst {
 		su, sv := u0, v0
@@ -77,6 +77,18 @@ func (s *Sink) sorted() []int {
 		return 0
 	})
 	return s.order
+}
+
+// inset pulls a sprite's source rectangle in by half a texel, so the edge of a quad drawn at an
+// angle never samples the neighbouring sprite of the sheet and shows a seam.
+func inset(sx0, sy0, sx1, sy1 float32) (float32, float32, float32, float32) {
+	return sx0 + 0.5, sy0 + 0.5, sx1 - 0.5, sy1 - 0.5
+}
+
+// Overlayer is a Submitter with something to draw over the sorted picture — grid lines, say —
+// which Sorted calls after drawing it.
+type Overlayer interface {
+	Overlay(screen *ebiten.Image)
 }
 
 // Sorted is a Renderer drawing several Submitters as one picture, back to front by depth: the
@@ -133,6 +145,11 @@ func (s *Sorted) Draw(screen *ebiten.Image) {
 		s.indices = append(s.indices, idx, idx+1, idx+2, idx+1, idx+2, idx+3)
 	}
 	s.flush(screen, atlas)
+	for _, sub := range s.subs {
+		if o, ok := sub.(Overlayer); ok {
+			o.Overlay(screen)
+		}
+	}
 }
 
 func (s *Sorted) flush(screen, atlas *ebiten.Image) {

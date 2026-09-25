@@ -10,7 +10,7 @@ import (
 type sheet struct{ img *ebiten.Image }
 
 func (s sheet) Atlas() *ebiten.Image                   { return s.img }
-func (sheet) UV(SpriteID) (sx0, sy0, sx1, sy1 float32) { return 0, 0, 1, 1 }
+func (sheet) UV(SpriteID) (sx0, sy0, sx1, sy1 float32) { return 0, 0, 32, 32 }
 
 // depths is a Submitter that submits one unit quad per depth given, in order.
 type depths struct {
@@ -64,7 +64,7 @@ func TestSorted_RefusesARendererThatOnlyDraws(t *testing.T) {
 func TestSink_ShadedScalesTheColour(t *testing.T) {
 	var s Sink
 	s.Shaded(0, sheet{}, 0, Corners{{0, 0}, {2, 0}, {0, 2}, {2, 2}}, 0.5)
-	if len(s.verts) != 4 || s.verts[3].DstX != 2 || s.verts[3].SrcX != 1 || s.verts[3].ColorR != 0.5 {
-		t.Errorf("vertices %+v, want four corners with UV 0..1 at half brightness", s.verts)
+	if len(s.verts) != 4 || s.verts[3].DstX != 2 || s.verts[0].SrcX != 0.5 || s.verts[3].SrcX != 31.5 || s.verts[3].ColorR != 0.5 {
+		t.Errorf("vertices %+v, want four corners sampling half a texel inside 0..32 at half brightness", s.verts)
 	}
 }

@@ -35,6 +35,8 @@ type Camera interface {
 	Unproject(sx, sy, z float32) (x, y float32)
 	// Depth orders drawing through the projection: further back is smaller, drawn first.
 	Depth(x, y, z float32) float32
+	// Viewport is the screen the camera draws to, in pixels.
+	Viewport() (w, h float32)
 	ToScreen(x, y float32) (float32, float32)
 	// FromScreen inverts ToScreen: screen coordinates back to world coordinates.
 	FromScreen(sx, sy float32) (float32, float32)
@@ -184,6 +186,10 @@ func windowOffset(x, ref, ww, ws float32) float32 {
 }
 
 func (c *basicCamera) Projection() Projection { return TopDown{} }
+
+func (c *basicCamera) Viewport() (float32, float32) {
+	return float32(c.viewportSize.X), float32(c.viewportSize.Y)
+}
 
 // Project is ToScreen: a top-down view draws no height.
 func (c *basicCamera) Project(x, y, _ float32) (float32, float32) { return c.ToScreen(x, y) }

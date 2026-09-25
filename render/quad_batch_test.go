@@ -57,8 +57,9 @@ func TestQuadBatch_IndicesRestartPerChunk(t *testing.T) {
 func TestQuadBatch_AppendCornersTakesTheScreenPointsAsGiven(t *testing.T) {
 	batch := NewQuadBatch(fakeAtlasSource{}, camera.NewFromSpace(1024, 1024, 0))
 	batch.AppendCorners(Corners{{10, 0}, {20, 5}, {0, 15}, {10, 20}}, 0)
-	if len(batch.vertices) != 4 || batch.vertices[1].DstX != 20 || batch.vertices[2].DstY != 15 || batch.vertices[3].SrcX != 1 {
-		t.Errorf("vertices %+v, want the four corners as given with the sprite's UV", batch.vertices)
+	sx0, _, sx1, _ := fakeAtlasSource{}.UV(0)
+	if len(batch.vertices) != 4 || batch.vertices[1].DstX != 20 || batch.vertices[2].DstY != 15 || batch.vertices[0].SrcX != sx0+0.5 || batch.vertices[3].SrcX != sx1-0.5 {
+		t.Errorf("vertices %+v, want the four corners as given sampling half a texel inside the sprite", batch.vertices)
 	}
 }
 
