@@ -26,6 +26,9 @@
 // Restitution (the share of approach speed given back, 0 to 1; a pair uses the lower). An entity
 // without Physics is only ever detected — a town, a trigger. Separation is always an even split.
 //
+// Collision brings a Collider and a Physics to every unit through the world's kind.Roster; a game
+// drops the Physics of a unit nothing pushes with comp.Without.
+//
 // # ShapeTest
 //
 // A [ShapeTest] ([Plugin.WithShapeTest]) is asked once per overlapping pair, with both sides as

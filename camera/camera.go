@@ -27,6 +27,16 @@ func FromScreenRect(cam Camera, sx0, sy0, sx1, sy1 float32) (x0, y0, x1, y1 floa
 // Camera is what renderers, plain click/drag logic, and Runtime need:
 // screen conversion, culling, viewport bounds, and control (move/zoom).
 type Camera interface {
+	// Projection is the mapping this camera draws through — TopDown unless configured otherwise.
+	Projection() Projection
+	// Project maps the world point (x, y) at height z to the screen; ToScreen is Project at 0.
+	Project(x, y, z float32) (sx, sy float32)
+	// Unproject inverts Project at height z; FromScreen is Unproject at 0.
+	Unproject(sx, sy, z float32) (x, y float32)
+	// Depth orders drawing through the projection: further back is smaller, drawn first.
+	Depth(x, y, z float32) float32
+	// Viewport is the screen the camera draws to, in pixels.
+	Viewport() (w, h float32)
 	ToScreen(x, y float32) (float32, float32)
 	// FromScreen inverts ToScreen: screen coordinates back to world coordinates.
 	FromScreen(sx, sy float32) (float32, float32)
@@ -68,6 +78,9 @@ type Config struct {
 	MinZoom float32
 	// MaxZoom caps ZoomIn; 0 leaves it unrestricted.
 	MaxZoom float32
+	// Projection is what the camera draws through: nil is TopDown; an Isometric refuses a
+	// wrapping world.
+	Projection Projection
 }
 
 // State is a Camera's persistable visible window and zoom.
@@ -76,7 +89,7 @@ type State struct {
 	Zoom     float32
 }
 
-// basicCamera is Camera's only implementation — construct via NewFromSpace.
+// basicCamera is the TopDown Camera — construct via NewFromSpace.
 type basicCamera struct {
 	world        geom.Vec
 	viewportSize geom.Vec // fixed size at zoom 1 (e.g. screen size)
@@ -114,13 +127,22 @@ func NewFromSpace(width, height uint32, edges aabbworld.Edges, viewport ...AABB)
 	return newBasicCamera(geom.NewVec(float64(width), float64(height)), vp, edges)
 }
 
-// NewFromSpaceWithConfig is NewFromSpace with cfg's viewport size and zoom limits.
+// NewFromSpaceWithConfig is NewFromSpace with cfg's viewport size, zoom limits and projection.
 func NewFromSpaceWithConfig(width, height uint32, edges aabbworld.Edges, cfg Config) Camera {
 	var viewport []AABB
 	if cfg.ViewportWidth != 0 && cfg.ViewportHeight != 0 {
 		viewport = []AABB{geom.NewAABBAt(geom.NewVec(0, 0), float64(cfg.ViewportWidth), float64(cfg.ViewportHeight))}
 	}
-	cam := NewFromSpace(width, height, edges, viewport...)
+	var cam Camera
+	if iso, ok := cfg.Projection.(Isometric); ok {
+		vp := geom.NewAABBAt(geom.NewVec(0, 0), float64(width), float64(height))
+		if len(viewport) > 0 {
+			vp = viewport[0]
+		}
+		cam = newIsoCamera(iso, geom.NewVec(float64(width), float64(height)), vp, edges)
+	} else {
+		cam = NewFromSpace(width, height, edges, viewport...)
+	}
 	if cfg.MinZoom > 0 {
 		cam.SetMinZoom(cfg.MinZoom)
 	}
@@ -162,6 +184,21 @@ func windowOffset(x, ref, ww, ws float32) float32 {
 	}
 	return fwd
 }
+
+func (c *basicCamera) Projection() Projection { return TopDown{} }
+
+func (c *basicCamera) Viewport() (float32, float32) {
+	return float32(c.viewportSize.X), float32(c.viewportSize.Y)
+}
+
+// Project is ToScreen: a top-down view draws no height.
+func (c *basicCamera) Project(x, y, _ float32) (float32, float32) { return c.ToScreen(x, y) }
+
+// Unproject is FromScreen at any height.
+func (c *basicCamera) Unproject(sx, sy, _ float32) (float32, float32) { return c.FromScreen(sx, sy) }
+
+// Depth is the world y: further up the screen is drawn first.
+func (c *basicCamera) Depth(_, y, _ float32) float32 { return y }
 
 func (c *basicCamera) ToScreen(x, y float32) (float32, float32) {
 	if c.edges.WrapsX() {

@@ -13,6 +13,7 @@ import (
 	"github.com/kjkrol/gram/internal/engine"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 )
 
 // typeStage defines its kinds in whatever order it is given, so two runs can
@@ -50,8 +51,8 @@ func (g *typeStage) Init(ctx game.Initializer) error {
 	g.kinds = map[string]kind.Of[struct{}]{}
 	for _, name := range g.order {
 		g.kinds[name] = kind.Define[struct{}](g.world.Kinds(), name, kind.Spec{
-			kind.Const(world.Position{AABB: plane.NewAABB(geom.NewVec(100, 100), 10, 10)}),
-			kind.Const(world.Velocity{}),
+			comp.Const(world.Position{AABB: plane.NewAABB(geom.NewVec(100, 100), 10, 10)}),
+			comp.Const(world.Velocity{}),
 		})
 	}
 	return nil

@@ -12,6 +12,7 @@ import (
 	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 )
 
 // moods is a tag family of the test's own.
@@ -57,9 +58,9 @@ func (g *tagStage) Init(ctx game.Initializer) error {
 		tags = append(tags, g.tags[name])
 	}
 	g.unit = kind.Define[struct{}](g.world.Kinds(), "unit", kind.Spec{
-		kind.Const(world.Position{AABB: plane.NewAABB(geom.NewVec(100, 100), 10, 10)}),
-		kind.Const(world.Velocity{}),
-		kind.Tagged(tags...),
+		comp.Const(world.Position{AABB: plane.NewAABB(geom.NewVec(100, 100), 10, 10)}),
+		comp.Const(world.Velocity{}),
+		comp.Tagged(tags...),
 	})
 	return nil
 }

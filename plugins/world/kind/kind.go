@@ -4,8 +4,12 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/gram/render"
 )
+
+// Spec is the definition of one kind: the components every entity of it carries — see package comp.
+type Spec []comp.Comp
 
 // ID identifies an entity's kind at runtime, carried on every entity a world spawns —
 // the one trace of its kind that outlives spawning. Define assigns one per kind, in call order.
@@ -30,7 +34,7 @@ type Of[P any] struct {
 func Define[P any](reg Registry, name string, spec Spec) Of[P] {
 	row := reflect.TypeFor[P]()
 	for _, c := range spec {
-		if read := c.rowType(); read != nil && read != row {
+		if read := comp.RowOf(c); read != nil && read != row {
 			panic(fmt.Sprintf("kind: %q: a Load reads %v, but its rows are %v", name, read, row))
 		}
 	}

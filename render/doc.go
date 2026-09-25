@@ -17,9 +17,19 @@
 // [Solid], [Border], [Diamond], [Cross], [Hexagon], [Dot] and [Arrow] are ready-made drawers. [AtlasSource]
 // is what a batch draws from: the sheet and each [SpriteID]'s UV rectangle.
 //
+// # Sorted
+//
+// A [Sorted] is a Renderer over several [Submitter]s — renderers that hand their quads to a
+// [Sink] with a depth each instead of drawing — and draws them back to front as one picture, one
+// DrawTriangles per run of quads sharing a sheet. It is the layer of an isometric view, where the
+// terrain and the entities interleave and a wall in front hides a unit behind it; the board's and
+// the world's renderers submit. Ties keep submission order, so a unit follows the tile it stands on.
+//
 // # QuadBatch
 //
 // A [QuadBatch] gathers textured quads from an AtlasSource, transformed through a camera.Camera,
-// into one DrawTriangles call. [VisitWrapImages] visits each image of a box on a wrapping world,
+// into one DrawTriangles call; AppendCorners takes four screen points already projected.
+// [ProjectCorners] projects a world box at a height through a camera, [Billboard] is a sprite
+// standing upright on a projected point — how an isometric view draws its entities. [VisitWrapImages] visits each image of a box on a wrapping world,
 // so a sprite straddling a seam is drawn on both sides.
 package render

@@ -11,6 +11,7 @@ import (
 	"github.com/kjkrol/gram/plugins/collision"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/uid"
 )
 
@@ -36,9 +37,9 @@ func TestCollider_AttachedAndDetachedMidGame(t *testing.T) {
 	}
 
 	town := kind.Define[float64](w.Kinds(), "town", kind.Spec{
-		kind.Load(func(x float64) world.Position { return posAt(x, 100, 10, 10) }),
-		kind.Const(world.Velocity{}),
-		kind.Const(collision.Collider{}),
+		comp.Load(func(x float64) world.Position { return posAt(x, 100, 10, 10) }),
+		comp.Const(world.Velocity{}),
+		comp.Const(collision.Collider{}),
 	})
 	w.Seed(town.Entry(100), town.Entry(105))
 	if err := w.Populate(); err != nil {

@@ -1,4 +1,4 @@
-package kind
+package comp
 
 import "github.com/kjkrol/gram/plugin"
 

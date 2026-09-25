@@ -1,10 +1,12 @@
 package board
 
 import (
-	"github.com/kjkrol/aabbworld"
+	"strings"
 	"testing"
 
+	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/gram/plugins/world"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 )
 
 func TestNewPlugin_SetsEachGridAxisFromTheWorldsEdges(t *testing.T) {
@@ -44,6 +46,22 @@ func newSeedTestPlugin(t *testing.T) (*Plugin, CellID) {
 	)
 	cell, _ := grid.CellIndex(2, 2)
 	return p, cell
+}
+
+func TestNewPlugin_RequiresACellAndAMoverOfEveryUnit(t *testing.T) {
+	w := world.NewPlugin(world.Config{Space: world.SpaceCfg{Width: 100, Height: 100}, Entities: world.EntitiesCfg{MaxCount: 1, MinSize: 10, MaxSize: 10}})
+	NewPlugin(DefaultGrids{}.Square(2, 2, 32), &MultipleOccupancy{}, w)
+	defer func() {
+		msg, _ := recover().(string)
+		for _, want := range []string{"board requires board.Cell (the cell it starts in)", "board requires board.Mover (the domains it moves in)"} {
+			if !strings.Contains(msg, want) {
+				t.Errorf("panic %q does not mention %q", msg, want)
+			}
+		}
+	}()
+
+	w.Roster().Unit.Spec(comp.Const(world.Position{}))
+	t.Error("the roster accepted a unit without a Cell and a Mover")
 }
 
 func TestPlugin_SeedPopulate_AppliesLayout(t *testing.T) {

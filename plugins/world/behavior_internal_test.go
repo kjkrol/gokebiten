@@ -9,7 +9,7 @@ import (
 	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/plugin"
-	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 )
 
 // behaviorTag marks the one kind TestBehavior_Include applies to.
@@ -51,7 +51,7 @@ func (b *driveVelocity) Update(*goke.CmdBuf, time.Duration) {
 	}
 }
 
-func spawnAt(wm *module, x float64, extras ...kind.Comp) {
+func spawnAt(wm *module, x float64, extras ...comp.Comp) {
 	pos := Position{AABB: plane.NewAABB(geom.NewVec(x, 100), 10, 10)}
 	wm.populate(testKind(pos, Velocity{}, extras...), []any{nil})
 }
@@ -115,7 +115,7 @@ func TestBehavior_IncludeVisitsOnlyTaggedEntities(t *testing.T) {
 	wm := testWorld()
 	wm.RegisterBehavior(b)
 	spawnAt(wm, 100)
-	spawnAt(wm, 300, kind.Const(behaviorTag{}))
+	spawnAt(wm, 300, comp.Const(behaviorTag{}))
 
 	tickWorld(t, wm)
 	if b.visited != 1 {

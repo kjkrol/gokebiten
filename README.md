@@ -73,7 +73,7 @@ and a few system libraries; Ebitengine uses cgo on most platforms).
 | **World** | `plugins/world` | Every entity's `Base` (position, velocity, kind, capabilities); movement under stop, wrap or open edges; the shared spatial index and camera; spawning from kinds |
 | **Kinds** | `plugins/world/kind` | `Define` a kind from a `Spec` of `Const` and `Load` components; `Entry` rows onto the roster |
 | **Collisions** | `plugins/collision` | A `CollisionSystem` over the world's space: `Collider` to take part, `Physics` to bounce and be pushed apart, a `ShapeTest` to refine, `Meeting`/`Struck` for behaviors |
-| **Sight** | `plugins/vision` | A `Sight` cone scanned each tick into `Seen`, nearest first; `Sighting` behaviors per observer; drawn outlines |
+| **Sight** | `plugins/vision` | A `Sight` cone scanned each tick into `Seen`, nearest first; `Sighting` behaviors per observer; drawn outlines; in a Quasi3D world the eye looks over walls, forests and hills by height |
 | **Board and navigation** | `plugins/board`, `plugins/navigation` | Square or hex grid with terrain and occupancy; `MoveOrder` paths that re-route when terrain changes |
 | **Selection** | `plugins/selection` | A `Select` command into a `Selected` tag, with default bindings (click, marquee, shift-add) and a highlight renderer |
 | **Players** | `plugins/players` | Who acts: a camera and view per player, the plugins' default bindings gathered and bound, input translated into typed commands the defining plugins drain |
@@ -154,10 +154,10 @@ func (a *arena) Init(ctx game.Initializer) error {
 		Entities: world.EntitiesCfg{MaxCount: boxCount, MinSize: boxSize, MaxSize: boxSize},
 	})
 	a.boxes = kind.Define[box](a.world.Kinds(), "box", kind.Spec{
-		kind.Load(func(b box) world.Position { return b.pos }),
-		kind.Load(func(b box) world.Velocity { return b.vel }),
-		kind.Const(collision.Collider{}),
-		kind.Const(collision.Physics{Restitution: 1}),
+		comp.Load(func(b box) world.Position { return b.pos }),
+		comp.Load(func(b box) world.Velocity { return b.vel }),
+		comp.Const(collision.Collider{}),
+		comp.Const(collision.Physics{Restitution: 1}),
 	})
 
 	a.collision = collision.NewPlugin(a.world)
@@ -268,7 +268,8 @@ colliding boxes at a fixed 120 TPS, with save and load on F5.
 | [`navigation-hex-demo`](examples/navigation-hex-demo) | The same on a hex board: hex cells and route arrows at 60°, a wall of merged hex bodies | `make demo-navigation-hex` |
 | [`navigation-vision-demo`](examples/navigation-vision-demo) | Navigated units with sight cones that stop at walls and fade in forests, and a hawk that flies over both and sees through the forest | `make demo-navigation-vision` |
 | [`navigation-vision-hex-demo`](examples/navigation-vision-hex-demo) | The same sight cones and hawk on a hex board | `make demo-navigation-vision-hex` |
-| [`island-demo`](examples/island-demo) | An island of fields, forests, slow hills and slower mountains in a sea that drowns whoever is pushed in, larger than the window, under a zooming, panning camera | `make demo-island` |
+| [`island-demo`](examples/island-demo) | An island of fields, forests, slow hills and slower mountains in a sea that drowns whoever is pushed in, larger than the window, under a zooming, panning camera; units with sight cones and a hawk on the Air plane | `make demo-island` |
+| [`island-isometric-demo`](examples/island-isometric-demo) | The same island in a Quasi3D world through an isometric camera: hills and mountains stand up with sloping sides, forests are blocks, units billboards, and the hawk 40 up looks over what a walker's cone climbs and stops at | `make demo-island-isometric` |
 | [`effect-demo`](examples/effect-demo) | An ice witch under orders turns the ground round her into snow and the lake into ice, fast on her own snow; it thaws behind her, a walker follows her trail while it lasts and slips on it, a boat with weak brakes sails onto the ice it saw coming and is frozen still and pale until it melts — all of it effects | `make demo-effect` |
 | [`vision-demo`](examples/vision-demo) | Entities keeping out of each other's way by sight, and a hunter living off the ones that fail | `make demo-vision` |
 
@@ -302,7 +303,7 @@ plugin's own constructors: `collision.Between(a, b, fn)` for every pair it meets
 carries tag `a` and the other `b` (`plugin.Any` as the wildcard), `board.Each[T](fn)` for every
 entity carrying `T`, `world.Every(fn)` for every entity the payload's host visits. A tag
 is a bit of a family — one `plugin.Tags[F]` component per family, named through `Kinds.DefineTag`,
-given to a kind with `kind.Tagged` — so markers cost no component types of their own. Ready-made
+given to a kind with `comp.Tagged` — so markers cost no component types of their own. Ready-made
 behaviors live in `plugins/collision/behavior` and `plugins/vision/behavior`; which tags they run
 between is the registration's to say. What a player *wants* goes the other way, as a command:
 the plugin that defines the type (`navigation.MoveTo`, `selection.Select`) is a `plugin.Commander`
@@ -312,7 +313,12 @@ the Commanders and carries what a player's bindings, an AI or a network issue.
 ## Kinds, spawning and saves
 
 `kind.Define[Row](world.Kinds(), "name", kind.Spec{...})` says what an entity is: each component
-`kind.Const(v)` (the same for all) or `kind.Load(func(row Row) T)` (read from that entity's row).
+`comp.Const(v)` (the same for all) or `comp.Load(func(row Row) T)` (read from that entity's row).
+A unit over a board is defined through `board.NewUnits[Row](brd, size, at)`:
+`units.Define(name, domain, steering, extra...)` derives `Position` and `Cell` from the one point
+`at` reads off a row and `Mover` and `Layers` from the one domain, then runs the world's roster —
+what the plugins in the game bring by default (a `Collider`, a `Physics`, a `Velocity`) and what
+they require (`Cell`, `Mover`, `Steering`), a Spec missing one panicking by plugin and reason.
 `Spawn` puts entries on the world's roster with `Seed`; the engine spawns them only when
 `Restore` loaded nothing. `Attach` and `Detach` are the mid-game counterparts of `Const`. Kinds
 tell save files every component type their entities carry, so a game's own tags and state

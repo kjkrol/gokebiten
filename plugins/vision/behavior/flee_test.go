@@ -13,6 +13,7 @@ import (
 	"github.com/kjkrol/gram/plugins/vision/behavior"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 )
 
 // fleeBody is a test entity: where it is, which way it is going (a zero dir is
@@ -59,11 +60,11 @@ func fleeRunWith(t *testing.T, tune func(*behavior.Flee), runner fleeBody, facin
 	}
 
 	runners := kind.Define[fleeBody](w.Kinds(), "runner", kind.Spec{
-		kind.Load(fleeAt),
-		kind.Const(world.Velocity{Dir: facing, Value: 1}),
-		kind.Const(vision.Sight{Facing: facing, HalfAngle: math.Pi / 2.5, Radius: 600}),
-		kind.Const(world.Steering{}),
-		kind.Tagged(tags.Skittish),
+		comp.Load(fleeAt),
+		comp.Const(world.Velocity{Dir: facing, Value: 1}),
+		comp.Const(vision.Sight{Facing: facing, HalfAngle: math.Pi / 2.5, Radius: 600}),
+		comp.Const(world.Steering{}),
+		comp.Tagged(tags.Skittish),
 	})
 	moving := func(d fleeBody) world.Velocity {
 		if d.dir == (geom.Vec{}) {
@@ -71,8 +72,8 @@ func fleeRunWith(t *testing.T, tune func(*behavior.Flee), runner fleeBody, facin
 		}
 		return world.Velocity{Dir: d.dir, Value: 1}
 	}
-	harmless := kind.Define[fleeBody](w.Kinds(), "threat", kind.Spec{kind.Load(fleeAt), kind.Load(moving)})
-	predators := kind.Define[fleeBody](w.Kinds(), "predator", kind.Spec{kind.Load(fleeAt), kind.Load(moving), kind.Tagged(tags.Threat)})
+	harmless := kind.Define[fleeBody](w.Kinds(), "threat", kind.Spec{comp.Load(fleeAt), comp.Load(moving)})
+	predators := kind.Define[fleeBody](w.Kinds(), "predator", kind.Spec{comp.Load(fleeAt), comp.Load(moving), comp.Tagged(tags.Threat)})
 
 	w.Seed(runners.Entry(runner))
 	for _, th := range threats {

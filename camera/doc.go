@@ -12,6 +12,16 @@
 // [NewFromSpace] builds one over a width x height world with aabbworld edge rules, viewing all of
 // it by default; [NewFromSpaceWithConfig] takes a [Config] with a viewport size and zoom limits.
 //
+// # Projection
+//
+// A [Projection] is the arithmetic a Camera draws through: [TopDown] (screen x and y are world x
+// and y, the default) or [Isometric] (the 2:1 view of Transport Tycoon: a Cell-sized square is a
+// TileW x TileH diamond, heights lift a point HeightUnit screen units per world unit). Every Camera
+// exposes Project (a world point at a height), Unproject and Depth (further back is smaller), and
+// ToScreen and FromScreen are the two at height 0; Viewport is the screen it draws to, in pixels. Config.Projection picks it; an Isometric camera
+// keeps a screen window over the projected world instead of a world rectangle, refuses a wrapping
+// world, and ToScreenQuads gives the rectangle round the diamond a world box projects to.
+//
 // # State
 //
 // [State] is the persistable part — the viewport and zoom — which the Camera hands to saves

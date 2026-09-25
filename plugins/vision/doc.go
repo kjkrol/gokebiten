@@ -21,6 +21,16 @@
 // still seen — a hawk with Blockers of Air looks over walls, forests and walkers, a walker with
 // Blockers of Land under the hawk. Zero Blockers make every entity count.
 //
+// # Heights
+//
+// In a Quasi3D world (world.Config.Quasi3D) sight follows geometry instead of planes: the cone's
+// eye is the observer's Z.Altitude plus Sight.Eye, every entity spans its world.Z, and the ground
+// is the world's Ground sampled every [Plugin.WithGroundStep] along a ray (default: the board's
+// cell). An entity is seen when the line from the eye to its top clears every nearer ground
+// sample and every nearer blocking band within the budget, so a hawk 40 up looks over the wall, the
+// forest and the hill a walker's cone stops at. Blockers are refused in a Quasi3D world, Eye in a
+// flat one. The scan costs about three times the flat one; a longer ground step is cheaper.
+//
 // # Sighting
 //
 // A [Between] behavior registered here is run once a tick per observer carrying tag a,
@@ -31,6 +41,10 @@
 // ones, and their tags, are in plugins/vision/behavior.
 //
 // # SightOutline and Renderer
+//
+// The Renderer drapes each fan over the world's Ground when it has one ([Renderer.WithGround]):
+// the apex at the observer's altitude, the boundary on the ground under it, so through an
+// isometric camera a cone climbs a hill.
 //
 // An entity also carrying [SightOutline] has its view's shape computed: a reach per evenly spaced
 // angle across the cone. The [Renderer] draws it through the camera in a [ConeStyle]

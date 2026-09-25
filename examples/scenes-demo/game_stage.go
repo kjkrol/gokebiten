@@ -17,6 +17,7 @@ import (
 	"github.com/kjkrol/gram/game"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/gram/render"
 )
 
@@ -59,8 +60,8 @@ func (g *GameplayStage) Init(ctx game.Initializer) error {
 	velocity := world.Velocity{}
 	velocity.SetDelta(geom.NewVec(30, 20))
 	g.mover = kind.Define[world.Position](g.world.Kinds(), "mover", kind.Spec{
-		kind.Load(func(p world.Position) world.Position { return p }),
-		kind.Const(velocity),
+		comp.Load(func(p world.Position) world.Position { return p }),
+		comp.Const(velocity),
 	})
 
 	worldScn := &worldScene{stage: g}

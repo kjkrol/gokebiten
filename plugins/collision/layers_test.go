@@ -9,6 +9,7 @@ import (
 	"github.com/kjkrol/gram/plugins/collision"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 )
 
 type layered struct {
@@ -36,11 +37,11 @@ func layersRun(t *testing.T, a, b world.Layers) (met bool, gap float64) {
 		t.Fatal(err)
 	}
 	boxes := kind.Define[layered](w.Kinds(), "box", kind.Spec{
-		kind.Load(func(b layered) world.Position { return posAt(b.x, 500, 10, 10) }),
-		kind.Const(world.Velocity{}),
-		kind.Const(collision.Collider{}),
-		kind.Load(func(b layered) world.Layers { return b.layers }),
-		kind.Const(collision.Physics{}),
+		comp.Load(func(b layered) world.Position { return posAt(b.x, 500, 10, 10) }),
+		comp.Const(world.Velocity{}),
+		comp.Const(collision.Collider{}),
+		comp.Load(func(b layered) world.Layers { return b.layers }),
+		comp.Const(collision.Physics{}),
 	})
 	w.Seed(boxes.Entry(layered{x: 100, layers: a}), boxes.Entry(layered{x: 104, layers: b}))
 	if err := w.Populate(); err != nil {

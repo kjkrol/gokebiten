@@ -62,10 +62,16 @@ type Renderer struct {
 	worldW, worldH float32
 	wraps          bool
 
+	// groundOf finds the world's Ground when drawing starts; a fan is draped over it.
+	groundOf func() world.Ground
+	ground   world.Ground
+	grounded bool
+
 	query *goke.Query
 	base  goke.Comp[world.Base]
 	sight goke.Comp[Sight]
 	out   goke.Comp[SightOutline]
+	z     goke.OptComp[world.Z]
 
 	pts []ebiten.Vertex // rebuilt per entity, kept to stay off the heap
 }
@@ -79,6 +85,12 @@ func NewRenderer(cam camera.Camera, space *aabbworld.Space) *Renderer {
 	}
 }
 
+// WithGround has the fans follow the ground heights groundOf gives when drawing starts.
+func (r *Renderer) WithGround(groundOf func() world.Ground) *Renderer {
+	r.groundOf = groundOf
+	return r
+}
+
 // Style reports how cones are currently drawn.
 func (r *Renderer) Style() ConeStyle { return r.style }
 
@@ -89,35 +101,47 @@ func (r *Renderer) WithStyle(style ConeStyle) *Renderer {
 }
 
 func (r *Renderer) Init(si *goke.SysInit) {
-	r.query = si.NewQueryBuilder(&r.base, &r.sight, &r.out).Build()
+	r.query = si.NewQueryBuilder(&r.base, &r.sight, &r.out).Optional(&r.z).Build()
 }
 
 func (r *Renderer) Draw(screen *ebiten.Image) {
+	if !r.grounded {
+		r.grounded = true
+		if r.groundOf != nil {
+			r.ground = r.groundOf()
+		}
+	}
 	r.query.All()
 	for r.query.Next() {
 		cursor := r.query.Cursor()
 		bases := r.base.Slice(cursor)
 		sights := r.sight.Slice(cursor)
 		outlines := r.out.Slice(cursor)
+		zs := r.z.Slice(cursor)
 
 		for i := range cursor.IDs {
 			if outlines[i].Count < 2 || !r.camera.Visible(bases[i].Pos.AABB.AABB) {
 				continue
 			}
-			r.drawCone(screen, &bases[i].Pos, &sights[i], &outlines[i])
+			alt := float32(0)
+			if zs != nil {
+				alt = float32(zs[i].Altitude)
+			}
+			r.drawCone(screen, &bases[i].Pos, alt, &sights[i], &outlines[i])
 		}
 	}
 }
 
-// drawCone draws one entity's view once per image of the world it reaches into.
-func (r *Renderer) drawCone(screen *ebiten.Image, pos *world.Position, s *Sight, o *SightOutline) {
+// drawCone draws one entity's view once per image of the world it reaches into; on a world that
+// does not wrap the fan is draped over the ground from the observer's altitude.
+func (r *Renderer) drawCone(screen *ebiten.Image, pos *world.Position, alt float32, s *Sight, o *SightOutline) {
 	ox, oy := centreOf(pos)
-	sx, sy := r.camera.ToScreen(float32(ox), float32(oy))
 
 	if !r.wraps {
-		r.style.Draw(screen, r.fan(sx, sy, s, o))
+		r.style.Draw(screen, r.draped(float32(ox), float32(oy), alt, s, o))
 		return
 	}
+	sx, sy := r.camera.ToScreen(float32(ox), float32(oy))
 
 	zoom := r.camera.Zoom()
 	box := r.space.WrapAABB(r.coneBox(ox, oy, s.Radius))
@@ -136,7 +160,30 @@ func (r *Renderer) coneBox(ox, oy, radius float64) geom.AABB {
 	)
 }
 
-// fan rebuilds the boundary around an already-projected anchor from the stored reaches.
+// draped projects the fan point by point: the apex at the observer's altitude, the boundary on the
+// ground under it (flat at 0 without a Ground).
+func (r *Renderer) draped(ox, oy, alt float32, s *Sight, o *SightOutline) []ebiten.Vertex {
+	facing := math.Atan2(s.Facing.Y, s.Facing.X)
+	step := 2 * s.HalfAngle / float64(o.Count-1)
+
+	ax, ay := r.camera.Project(ox, oy, alt)
+	r.pts = append(r.pts[:0], ebiten.Vertex{DstX: ax, DstY: ay})
+	for i := range int(o.Count) {
+		a := facing - s.HalfAngle + float64(i)*step
+		d := float64(o.Depths[i])
+		x, y := ox+float32(d*math.Cos(a)), oy+float32(d*math.Sin(a))
+		z := float32(0)
+		if r.ground != nil {
+			z = float32(r.ground.At(geom.NewVec(float64(x), float64(y))))
+		}
+		px, py := r.camera.Project(x, y, z)
+		r.pts = append(r.pts, ebiten.Vertex{DstX: px, DstY: py})
+	}
+	return r.pts
+}
+
+// fan rebuilds the boundary around an already-projected anchor from the stored reaches, for the
+// images of a cone on a wrapping world.
 func (r *Renderer) fan(sx, sy float32, s *Sight, o *SightOutline) []ebiten.Vertex {
 	facing := math.Atan2(s.Facing.Y, s.Facing.X)
 	step := 2 * s.HalfAngle / float64(o.Count-1)

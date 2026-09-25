@@ -1,6 +1,10 @@
 package board
 
-import "github.com/kjkrol/gram/render"
+import (
+	"fmt"
+
+	"github.com/kjkrol/gram/render"
+)
 
 // Terrain reports one cell's terrain kind, independent of the Grid's topology.
 type Terrain interface {
@@ -25,8 +29,11 @@ type CellKind struct {
 	Veil float64
 	// Veils is whom the Veil dims, as world.Layers: a forest veiling Land is looked over from Air.
 	// Zero veils everyone.
-	Veils    Domain
-	SpriteID render.SpriteID
+	Veils Domain
+	// Altitude is the ground level of the cell and Height what stands on it (a wall, a forest), in
+	// a Quasi3D world; a flat world refuses either — see world.Config.Quasi3D.
+	Altitude, Height float64
+	SpriteID         render.SpriteID
 	// Costs overrides Cost for entities moving in a domain — Costs[i] for the domain bit i, when
 	// set; see Costing and CostFor.
 	Costs [8]float64
@@ -72,12 +79,18 @@ type CellKindDict interface {
 type cellKindDict struct {
 	entries map[Name]CellKind
 	next    render.SpriteID
+	quasi3D bool
 }
 
-func newCellKindDict() *cellKindDict { return &cellKindDict{entries: make(map[Name]CellKind)} }
+func newCellKindDict(quasi3D bool) *cellKindDict {
+	return &cellKindDict{entries: make(map[Name]CellKind), quasi3D: quasi3D}
+}
 
 func (d *cellKindDict) Create(kinds ...CellKind) {
 	for _, k := range kinds {
+		if !d.quasi3D && (k.Altitude != 0 || k.Height != 0) {
+			panic(fmt.Sprintf("board: kind %q has an Altitude or a Height in a flat world; set world.Config.Quasi3D", k.Name.String()))
+		}
 		k.SpriteID = d.next
 		d.next++
 		d.entries[k.Name] = k

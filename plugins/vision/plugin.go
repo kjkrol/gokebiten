@@ -21,6 +21,7 @@ type Plugin struct {
 	module      *module
 	renderer    *Renderer
 	style       ConeStyle
+	groundStep  float64
 
 	sightings host.PairHost[Sighting]
 }
@@ -39,7 +40,11 @@ func NewPlugin(worldPlugin *world.Plugin) *Plugin {
 func (p *Plugin) Name() string { return "gram.vision" }
 
 func (p *Plugin) Install(ctx plugin.Installer) error {
-	p.module = newModule(p.worldPlugin.Space(), &p.sightings)
+	var h *heights
+	if p.worldPlugin.Quasi3D() {
+		h = &heights{groundOf: p.worldPlugin.Ground, step: p.groundStep}
+	}
+	p.module = newModule(p.worldPlugin.Space(), &p.sightings, h)
 	ctx.UseModule(p.module)
 	return nil
 }
@@ -49,7 +54,7 @@ func (p *Plugin) RunPlan(ctx goke.RunCtx, d time.Duration) { p.module.RunPlan(ct
 
 // WithRenderer builds the cone renderer; atlas is unused, vision draws primitives.
 func (p *Plugin) WithRenderer(render.AtlasSource) {
-	p.renderer = NewRenderer(p.camera, p.worldPlugin.Space())
+	p.renderer = NewRenderer(p.camera, p.worldPlugin.Space()).WithGround(p.worldPlugin.Ground)
 	if p.style != nil {
 		p.renderer.WithStyle(p.style)
 	}
@@ -85,5 +90,12 @@ func (p *Plugin) RegisterBehavior(behaviors ...plugin.Behavior) error {
 // WithStyle sets how cones are drawn, in place of DefaultConeStyle; call before Use.
 func (p *Plugin) WithStyle(style ConeStyle) *Plugin {
 	p.style = style
+	return p
+}
+
+// WithGroundStep sets how far apart a Quasi3D scan samples the ground along a ray, in place of the
+// board's cell; a longer step is a cheaper scan. Call before Use.
+func (p *Plugin) WithGroundStep(step float64) *Plugin {
+	p.groundStep = step
 	return p
 }

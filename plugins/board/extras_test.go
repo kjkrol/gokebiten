@@ -7,6 +7,7 @@ import (
 	"github.com/kjkrol/gram/plugins/board"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/uid"
 )
 
@@ -50,9 +51,9 @@ func TestKind_LoadWithEffect_EntersOccupancyOnSpawn(t *testing.T) {
 	plugin := world.NewPlugin(cfg)
 	placement := world.NewGridPlacement(50, 50, 8)
 	unit := kind.Define[board.CellID](plugin.Kinds(), "unit", kind.Spec{
-		kind.Const(placement.Place(0, 1)),
-		kind.Const(world.Velocity{}),
-		kind.Load(func(c board.CellID) board.Cell { return board.Cell{ID: c} }).
+		comp.Const(placement.Place(0, 1)),
+		comp.Const(world.Velocity{}),
+		comp.Load(func(c board.CellID) board.Cell { return board.Cell{ID: c} }).
 			WithEffect(func(c board.Cell, id uid.UID64) { occupancy.Enter(c.ID, id, board.Land) }),
 	})
 	plugin.Seed(unit.Entry(target))

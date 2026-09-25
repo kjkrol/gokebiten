@@ -21,18 +21,34 @@ type RenderState struct {
 // ToggleShowGridLines flips whether grid lines are drawn.
 func (r *RenderState) ToggleShowGridLines() { r.ShowGridLines = !r.ShowGridLines }
 
-// Renderer draws Board's cells — register it before the entities layer in
-// Game.Layers so terrain sits underneath.
+// Renderer draws Board's cells — register it before the entities layer in Game.Layers so terrain
+// sits underneath, or hand it to render.NewSorted, where it submits each cell as a quad at the
+// cell's altitude and depth (no grid lines there).
 type Renderer struct {
 	board     *Board
 	camera    camera.Camera
+	atlas     render.AtlasSource
 	cellW     float64
 	cellH     float64
 	state     *RenderState
 	batch     *render.QuadBatch
 	gridLines []gridLine
 	outline   []geom.Vec
+	visited   map[CellID]struct{}
+	// relief draws the sides of raised ground and of tall kinds: an isometric camera's view.
+	relief bool
 }
+
+// Shades of a block's faces against its top: the side facing down-right and the one facing
+// down-left, as if lit from the upper left; a level tile is drawn at shadeLevel, so a slope
+// rising towards the light can be brighter and one falling away darker (shadePerUnit per world
+// unit of rise across the cell).
+const (
+	shadeRight   = 0.72
+	shadeLeft    = 0.55
+	shadeLevel   = 0.92
+	shadePerUnit = 0.012
+)
 
 type gridLine struct{ x0, y0, x1, y1 float32 }
 
@@ -43,11 +59,14 @@ func abs32(v float32) float32 {
 	return v
 }
 
-var _ render.Renderer = (*Renderer)(nil)
+var _ render.Submitter = (*Renderer)(nil)
+var _ render.Overlayer = (*Renderer)(nil)
 
 func newRenderer(cam camera.Camera, board *Board, atlas render.AtlasSource, state *RenderState) *Renderer {
 	w, h := board.CellBounds()
-	return &Renderer{board: board, camera: cam, cellW: w, cellH: h, state: state, batch: render.NewQuadBatch(atlas, cam)}
+	_, iso := cam.Projection().(camera.Isometric)
+	return &Renderer{board: board, camera: cam, atlas: atlas, cellW: w, cellH: h, state: state,
+		batch: render.NewQuadBatch(atlas, cam), visited: map[CellID]struct{}{}, relief: iso}
 }
 
 func (l *Renderer) Init(*goke.SysInit) {}
@@ -55,30 +74,148 @@ func (l *Renderer) Init(*goke.SysInit) {}
 func (l *Renderer) Draw(screen *ebiten.Image) {
 	l.batch.Reset()
 	l.gridLines = l.gridLines[:0]
+	l.eachVisible(l.drawCell)
+	l.batch.Flush(screen)
+
+	for _, gl := range l.gridLines {
+		vector.StrokeLine(screen, gl.x0, gl.y0, gl.x1, gl.y1, 1, colorGridLine, false)
+	}
+}
+
+// Submit hands every visible cell to sink at the depth of its centre, so the entities standing on
+// it follow it: its top raised by its kind's Height over the ground, sloped between the corner
+// heights the board gives, and, through an isometric camera, the two faces towards the viewer
+// wherever that top stands above the neighbour's — a wall over grass, a raised edge over the sea.
+func (l *Renderer) Submit(sink *render.Sink) {
+	l.eachVisible(func(c CellID) {
+		center := l.board.CellCenter(c)
+		kind := l.board.Kind(c)
+		alt := float32(l.board.Altitude(c))
+		top := l.tops(c)
+		x0, y0 := float32(center.X-l.cellW/2), float32(center.Y-l.cellH/2)
+		x1, y1 := float32(center.X+l.cellW/2), float32(center.Y+l.cellH/2)
+		depth := l.camera.Depth(float32(center.X), float32(center.Y), alt)
+		if l.relief {
+			// the face along x = x1 shows down to the top of the neighbour across it, likewise y = y1
+			if fa, fb := l.neighbourTops(center.X+l.cellW, center.Y, 0, 2); top[1] > fa || top[3] > fb {
+				sink.Shaded(depth, l.atlas, kind.SpriteID, l.face(x1, y0, x1, y1, top[1], top[3], fa, fb), shadeRight)
+			}
+			if fa, fb := l.neighbourTops(center.X, center.Y+l.cellH, 0, 1); top[2] > fa || top[3] > fb {
+				sink.Shaded(depth, l.atlas, kind.SpriteID, l.face(x0, y1, x1, y1, top[2], top[3], fa, fb), shadeLeft)
+			}
+		}
+		shade := float32(1)
+		if l.relief {
+			shade = slopeShade(top)
+		}
+		sink.Shaded(depth, l.atlas, kind.SpriteID, l.sloped(x0, y0, x1, y1, top), shade)
+	})
+}
+
+// slopeShade lights a tile from the upper left: level at shadeLevel, brighter where it rises
+// towards the light (up and to the left), darker where it falls away.
+func slopeShade(top [4]float32) float32 {
+	rise := (top[1] + top[3] - top[0] - top[2]) / 2 // along x, towards the right
+	rise += (top[2] + top[3] - top[0] - top[1]) / 2 // along y, downwards
+	return min(max(shadeLevel-shadePerUnit*rise, 0.45), 1)
+}
+
+// Overlay strokes the grid over a sorted picture, each cell's outline on the ground at its corner
+// heights, when ShowGridLines is on.
+func (l *Renderer) Overlay(screen *ebiten.Image) {
+	if !l.state.ShowGridLines {
+		return
+	}
+	l.eachVisible(func(c CellID) {
+		center := l.board.CellCenter(c)
+		x0, y0 := float32(center.X-l.cellW/2), float32(center.Y-l.cellH/2)
+		x1, y1 := float32(center.X+l.cellW/2), float32(center.Y+l.cellH/2)
+		var z [4]float32
+		if hs, _, _, ok := l.board.Corners(c); ok {
+			for i := range z {
+				z[i] = float32(hs[i])
+			}
+		} else {
+			alt := float32(l.board.Altitude(c))
+			z = [4]float32{alt, alt, alt, alt}
+		}
+		p := l.sloped(x0, y0, x1, y1, z)
+		// the two edges towards the viewer; the neighbours draw the other two
+		vector.StrokeLine(screen, p[1][0], p[1][1], p[3][0], p[3][1], 1, colorGridLine, false)
+		vector.StrokeLine(screen, p[2][0], p[2][1], p[3][0], p[3][1], 1, colorGridLine, false)
+	})
+}
+
+// tops is the height of c's four corners with its kind standing on them: the ground's corners on a
+// sloped grid, its altitude everywhere on a flat one.
+func (l *Renderer) tops(c CellID) [4]float32 {
+	var out [4]float32
+	rise := float32(l.board.Kind(c).Height)
+	if hs, _, _, ok := l.board.Corners(c); ok {
+		for i := range out {
+			out[i] = float32(hs[i]) + rise
+		}
+		return out
+	}
+	alt := float32(l.board.Altitude(c)) + rise
+	return [4]float32{alt, alt, alt, alt}
+}
+
+// neighbourTops is the top of the cell at (x, y) at its corners a and b, the sea level 0 off the board.
+func (l *Renderer) neighbourTops(x, y float64, a, b int) (float32, float32) {
+	c, ok := l.board.CellAt(geom.NewVec(x, y))
+	if !ok {
+		return 0, 0
+	}
+	t := l.tops(c)
+	return t[a], t[b]
+}
+
+// corners projects the four corners of a world box at height z.
+func (l *Renderer) corners(x0, y0, x1, y1, z float32) render.Corners {
+	return l.sloped(x0, y0, x1, y1, [4]float32{z, z, z, z})
+}
+
+// sloped projects the four corners of a world box, each at its own height.
+func (l *Renderer) sloped(x0, y0, x1, y1 float32, z [4]float32) render.Corners {
+	var out render.Corners
+	for i, p := range [4][2]float32{{x0, y0}, {x1, y0}, {x0, y1}, {x1, y1}} {
+		out[i][0], out[i][1] = l.camera.Project(p[0], p[1], z[i])
+	}
+	return out
+}
+
+// face projects a wall from the edge (ax, ay)-(bx, by): tops topA and topB down to feet footA
+// and footB.
+func (l *Renderer) face(ax, ay, bx, by, topA, topB, footA, footB float32) render.Corners {
+	var out render.Corners
+	out[0][0], out[0][1] = l.camera.Project(ax, ay, topA)
+	out[1][0], out[1][1] = l.camera.Project(bx, by, topB)
+	out[2][0], out[2][1] = l.camera.Project(ax, ay, footA)
+	out[3][0], out[3][1] = l.camera.Project(bx, by, footB)
+	return out
+}
+
+// eachVisible calls fn once for every cell under the camera's bounds.
+func (l *Renderer) eachVisible(fn func(c CellID)) {
 	step := min(l.cellW, l.cellH) / 2
 	if step <= 0 {
 		step = 1
 	}
 	bounds := l.camera.Bounds()
-
-	visited := make(map[CellID]struct{})
+	clear(l.visited)
 	for y := float64(bounds.TopLeft.Y); y < float64(bounds.BottomRight.Y)+step; y += step {
 		for x := float64(bounds.TopLeft.X); x < float64(bounds.BottomRight.X)+step; x += step {
 			c, ok := l.board.CellAt(geom.NewVec(x, y))
 			if !ok {
 				continue
 			}
-			if _, seen := visited[c]; seen {
+			if _, seen := l.visited[c]; seen {
 				continue
 			}
-			visited[c] = struct{}{}
-			l.drawCell(c)
+			l.visited[c] = struct{}{}
+			fn(c)
 		}
-	}
-	l.batch.Flush(screen)
-
-	for _, gl := range l.gridLines {
-		vector.StrokeLine(screen, gl.x0, gl.y0, gl.x1, gl.y1, 1, colorGridLine, false)
 	}
 }
 

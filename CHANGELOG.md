@@ -30,6 +30,59 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
   domain may not keeps its order.
 - The camera pans in screen pixels at any zoom.
 
+**Isometric view**
+- `camera.Projection`: `TopDown` (the default, unchanged) and `Isometric` (Transport Tycoon's 2:1
+  diamonds, heights lifting a point); `Camera.Project/Unproject/Depth` and `Projection()`,
+  `camera.Config.Projection`. An isometric camera keeps a screen window over the projected world
+  and refuses a wrapping one. `Camera.Viewport` is the screen in pixels; players read it for edge
+  scrolling instead of deriving it from the world bounds.
+- `render.Sorted` draws several `render.Submitter`s back to front by depth as one picture; the
+  board's and the world's renderers submit their quads (cells at their altitude, entities at their
+  `Z.Altitude`) besides drawing them as before.
+- Through an isometric camera the board's renderer draws relief: raised ground shows the faces
+  towards the viewer down to its lower neighbours, tall kinds (a wall, a forest) stand as blocks.
+- Through an isometric camera entities are billboards standing on their projected centre; the
+  vision fan is draped over the ground (`vision.Renderer.WithGround`), path sprites lie on the
+  cells' diamonds and the selection highlight rounds the diamond under the unit
+  (`selection.HighlightStyle.Draw` takes the altitude). `render.QuadBatch.AppendCorners`,
+  `render.ProjectCorners`, `render.Billboard`.
+- `island-isometric-demo`: the island in a Quasi3D world through an isometric camera — hills 20 and
+  mountains 40 up with sloping sides, forests 8 tall, units upright, a hawk 40 up; `island-demo`
+  gains sight cones and the hawk on the Air plane.
+- On a square grid the ground slopes between cells: `Board.Corners` (each corner the mean of the
+  cells meeting there), `GroundAt` interpolated, tiles drawn tilted, faces only where a top stands
+  above its neighbour's, lit from the upper left: a slope rising towards the light is brighter, one
+  falling away darker. `Grid.Coords` inverts `CellIndex`.
+
+**Heights**
+- `world.Config{Quasi3D: true}` gives a world heights; the default is flat and no plugin guesses
+  the mode from the data. Entities carry `world.Z{Altitude, Height}`; a flat world refuses a Z.
+- Board: `CellKind.Altitude` (ground level) and `Height` (what stands on the cell), `Mover.Lift`,
+  `Shape{Size, Height}` for `NewUnits`, `Units.Define(name, board.Mover{Domain, Lift}, …)`. The
+  `Board` keeps a raster of altitudes (`Grid.Ordinal`, `GroundAt`) rebuilt when the terrain
+  changes and is the world's `Ground`; the board writes every `Z.Altitude` each tick from the
+  ground under the entity plus its `Lift`; terrain bodies carry their kind's `Z`.
+- Vision: `Sight.Eye`; in a Quasi3D world the cone has heights (aabbworld v1.7.0: eye, entity
+  bands, ground sampled every `Plugin.WithGroundStep`), so a hawk 40 up looks over a wall 10 tall,
+  a forest and a hill a walker's cone stops at. `Blockers` are refused in a Quasi3D world, `Eye`
+  in a flat one. Collision stays on `Layers` in both.
+- The vision demos run in a Quasi3D world with a hill; aabbworld is pinned to v1.7.0.
+
+**Kinds**
+- Package `kind/comp` holds what names one component of a Spec — `comp.Const`, `comp.Load`,
+  `comp.Tagged`, `comp.Without` — and `kind` keeps the kinds: `Spec`, `Define`, `Of`, `Roster`.
+- `world.Plugin.Roster()`: what the plugins in the game ask of a unit's kind, gathered as the
+  plugins are made. `kind.Require[T](role, by, why)` names what the game must supply (world:
+  `Position`; board: `Cell`, `Mover`; navigation: `Steering`), `Role.Default` what a plugin brings
+  (world: `Velocity{}`; collision: `Collider{}`, `Physics{}`; `comp.Without[T]()` drops one).
+  `Roster().Unit.Spec(own...)` builds the Spec and panics naming every requirement left unmet, by
+  plugin and reason.
+- `board.NewUnits[Row](brd, size, at)` and `Units.Define(name, domain, steering, extra...)`: a
+  game's units over a board are defined by where a row says they stand, the domain they move in
+  and their steering profile; `Position` and `Cell` come from the one point, `Mover` and `Layers`
+  from the one domain, the roster is run and `kind.Define` called. The demos define their units
+  through it.
+
 **Board**
 - Terrain kinds say whom they admit (`Allows`, a bitset of `Domain`s), whether they are `Solid`,
   how much they `Veil` sight (0 clear, 1 cutting; a forest 0.6), and what they cost per domain
@@ -60,7 +113,7 @@ Saves written by v0.2.0 do not load: `Base` and the marker components changed sh
   `selection.Resources`/`DefaultEventHandler`, `navigation.Resources`/`MoveCommand`/
   `DefaultCommandEventHandler`, `world.WithCameraControls`.
 - Tags are bits of families: `plugin.Tags[F]` is one component per family, `Kinds.DefineTag`
-  names the bits (saved by name), `kind.Tagged` gives them to a kind, `Between(a, b, fn)` takes
+  names the bits (saved by name), `comp.Tagged` gives them to a kind, `Between(a, b, fn)` takes
   them as values; `Selectable` and `Selected`, the vision behaviors' tags and terrain bodies are
   bits. `navigation.NewPlugin` takes the selection plugin.
 - `plugins/effects`: temporary changes to entities — `Grant` and `Alter` in a `Spec`, `Lasts`

@@ -40,7 +40,10 @@ type PathRenderer struct {
 	grid    board.Grid
 	sprites PathSprites
 	batch   *render.QuadBatch
+	camera  camera.Camera
 	space   *aabbworld.Space
+	// heights is the grid's altitudes when it has them (a Board), for laying sprites on the ground.
+	heights interface{ Altitude(board.CellID) float64 }
 
 	// finder plans the routes between queued goals for the preview; nil draws the goals alone.
 	finder   *pathFinder
@@ -59,7 +62,9 @@ type PathRenderer struct {
 var _ render.Renderer = (*PathRenderer)(nil)
 
 func NewPathRenderer(cam camera.Camera, grid board.Grid, atlas render.AtlasSource, sprites PathSprites, selected plugin.Tag[selection.Family]) *PathRenderer {
-	return &PathRenderer{grid: grid, sprites: sprites, batch: render.NewQuadBatch(atlas, cam), selected: selected}
+	r := &PathRenderer{grid: grid, sprites: sprites, batch: render.NewQuadBatch(atlas, cam), camera: cam, selected: selected}
+	r.heights, _ = grid.(interface{ Altitude(board.CellID) float64 })
+	return r
 }
 
 func (r *PathRenderer) BindSpace(space *aabbworld.Space) { r.space = space }
@@ -178,12 +183,22 @@ func (r *PathRenderer) queued(id uid.UID64, domain board.Domain, mt *MoveOrder) 
 }
 
 // appendCellSprite lays sprite as a square reaching the cell's nearest edges, so a spoke ends where
-// the neighbour's begins.
+// the neighbour's begins; through an isometric camera it lies on the ground at the cell's altitude.
 func (r *PathRenderer) appendCellSprite(c board.CellID, sprite render.SpriteID) {
 	center := r.grid.CellCenter(c)
 	w, h := r.grid.CellBounds()
 	half := min(w, h) / 2
-	r.batch.AppendQuad(float32(center.X-half), float32(center.Y-half), float32(center.X+half), float32(center.Y+half), sprite)
+	x0, y0 := float32(center.X-half), float32(center.Y-half)
+	x1, y1 := float32(center.X+half), float32(center.Y+half)
+	if _, iso := r.camera.Projection().(camera.Isometric); iso {
+		alt := float32(0)
+		if r.heights != nil {
+			alt = float32(r.heights.Altitude(c))
+		}
+		r.batch.AppendCorners(render.ProjectCorners(r.camera, x0, y0, x1, y1, alt), sprite)
+		return
+	}
+	r.batch.AppendQuad(x0, y0, x1, y1, sprite)
 }
 
 func hasPassedCenter(cellCenter, entityCenter, travel geom.Vec, width, height uint32, edges aabbworld.Edges) bool {

@@ -35,6 +35,7 @@ make demo-navigation-vision                                        # board + nav
 make demo-navigation-vision-hex                                    # the same on a hex board
 make demo-effect                                                   # an ice witch: frost and frozen as effects
 make demo-island                                                   # a map larger than the window under a moving camera
+make demo-island-isometric                                         # the island in Quasi3D through an isometric camera: relief, blocks, billboards
 make demo-scenes                                                  # go mod tidy && run examples/scenes-demo
 make demo-vision                                                  # go mod tidy && run examples/vision-demo
 make demo-minimal                                                 # the README example
@@ -72,7 +73,7 @@ with `host.PairHost[P]`/`host.EachHost[P]`. Tags are bits of a family, not compo
 holding up to 64 tags of family `F` (an empty type a plugin or a game names the family by:
 `selection.Family`, `behavior.Family` in vision, `board.Family`), `kinds.DefineTag[F](name)`
 hands out the bits by name through `world.Kinds` (saved by name, remapped on load like `TypeID`),
-`kind.Tagged(tags...)` gives them to a kind, a query over the family's `Tags` narrows to entities
+`comp.Tagged(tags...)` gives them to a kind, a query over the family's `Tags` narrows to entities
 carrying any of them, and flipping a bit is a value write seen the same tick. `Between(a, b, fn)`
 takes tags as values (`plugin.Any` for either side); a payload's `plugin.Marks` answers
 `marks.Carries(tag)` for the families the host's behaviors name. This keeps goke's
@@ -99,8 +100,8 @@ each plugin's own typed `Seed` (`world.Plugin.Seed(roster)`,
 tracked `plugin.Populator` — only when `Restore` loaded nothing. Entity kinds
 are defined in `Stage.Init` with the `plugins/world/kind` package:
 `prey := kind.Define[P](world.Kinds(), "prey", kind.Spec{...})` — a `Spec` is
-just the list of a kind's components, each `kind.Const(v)` (same for all) or
-`kind.Load(func(row P) T)` (read from that entity's row), `world.Position` and
+just the list of a kind's components, each made in `kind/comp`: `comp.Const(v)` (same for all) or
+`comp.Load(func(row P) T)` (read from that entity's row), `world.Position` and
 `world.Velocity` among them (one of each, or `Define` panics by name; so does a
 `Load` over a row type other than `P`). `Define` hands back the kind itself,
 `kind.Of[P]`: `prey.Entry(row)` builds a roster entry for `world.Plugin.Seed`
@@ -173,9 +174,20 @@ shows how much of it is boilerplate vs. real behavior.
   solver); every tick it does, `world.Each` behaviors of a `world.Leaving`
   registered on the world hear of it, and with none it is despawned; back inside
   it loses the mark.
+  `world.Roster()` is what the plugins in the game ask of a unit's kind, gathered as the plugins
+  are made: `kind.Require[T](&roster.Unit, by, why)` names what the game must supply (world:
+  `Position`; board: `Cell`, `Mover`; navigation: `Steering`), `roster.Unit.Default(comp.Const(v))`
+  what a plugin brings itself (world: `Velocity{}`; collision: `Collider{}`, `Physics{}`, dropped
+  with `comp.Without[T]()`); a game builds a unit's Spec with `roster.Unit.Spec(own...)` and a
+  missing requirement panics by plugin and reason. A plugin's requirements go in its `NewPlugin`.
   `world.Layers` are the planes an entity is on, one bit each (none, or the component absent:
   every plane); collision and vision read it, so a hawk on `Air` and a walker on `Land` neither
   push nor block each other. A world without heights is a set of planes: that is the 2D model.
+  `world.Config{Quasi3D: true}` gives the world heights: entities carry `world.Z{Altitude,
+  Height}`, the board sets the world's `Ground`, sight follows geometry (`Sight.Eye`) while
+  collision stays on planes. The dimension is the game's choice in `world.Config`; no plugin
+  guesses the mode from the data, and each refuses the other mode's facts where it first meets
+  them (a `Z` in a flat world, `Blockers` in a Quasi3D one).
   `Base` — the one component every entity carries, holding its `Position`,
   `Velocity`, `TypeID` and `Caps` (the `aabbworld.Capability` bits the space
   indexes it under; `collision` writes them), so a host hands it to whatever it
@@ -213,7 +225,18 @@ shows how much of it is boilerplate vs. real behavior.
   what it costs — `Costing(domain, cost)` prices it differently per domain, and
   `CostFor(domain)` is what a unit pays in the planner and in the Moving behavior board
   registers on the world (only entities carrying `Mover` are slowed); a unit's
-  `Mover` says which domains it moves in (none: `Land`). Every tick, after
+  `Mover` says which domains it moves in (none: `Land`) and, in a Quasi3D world, how high it
+  flies (`Lift`). `board.NewUnits[Row](brd, board.Shape{Size, Height}, at)` is how a game defines
+  its units: `units.Define(name, board.Mover{…}, steering, extra...)` derives `Position` and
+  `Cell` from the one point `at` reads off a row, `Layers` from the domain, in a Quasi3D world a
+  `world.Z{Height}` from the shape, runs the world's roster and `kind.Define`, and hands back the
+  usual `kind.Of[Row]`. In a Quasi3D world a `CellKind` also has an `Altitude` (its ground level)
+  and a `Height` (what stands on it); the `Board` keeps a raster of altitudes (`Grid.Ordinal`,
+  rebuilt when `Version` moves) and is the world's `Ground`; the `altitudeSystem` writes every
+  `Z.Altitude` each tick from the ground under the entity plus its `Lift`; terrain bodies carry
+  their kind's `Z`. A flat world refuses all of it at the first sight (`CellKindDict.Create`,
+  `NewUnits`, `Units.Define`, `Kinds.Register`).
+  Every tick, after
   collision's `RunPlan`, `board.RunPlan` reports a `Standing` (cell under the centre and its kind) to
   `board.Each` behaviors registered on the board, naturally `board.Each[board.Mover]`;
   `Standing.Fell(domain)` is a land unit in water or in a hole, and the reaction is the game's.
@@ -226,7 +249,7 @@ shows how much of it is boilerplate vs. real behavior.
   once after a load. Depends on `world`, and on `collision` for the bodies.
 - **`collision`** — optional collision detection over `world`'s space, one
   `CollisionSystem` system a tick. An entity collides exactly while it carries `Collider` —
-  `kind.Const(collision.Collider{})`, or `Attach`/`Detach` mid-game. The `CollisionSystem`
+  `comp.Const(collision.Collider{})`, or `Attach`/`Detach` mid-game. The `CollisionSystem`
   first settles every `Collider`'s `Base.Caps` (`CanCollide`, plus `Static` for an
   immovable `Physics`, `Sensor` for none) and rebuilds the space when any changed;
   two colliders touch only where their `world.Layers` meet — a board game uses `Domain` bits,
@@ -281,7 +304,7 @@ shows how much of it is boilerplate vs. real behavior.
   `Active`. Depends on `world`.
 - **`selection`** — a `Select` command (ids, or a world box, additive or not) → the `Selected`
   tag on `world` entities that carry `Selectable`, both bits of `selection.Family` from
-  `Plugin.Tags()` (a kind's choice via `kind.Tagged`; terrain bodies never do); a bit flip, seen
+  `Plugin.Tags()` (a kind's choice via `comp.Tagged`; terrain bodies never do); a bit flip, seen
   the same tick. A `plugin.Commander`: its `DefaultBindings()` make a left drag one (Shift adds).
   Depends on `world`.
 - **`players`** — whoever acts in the game, a carrier over `plugin.Commander`s:
@@ -306,7 +329,11 @@ shows how much of it is boilerplate vs. real behavior.
   ray spending its radius as a budget through it; whatever the ray reaches is seen, a forest
   looked into as much as a wall. `Sight.Blockers` are the `world.Layers` that cut or dim this
   sight at all (zero: every entity): a hawk with `Blockers` of `Air` looks over walls, forests
-  and walkers and still sees them; a walker with `Land` looks under the hawk. It
+  and walkers and still sees them; a walker with `Land` looks under the hawk. In a Quasi3D world
+  sight has heights instead: the cone's eye is `Z.Altitude + Sight.Eye`, every entity spans its
+  `Z`, the ground is the world's `Ground` sampled every `WithGroundStep` (default: a cell), and a
+  hawk 40 up looks over the wall, the forest and the hill a walker's cone stops at; `Blockers`
+  are refused there, `Eye` in a flat world. It
   hosts `vision.Between(a, b, fn)` of a `Sighting` inside the scan's own pass: once
   a tick per observer carrying `a`, with everything in view carrying `b` — a
   directed pair, grouped by observer, empty included. A behavior tells its seen

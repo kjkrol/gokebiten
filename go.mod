@@ -4,7 +4,7 @@ go 1.27.1
 
 require (
 	github.com/hajimehoshi/ebiten/v2 v2.10.2
-	github.com/kjkrol/aabbworld v1.6.0
+	github.com/kjkrol/aabbworld v1.7.0
 	github.com/kjkrol/astar v1.1.1
 	github.com/kjkrol/goke/v3 v3.2.3
 	github.com/kjkrol/uid v0.3.0
@@ -17,5 +17,3 @@ require (
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 )
-
-replace github.com/kjkrol/aabbworld => /home/karol/CODE/aabbworld

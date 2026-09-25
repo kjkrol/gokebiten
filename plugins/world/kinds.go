@@ -8,6 +8,7 @@ import (
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/gram/render"
 )
 
@@ -22,6 +23,7 @@ type Kinds struct {
 	families    map[reflect.Type]*tagFamily
 	familyOrder []reflect.Type
 	savedTags   map[string][]string // per family type name, what a save brought in
+	quasi3D     bool
 }
 
 // tagFamily is one family of tags: its names by bit, its component for saves, its remap.
@@ -38,9 +40,9 @@ type registered struct {
 	typeID   kind.ID
 	spriteID render.SpriteID
 	row      reflect.Type
-	position kind.Template[Position]
-	velocity kind.Template[Velocity]
-	comps    []kind.Comp
+	position comp.Template[Position]
+	velocity comp.Template[Velocity]
+	comps    []comp.Comp
 }
 
 var (
@@ -50,8 +52,8 @@ var (
 	_ plugin.Serializable = (*Kinds)(nil)
 )
 
-func newKinds() *Kinds {
-	return &Kinds{entries: make(map[string]registered), families: make(map[reflect.Type]*tagFamily)}
+func newKinds(quasi3D bool) *Kinds {
+	return &Kinds{entries: make(map[string]registered), families: make(map[reflect.Type]*tagFamily), quasi3D: quasi3D}
 }
 
 // Register takes spec on as name and assigns its ID and SpriteID by call order.
@@ -65,10 +67,13 @@ func (k *Kinds) Register(name string, row reflect.Type, spec kind.Spec) (kind.ID
 	r := registered{name: name, typeID: kind.ID(len(k.order)), spriteID: k.NewSprite(), row: row}
 	var positions, velocities int
 	for _, c := range spec {
+		if _, z := c.(comp.Template[Z]); z && !k.quasi3D {
+			panic(fmt.Sprintf("world: kind %q carries a Z in a flat world; set world.Config.Quasi3D", name))
+		}
 		switch t := c.(type) {
-		case kind.Template[Position]:
+		case comp.Template[Position]:
 			r.position, positions = t, positions+1
-		case kind.Template[Velocity]:
+		case comp.Template[Velocity]:
 			r.velocity, velocities = t, velocities+1
 		default:
 			r.comps = append(r.comps, c)

@@ -56,6 +56,28 @@
 // up to [MaxBodyCells] a side. The bodies follow [TerrainMap.Version]; call [Plugin.RunPlan] after
 // collision's.
 //
+// The board requires of every unit a [Cell] (where it starts) and a [Mover] (the domains it moves
+// in) through the world's kind.Roster — and makes them itself in [Units]: a game binds its rows to
+// the board once ([NewUnits]: the units' [Shape], where a row says a unit stands) and defines each
+// kind by its Mover and steering profile plus its own components; Position and Cell come from the
+// one point, Layers from the domain.
+//
+// # Heights
+//
+// In a Quasi3D world (world.Config.Quasi3D) a [CellKind] has an Altitude, its ground level, and a
+// Height, what stands on it. The [Board] keeps a raster of altitudes, one per cell (Grid.Ordinal),
+// rebuilt when the terrain's Version moves, and is the world's Ground ([Board.GroundAt],
+// [Board.Step]). Every tick the board writes each Z-carrying entity's Altitude: the ground under
+// its centre plus its Mover's Lift, so a unit never declares where it stands in height and a hawk
+// declares only how high it flies. Units get their Z from the Shape, terrain bodies from their
+// kind. A hill is a number in the raster and never a body, so the cost of sight does not depend
+// on how many a game has. On a square grid the ground runs smoothly between cells: each corner
+// stands at the mean altitude of the cells that meet there ([Board.Corners]), GroundAt reads
+// between a cell's corners, a hill has slopes and a unit on a slope stands at its height; the
+// renderer draws the tiles sloped, lit from the upper left so the relief reads, and faces only
+// where a top stands above its neighbour's — a wall over grass, a raised edge over the sea. A flat world refuses an Altitude, a Height or a
+// Lift where it first meets one.
+//
 // # Occupancy
 //
 // [Occupancy] tracks who holds each cell and in which domains, gating and recording every step
@@ -68,5 +90,9 @@
 // # Renderer
 //
 // [Plugin.WithRenderer] builds the [Renderer] drawing each cell's sprite from an atlas; put it
-// under the entity layer. [RenderState] holds its live toggles, such as grid lines.
+// under the entity layer, or into a render.Sorted with the world's renderer. There it submits each
+// cell's top at its altitude plus its kind's Height and, through an isometric camera, the two faces
+// towards the viewer wherever the ground drops to a neighbour (a cliff, down to sea level 0 off the
+// board) or the kind stands tall (a wall), shaded as if lit from the upper left. [RenderState] holds
+// its live toggles, such as grid lines (drawn only in the plain layer).
 package board

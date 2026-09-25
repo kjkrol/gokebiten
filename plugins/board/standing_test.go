@@ -14,6 +14,7 @@ import (
 	"github.com/kjkrol/gram/plugins/collision"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/uid"
 )
 
@@ -32,10 +33,10 @@ func installWorldAndBoard(t *testing.T, w *world.Plugin, brd *board.Plugin, grid
 	}
 	start, _ := grid.CellIndex(1, 1)
 	w.Seed(kind.Define[mover](w.Kinds(), "unit", kind.Spec{
-		kind.Load(func(m mover) world.Position { return world.Position{AABB: board.CellAABB(grid, m.cell, unitSize)} }),
-		kind.Const(world.Velocity{}),
-		kind.Load(func(m mover) board.Cell { return board.Cell{ID: m.cell} }),
-		kind.Const(board.Mover{Domain: board.Land}),
+		comp.Load(func(m mover) world.Position { return world.Position{AABB: board.CellAABB(grid, m.cell, unitSize)} }),
+		comp.Const(world.Velocity{}),
+		comp.Load(func(m mover) board.Cell { return board.Cell{ID: m.cell} }),
+		comp.Const(board.Mover{Domain: board.Land}),
 	}).Entry(mover{cell: start}))
 	if err := w.Populate(); err != nil {
 		t.Fatal(err)

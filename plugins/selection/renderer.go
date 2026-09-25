@@ -12,29 +12,44 @@ import (
 	"github.com/kjkrol/gram/render"
 )
 
-// HighlightStyle draws one Selected entity's outline, given its world-space AABB.
+// HighlightStyle draws one Selected entity's outline, given its world-space AABB and the altitude
+// it stands at (0 in a flat world).
 type HighlightStyle interface {
-	Draw(screen *ebiten.Image, cam camera.Camera, box camera.AABB)
+	Draw(screen *ebiten.Image, cam camera.Camera, box camera.AABB, altitude float32)
 }
 
 // HighlightStyleFn adapts a plain function to HighlightStyle.
-type HighlightStyleFn func(screen *ebiten.Image, cam camera.Camera, box camera.AABB)
+type HighlightStyleFn func(screen *ebiten.Image, cam camera.Camera, box camera.AABB, altitude float32)
 
-func (f HighlightStyleFn) Draw(screen *ebiten.Image, cam camera.Camera, box camera.AABB) {
-	f(screen, cam, box)
+func (f HighlightStyleFn) Draw(screen *ebiten.Image, cam camera.Camera, box camera.AABB, altitude float32) {
+	f(screen, cam, box, altitude)
 }
 
 var _ HighlightStyle = HighlightStyleFn(nil)
 
 var highlightColor = color.RGBA{R: 220, G: 40, B: 40, A: 255}
 
-// DefaultHighlightStyle draws a thin red outline around box.
+// DefaultHighlightStyle draws a thin red outline around box; through an isometric camera the box
+// is the diamond on the ground under the entity.
 func DefaultHighlightStyle() HighlightStyle {
-	return HighlightStyleFn(func(screen *ebiten.Image, cam camera.Camera, box camera.AABB) {
+	return HighlightStyleFn(func(screen *ebiten.Image, cam camera.Camera, box camera.AABB, altitude float32) {
+		x0, y0 := float32(box.TopLeft.X), float32(box.TopLeft.Y)
+		x1, y1 := float32(box.BottomRight.X), float32(box.BottomRight.Y)
+		if _, iso := cam.Projection().(camera.Isometric); iso {
+			c := render.ProjectCorners(cam, x0, y0, x1, y1, altitude)
+			var path vector.Path
+			path.MoveTo(c[0][0], c[0][1])
+			path.LineTo(c[1][0], c[1][1])
+			path.LineTo(c[3][0], c[3][1])
+			path.LineTo(c[2][0], c[2][1])
+			path.Close()
+			var cs ebiten.ColorScale
+			cs.ScaleWithColor(highlightColor)
+			vector.StrokePath(screen, &path, &vector.StrokeOptions{Width: 2}, &vector.DrawPathOptions{ColorScale: cs, AntiAlias: true})
+			return
+		}
 		var buf [4]camera.Quad
-		for _, q := range cam.ToScreenQuads(
-			float32(box.TopLeft.X), float32(box.TopLeft.Y),
-			float32(box.BottomRight.X), float32(box.BottomRight.Y), buf[:0]) {
+		for _, q := range cam.ToScreenQuads(x0, y0, x1, y1, buf[:0]) {
 			vector.StrokeRect(screen, q.X0, q.Y0, q.X1-q.X0, q.Y1-q.Y0, 2, highlightColor, true)
 		}
 	})
@@ -48,6 +63,7 @@ type Renderer struct {
 	query    *goke.Query
 	base     goke.Comp[world.Base]
 	marks    goke.Comp[plugin.Tags[Family]]
+	z        goke.OptComp[world.Z]
 	selected plugin.Tag[Family]
 }
 
@@ -65,7 +81,7 @@ func (r *Renderer) WithStyle(style HighlightStyle) *Renderer {
 }
 
 func (r *Renderer) Init(si *goke.SysInit) {
-	r.query = si.NewQueryBuilder(&r.base, &r.marks).Build()
+	r.query = si.NewQueryBuilder(&r.base, &r.marks).Optional(&r.z).Build()
 }
 
 func (r *Renderer) Draw(screen *ebiten.Image) {
@@ -74,9 +90,14 @@ func (r *Renderer) Draw(screen *ebiten.Image) {
 		cursor := r.query.Cursor()
 		bases := r.base.Slice(cursor)
 		marks := r.marks.Slice(cursor)
+		zs := r.z.Slice(cursor)
 		for i := range cursor.IDs {
 			if marks[i].Has(r.selected) {
-				r.style.Draw(screen, r.camera, bases[i].Pos.AABB.AABB)
+				alt := float32(0)
+				if zs != nil {
+					alt = float32(zs[i].Altitude)
+				}
+				r.style.Draw(screen, r.camera, bases[i].Pos.AABB.AABB, alt)
 			}
 		}
 	}

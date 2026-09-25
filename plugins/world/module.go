@@ -8,6 +8,7 @@ import (
 	"github.com/kjkrol/aabbworld"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/uid"
 )
 
@@ -103,6 +104,7 @@ func (w *module) LoadComps() []goke.CompToken {
 		goke.LoadComp[Steering](),
 		goke.LoadComp[Outside](),
 		goke.LoadComp[Layers](),
+		goke.LoadComp[Z](),
 	}, w.declared...)
 }
 
@@ -180,8 +182,8 @@ func (w *module) despawn(cb *goke.CmdBuf, id uid.UID64) {
 // populate queues a spawn of one entity of k per row, each row feeding k's Loads.
 func (w *module) populate(k registered, rows []any) {
 	count := len(rows)
-	writers := []kind.Spawner{
-		kind.Const(Appearance{SpriteID: k.spriteID}).Spawner(),
+	writers := []comp.Spawner{
+		comp.Const(Appearance{SpriteID: k.spriteID}).Spawner(),
 	}
 	for _, c := range k.comps {
 		writers = append(writers, c.Spawner())

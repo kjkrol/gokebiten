@@ -10,6 +10,7 @@ import (
 	"github.com/kjkrol/gram/plugins/collision"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 )
 
 type shaped struct{ x float64 }
@@ -39,10 +40,10 @@ func shapesRun(t *testing.T, test collision.ShapeTest) (meetings []collision.Mee
 	}
 
 	boxes := kind.Define[shaped](w.Kinds(), "box", kind.Spec{
-		kind.Load(func(b shaped) world.Position { return posAt(b.x, 500, 10, 10) }),
-		kind.Const(world.Velocity{}),
-		kind.Const(collision.Collider{}),
-		kind.Const(collision.Physics{Restitution: 1}),
+		comp.Load(func(b shaped) world.Position { return posAt(b.x, 500, 10, 10) }),
+		comp.Const(world.Velocity{}),
+		comp.Const(collision.Collider{}),
+		comp.Const(collision.Physics{Restitution: 1}),
 	})
 	w.Seed(boxes.Entry(shaped{x: 100}), boxes.Entry(shaped{x: 104}))
 	if err := w.Populate(); err != nil {

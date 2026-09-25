@@ -10,6 +10,7 @@ import (
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/uid"
 )
 
@@ -72,17 +73,17 @@ func newRoadWorld(t *testing.T, width uint32, units []roadUnit) *roadWorld {
 			domain = board.Land
 		}
 		s := kind.Spec{
-			kind.Load(func(u roadUnit) world.Position { return world.Position{AABB: board.CellAABB(rw.grid, u.start, 22)} }),
-			kind.Const(world.Velocity{}),
-			kind.Const(world.Steering{MaxSpeed: 96, Accel: 192, Brake: 384, V0: 48, TurnRate: 0.15}),
-			kind.Load(func(u roadUnit) board.Cell { return board.Cell{ID: u.start} }),
-			kind.Const(collision.Collider{}),
-			kind.Const(world.Layers(domain)),
-			kind.Const(collision.Physics{}),
-			kind.Const(board.Mover{Domain: domain}),
+			comp.Load(func(u roadUnit) world.Position { return world.Position{AABB: board.CellAABB(rw.grid, u.start, 22)} }),
+			comp.Const(world.Velocity{}),
+			comp.Const(world.Steering{MaxSpeed: 96, Accel: 192, Brake: 384, V0: 48, TurnRate: 0.15}),
+			comp.Load(func(u roadUnit) board.Cell { return board.Cell{ID: u.start} }),
+			comp.Const(collision.Collider{}),
+			comp.Const(world.Layers(domain)),
+			comp.Const(collision.Physics{}),
+			comp.Const(board.Mover{Domain: domain}),
 		}
 		if ordered {
-			s = append(s, kind.Load(func(u roadUnit) MoveOrder { return MoveOrder{Target: u.target} }))
+			s = append(s, comp.Load(func(u roadUnit) MoveOrder { return MoveOrder{Target: u.target} }))
 		}
 		return s
 	}

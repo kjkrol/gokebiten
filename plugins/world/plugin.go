@@ -14,6 +14,7 @@ import (
 	"github.com/kjkrol/gram/control"
 	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/gram/render"
 	"github.com/kjkrol/uid"
 )
@@ -37,6 +38,8 @@ type Plugin struct {
 	module   *module
 	renderer *Renderer
 	kinds    *Kinds
+	roster   *kind.Roster
+	ground   Ground
 	seeded   []kind.Entry
 	view     *View // the camera's
 }
@@ -53,12 +56,27 @@ func (*Plugin) Builtin() {}
 func NewPlugin(cfg Config) *Plugin {
 	m := newModule(cfg)
 	cam := camera.NewFromSpaceWithConfig(cfg.Space.Width, cfg.Space.Height, cfg.Space.Edges, cfg.Camera)
-	kinds := newKinds()
+	kinds := newKinds(cfg.Quasi3D)
 	m.kinds = kinds
-	p := &Plugin{Res: Resources{Config: cfg, Telemetry: &m.telemetry, Camera: cam}, module: m, kinds: kinds}
+	p := &Plugin{Res: Resources{Config: cfg, Telemetry: &m.telemetry, Camera: cam}, module: m, kinds: kinds, roster: kind.NewRoster()}
 	p.view = p.NewView(cam.Bounds)
+	kind.Require[Position](&p.roster.Unit, "world", "where it stands")
+	p.roster.Unit.Default(comp.Const(Velocity{}))
 	return p
 }
+
+// Roster is what this world's plugins ask of the kinds a game defines; build a unit's Spec through
+// Roster().Unit.Spec.
+func (p *Plugin) Roster() *kind.Roster { return p.roster }
+
+// Quasi3D reports whether this world has heights — see Config.Quasi3D.
+func (p *Plugin) Quasi3D() bool { return p.Res.Config.Quasi3D }
+
+// SetGround gives a Quasi3D world its ground heights; the board calls it, sight reads Ground.
+func (p *Plugin) SetGround(g Ground) { p.ground = g }
+
+// Ground is the world's ground heights, nil for flat ground at 0.
+func (p *Plugin) Ground() Ground { return p.ground }
 
 // View is what the camera sees: refreshed each tick after movement, drawn by the entity renderer.
 func (p *Plugin) View() *View { return p.view }

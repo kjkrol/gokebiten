@@ -9,7 +9,7 @@ import (
 	"github.com/kjkrol/aabbworld/plane"
 	"github.com/kjkrol/goke/v3"
 	"github.com/kjkrol/gram/plugin"
-	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 )
 
 var (
@@ -25,7 +25,7 @@ func steerTicks(t *testing.T, st Steering, start geom.Vec, n int) []geom.Vec {
 	wm.populate(testKind(
 		Position{AABB: plane.NewAABB(geom.NewVec(500, 500), 10, 10)},
 		Velocity{Dir: start, Value: 1},
-		kind.Const(st),
+		comp.Const(st),
 	), []any{nil})
 
 	var base goke.Comp[Base]
@@ -162,7 +162,7 @@ func TestSteering_LastingStimulusStillTurnsTheEntity(t *testing.T) {
 	wm.populate(testKind(
 		Position{AABB: plane.NewAABB(geom.NewVec(500, 500), 10, 10)},
 		Velocity{Dir: east, Value: 1},
-		kind.Const(Steering{Reflex: 3, TurnRate: 0.12}),
+		comp.Const(Steering{Reflex: 3, TurnRate: 0.12}),
 	), []any{nil})
 
 	var base goke.Comp[Base]
@@ -212,7 +212,7 @@ func speedTicks(t *testing.T, st Steering, vel Velocity, moving []plugin.Behavio
 	wm.populate(testKind(
 		Position{AABB: plane.NewAABB(geom.NewVec(500, 500), 10, 10)},
 		vel,
-		kind.Const(st),
+		comp.Const(st),
 	), []any{nil})
 
 	var base goke.Comp[Base]

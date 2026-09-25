@@ -11,6 +11,7 @@ import (
 	"github.com/kjkrol/gram/plugins/effects"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/uid"
 )
 
@@ -82,12 +83,12 @@ func newRig(t *testing.T, withFamily bool, define func(r *rig)) *rig {
 		t.Fatal(err)
 	}
 	spec := kind.Spec{
-		kind.Const(world.Position{AABB: plane.NewAABB(geom.NewVec(100, 100), 10, 10)}),
-		kind.Const(world.Velocity{}),
-		kind.Const(world.Steering{MaxSpeed: 10}),
+		comp.Const(world.Position{AABB: plane.NewAABB(geom.NewVec(100, 100), 10, 10)}),
+		comp.Const(world.Velocity{}),
+		comp.Const(world.Steering{MaxSpeed: 10}),
 	}
 	if withFamily {
-		spec = append(spec, kind.Tagged[moods]())
+		spec = append(spec, comp.Tagged[moods]())
 	}
 	unit := kind.Define[struct{}](r.w.Kinds(), "unit", spec)
 	r.w.Seed(unit.Entry(struct{}{}))

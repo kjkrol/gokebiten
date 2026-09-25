@@ -59,9 +59,8 @@ func (p *Player) DragBox() (start, current geom.Vec, dragging bool) {
 
 // screen is the window's size in pixels, as the camera shows the world.
 func (p *Player) screen() geom.Vec {
-	b := p.Camera.Bounds()
-	z := float64(p.Camera.Zoom())
-	return geom.NewVec((b.BottomRight.X-b.TopLeft.X)*z, (b.BottomRight.Y-b.TopLeft.Y)*z)
+	w, h := p.Camera.Viewport()
+	return geom.NewVec(float64(w), float64(h))
 }
 
 func (p *Player) press(button ebiten.MouseButton, at geom.Vec) {

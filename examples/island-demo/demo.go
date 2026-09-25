@@ -1,12 +1,15 @@
 // Command island-demo is a map larger than the window: an island of fields, forests, slow hills
 // and slower mountains in a sea that drowns whoever is pushed in, a road round it, units under
-// orders. Scroll with the wheel, drag with the
-// middle button or push the cursor to an edge to move the camera.
+// orders with sight cones, and a hawk on the Air plane whose cone nothing on the ground dims.
+// Scroll with the wheel, drag with the middle button or push the cursor to an edge to move the
+// camera.
 package main
 
 import (
+	"github.com/kjkrol/aabbworld/geom"
 	"image/color"
 	"log"
+	"math"
 	"slices"
 	"time"
 
@@ -20,8 +23,10 @@ import (
 	"github.com/kjkrol/gram/plugins/navigation"
 	"github.com/kjkrol/gram/plugins/players"
 	"github.com/kjkrol/gram/plugins/selection"
+	"github.com/kjkrol/gram/plugins/vision"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/gram/render"
 )
 
@@ -37,6 +42,8 @@ const (
 	EntitySize   = 22
 	UnitSpeed    = CellSize * 3
 	UnitCount    = 6
+	sightRadius  = 220
+	sightHalf    = math.Pi / 5
 	// MaxEntCount is the units plus the terrain bodies the forests make.
 	MaxEntCount = 400
 
@@ -75,7 +82,9 @@ type mainStage struct {
 	collision *collision.Plugin
 	selection *selection.Plugin
 	players   *players.Plugin
+	vision    *vision.Plugin
 	unit      kind.Of[unit]
+	hawk      kind.Of[unit]
 	stack     game.Scenes
 	state     *State
 }
@@ -100,12 +109,12 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 	grid := board.DefaultGrids{}.Square(GridWidth, GridHeight, CellSize)
 	s.board = board.NewPlugin(grid, &board.SingleOccupancy{}, s.world).WithCollision(s.collision)
 	s.board.CellKindDict().Create(
-		board.CellKind{Name: board.Named("water"), Cost: 1, Allows: board.Water},
-		board.CellKind{Name: board.Named("field"), Cost: 1.5, Allows: board.Land},
-		board.CellKind{Name: board.Named("forest"), Cost: 3, Allows: board.Land, Veil: 0.6},
-		board.CellKind{Name: board.Named("hills"), Cost: 4, Allows: board.Land},
-		board.CellKind{Name: board.Named("mountain"), Cost: 8, Allows: board.Land},
-		board.CellKind{Name: board.Named("road"), Cost: 1, Allows: board.Land},
+		board.CellKind{Name: board.Named("water"), Cost: 1, Allows: board.Water | board.Air},
+		board.CellKind{Name: board.Named("field"), Cost: 1.5, Allows: board.Land | board.Air}.Costing(board.Air, 1),
+		board.CellKind{Name: board.Named("forest"), Cost: 3, Allows: board.Land | board.Air, Veil: 0.6, Veils: board.Land}.Costing(board.Air, 1),
+		board.CellKind{Name: board.Named("hills"), Cost: 4, Allows: board.Land | board.Air}.Costing(board.Air, 1),
+		board.CellKind{Name: board.Named("mountain"), Cost: 8, Allows: board.Land | board.Air}.Costing(board.Air, 1),
+		board.CellKind{Name: board.Named("road"), Cost: 1, Allows: board.Land | board.Air},
 	)
 	if err := s.board.RegisterBehavior(board.Each[board.Mover](s.drown)); err != nil {
 		return err
@@ -121,6 +130,11 @@ func (s *mainStage) Init(ctx game.Initializer) error {
 
 	s.nav = navigation.NewPlugin(s.board, s.world, s.selection)
 	if err := ctx.Use(s.nav); err != nil {
+		return err
+	}
+
+	s.vision = vision.NewPlugin(s.world)
+	if err := ctx.Use(s.vision); err != nil {
 		return err
 	}
 
@@ -168,18 +182,20 @@ type unit struct{ start, target board.CellID }
 // defineKinds says what this game's entities are, fresh or restored.
 func (s *mainStage) defineKinds() {
 	brd := s.board.Res.Logic.Board
-	s.unit = kind.Define[unit](s.world.Kinds(), "unit", kind.Spec{
-		kind.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(brd, u.start, EntitySize)} }),
-		kind.Const(world.Velocity{}),
-		kind.Const(world.Steering{MaxSpeed: UnitSpeed, Accel: UnitSpeed * 2, Brake: UnitSpeed * 4, V0: UnitSpeed / 2, TurnRate: 0.15}),
-		kind.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} }),
-		kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }),
-		kind.Tagged(s.selection.Tags().Selectable, s.selection.Tags().Selected),
-		kind.Const(collision.Collider{}),
-		kind.Const(world.Layers(board.Land)),
-		kind.Const(collision.Physics{}),
-		kind.Const(board.Mover{Domain: board.Land}),
-	})
+	units := board.NewUnits[unit](s.board, board.Shape{Size: EntitySize}, func(u unit) geom.Vec { return brd.CellCenter(u.start) })
+	order := comp.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} })
+	sight := func(blockers board.Domain) comp.Comp {
+		return comp.Const(vision.Sight{Facing: geom.NewVec(1, 0), HalfAngle: sightHalf, Radius: sightRadius, Blockers: world.Layers(blockers)})
+	}
+	s.unit = units.Define("unit", board.Mover{Domain: board.Land}, world.Steering{MaxSpeed: UnitSpeed, Accel: UnitSpeed * 2, Brake: UnitSpeed * 4, V0: UnitSpeed / 2, TurnRate: 0.15},
+		order, comp.Tagged(s.selection.Tags().Selectable, s.selection.Tags().Selected),
+		sight(board.Land), comp.Const(vision.SightOutline{}),
+	)
+	// The hawk is on the Air plane alone: nothing on the ground pushes it or dims its sight.
+	s.hawk = units.Define("hawk", board.Mover{Domain: board.Air}, world.Steering{MaxSpeed: UnitSpeed * 1.5, Accel: UnitSpeed * 2, Brake: UnitSpeed * 4, V0: UnitSpeed / 2, TurnRate: 0.1},
+		order, comp.Tagged(s.selection.Tags().Selectable),
+		sight(board.Air), comp.Const(vision.SightOutline{}),
+	)
 }
 
 // Spawn lays the island out and puts a unit at every road stop, bound for the opposite one.
@@ -187,10 +203,12 @@ func (s *mainStage) Spawn() error {
 	layout, stops := islandLayout(s.board.Res.Logic.Board)
 	s.board.Seed(layout)
 
-	entries := make([]kind.Entry, 0, len(stops))
+	entries := make([]kind.Entry, 0, len(stops)+1)
 	for i, from := range stops {
 		entries = append(entries, s.unit.Entry(unit{start: from, target: stops[(i+len(stops)/2)%len(stops)]}))
 	}
+	// The hawk crosses the island from the first stop to the one across the mountains.
+	entries = append(entries, s.hawk.Entry(unit{start: stops[0], target: stops[len(stops)/2]}))
 	s.world.Seed(entries...)
 	return nil
 }
@@ -208,6 +226,7 @@ func (s *mainStage) Update(ctx goke.RunCtx, d time.Duration) {
 	s.collision.RunPlan(ctx, d)
 	s.board.RunPlan(ctx, d)
 	s.nav.RunPlan(ctx, d)
+	s.vision.RunPlan(ctx, d)
 	s.selection.RunPlan(ctx, d)
 	s.players.RunPlan(ctx, d)
 	ctx.Sync()
@@ -230,6 +249,7 @@ func (m *mainScene) Layers() []render.Renderer {
 
 	worldAtlas := render.NewAtlas()
 	worldAtlas.RegisterAt(s.unit.SpriteID(), EntitySize, render.Solid(color.RGBA{R: 230, G: 80, B: 80, A: 255}))
+	worldAtlas.RegisterAt(s.hawk.SpriteID(), EntitySize, render.Diamond(color.RGBA{R: 120, G: 130, B: 60, A: 255}))
 	worldAtlas.Close()
 	s.world.WithRenderer(worldAtlas)
 
@@ -253,11 +273,12 @@ func (m *mainScene) Layers() []render.Renderer {
 	pathAtlas, pathSprites := navigation.RegisterDefaultPathSprites(CellSize, 2, color.RGBA{R: 255, G: 140, B: 0, A: 255})
 	s.nav.SetPathSprites(pathSprites)
 	s.nav.WithRenderer(pathAtlas)
+	s.vision.WithRenderer(nil)
 	s.selection.WithRenderer(nil)
 	s.players.WithRenderer(nil)
 
 	count := func() int { return s.world.Res.Telemetry.Count }
-	layers := append([]render.Renderer{s.board.Renderer(), s.world.Renderer()}, s.players.Renderers()...)
+	layers := append([]render.Renderer{s.board.Renderer(), s.vision.Renderer(), s.world.Renderer()}, s.players.Renderers()...)
 	return append(layers, render.NewTelemetryRenderer(&m.tps.Ticks, count, &m.none))
 }
 

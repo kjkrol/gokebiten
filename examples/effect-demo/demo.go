@@ -8,6 +8,7 @@
 package main
 
 import (
+	"github.com/kjkrol/aabbworld/geom"
 	"image/color"
 	"log"
 	"math"
@@ -26,6 +27,7 @@ import (
 	"github.com/kjkrol/gram/plugins/selection"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/gram/render"
 )
 
@@ -271,25 +273,15 @@ func (s *mainStage) onGround(t plugin.Tick, m *board.Mover, st board.Standing) {
 // defineKinds says what this game's entities are: the witch walks on land and water, the walker
 // on land, the boat on water.
 func (s *mainStage) defineKinds() {
-	spec := func(domain board.Domain, brake float64, extra ...kind.Comp) kind.Spec {
-		base := kind.Spec{
-			kind.Load(func(u unit) world.Position { return world.Position{AABB: board.CellAABB(s.brd, u.start, EntitySize)} }),
-			kind.Const(world.Velocity{}),
-			kind.Const(world.Steering{MaxSpeed: UnitSpeed, Accel: UnitSpeed * 2, Brake: brake, V0: UnitSpeed / 2, TurnRate: 0.15}),
-			kind.Load(func(u unit) board.Cell { return board.Cell{ID: u.start} }),
-			kind.Const(board.Mover{Domain: domain}),
-			kind.Tagged(s.selection.Tags().Selectable),
-			kind.Const(collision.Collider{}),
-			kind.Const(world.Layers(domain)),
-			kind.Const(collision.Physics{}),
-		}
-		return append(base, extra...)
+	units := board.NewUnits[unit](s.board, board.Shape{Size: EntitySize}, func(u unit) geom.Vec { return s.brd.CellCenter(u.start) })
+	profile := func(brake float64) world.Steering {
+		return world.Steering{MaxSpeed: UnitSpeed, Accel: UnitSpeed * 2, Brake: brake, V0: UnitSpeed / 2, TurnRate: 0.15}
 	}
-	order := kind.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} })
-	kinds := s.world.Kinds()
-	s.witch = kind.Define[unit](kinds, "witch", spec(board.Land|board.Water|Frost, UnitSpeed*4, order, kind.Const(witch{Power: 1})))
-	s.walker = kind.Define[unit](kinds, "walker", spec(board.Land, UnitSpeed*4))
-	s.boat = kind.Define[unit](kinds, "boat", spec(board.Water, UnitSpeed/4, order))
+	sel := comp.Tagged(s.selection.Tags().Selectable)
+	order := comp.Load(func(u unit) navigation.MoveOrder { return navigation.MoveOrder{Target: u.target} })
+	s.witch = units.Define("witch", board.Mover{Domain: board.Land | board.Water | Frost}, profile(UnitSpeed*4), sel, order, comp.Const(witch{Power: 1}))
+	s.walker = units.Define("walker", board.Mover{Domain: board.Land}, profile(UnitSpeed*4), sel)
+	s.boat = units.Define("boat", board.Mover{Domain: board.Water}, profile(UnitSpeed/4), sel, order)
 }
 
 // Spawn lays the lake and the road and puts the three of them in place.

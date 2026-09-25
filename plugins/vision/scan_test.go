@@ -11,6 +11,7 @@ import (
 	"github.com/kjkrol/gram/plugins/vision"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/uid"
 )
 
@@ -43,8 +44,15 @@ type spawn struct {
 	size    float64
 	tau     float64
 	layers  world.Layers
+	z       *world.Z      // heights, in a Quasi3D scene
 	sight   *vision.Sight // nil for something that is merely seen
 	outline bool
+}
+
+// relief is what a Quasi3D scene stands on: nil for flat ground at 0.
+type relief struct {
+	ground world.Ground
+	step   float64
 }
 
 func at(d spawn) world.Position {
@@ -55,15 +63,27 @@ func at(d spawn) world.Position {
 	return world.Position{AABB: plane.NewAABB(geom.NewVec(d.x, d.y), size, size)}
 }
 
-// scene installs world+vision, spawns everything, ticks once; returns observers and what they saw.
+// scene installs world+vision on a flat world, spawns everything, ticks once; returns observers and
+// what they saw.
 func scene(t *testing.T, spawns ...spawn) ([]uid.UID64, []vision.Sighted, []vision.SightOutline) {
+	t.Helper()
+	return sceneIn(t, nil, spawns...)
+}
+
+// sceneIn is scene in a Quasi3D world standing on r (nil: a flat world).
+func sceneIn(t *testing.T, r *relief, spawns ...spawn) ([]uid.UID64, []vision.Sighted, []vision.SightOutline) {
 	t.Helper()
 
 	w := world.NewPlugin(world.Config{
 		Space:    world.SpaceCfg{Width: 2000, Height: 2000},
 		Entities: world.EntitiesCfg{MaxCount: 64, MinSize: 1, MaxSize: 100},
+		Quasi3D:  r != nil,
 	})
 	v := vision.NewPlugin(w)
+	if r != nil {
+		w.SetGround(r.ground)
+		v.WithGroundStep(r.step)
+	}
 
 	ctx := &installCtx{ecs: goke.New()}
 	if err := w.Install(ctx); err != nil {
@@ -75,19 +95,22 @@ func scene(t *testing.T, spawns ...spawn) ([]uid.UID64, []vision.Sighted, []visi
 
 	for i, s := range spawns {
 		spec := kind.Spec{
-			kind.Load(at),
-			kind.Const(world.Velocity{}),
+			comp.Load(at),
+			comp.Const(world.Velocity{}),
 		}
 		if s.tau > 0 {
-			spec = append(spec, kind.Const(vision.Transparency{Value: s.tau}))
+			spec = append(spec, comp.Const(vision.Transparency{Value: s.tau}))
 		}
 		if s.layers != 0 {
-			spec = append(spec, kind.Const(s.layers))
+			spec = append(spec, comp.Const(s.layers))
+		}
+		if s.z != nil {
+			spec = append(spec, comp.Const(*s.z))
 		}
 		if s.sight != nil {
-			spec = append(spec, kind.Const(*s.sight))
+			spec = append(spec, comp.Const(*s.sight))
 			if s.outline {
-				spec = append(spec, kind.Const(vision.SightOutline{}))
+				spec = append(spec, comp.Const(vision.SightOutline{}))
 			}
 		}
 		w.Seed(kind.Define[spawn](w.Kinds(), kindName(i), spec).Entry(s))

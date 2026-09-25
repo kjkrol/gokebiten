@@ -58,6 +58,41 @@ func (b *QuadBatch) AppendQuad(x0, y0, x1, y1 float32, id SpriteID) {
 	b.AppendQuadUV(x0, y0, x1, y1, id, 0, 0, 1, 1)
 }
 
+// AppendCorners appends the sprite over four screen corners already projected — top-left,
+// top-right, bottom-left, bottom-right — for a quad that is no rectangle on screen.
+func (b *QuadBatch) AppendCorners(dst Corners, id SpriteID) {
+	sx0, sy0, sx1, sy1 := inset(b.atlas.UV(id))
+	if len(b.vertices)-b.chunk == chunkVertices {
+		b.chunk = len(b.vertices)
+	}
+	idx := uint16(len(b.vertices) - b.chunk)
+	b.vertices = append(b.vertices,
+		ebiten.Vertex{DstX: dst[0][0], DstY: dst[0][1], SrcX: sx0, SrcY: sy0, ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1},
+		ebiten.Vertex{DstX: dst[1][0], DstY: dst[1][1], SrcX: sx1, SrcY: sy0, ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1},
+		ebiten.Vertex{DstX: dst[2][0], DstY: dst[2][1], SrcX: sx0, SrcY: sy1, ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1},
+		ebiten.Vertex{DstX: dst[3][0], DstY: dst[3][1], SrcX: sx1, SrcY: sy1, ColorR: 1, ColorG: 1, ColorB: 1, ColorA: 1},
+	)
+	b.indices = append(b.indices, idx, idx+1, idx+2, idx+1, idx+2, idx+3)
+}
+
+// ProjectCorners is the four corners of the world box (x0, y0)-(x1, y1) at height z through cam.
+func ProjectCorners(cam camera.Camera, x0, y0, x1, y1, z float32) Corners {
+	var out Corners
+	for i, p := range [4][2]float32{{x0, y0}, {x1, y0}, {x0, y1}, {x1, y1}} {
+		out[i][0], out[i][1] = cam.Project(p[0], p[1], z)
+	}
+	return out
+}
+
+// Billboard is a sprite w x h world units large standing upright at the world point (x, y, z):
+// on screen, a rectangle whose bottom edge is centred on the projected point.
+func Billboard(cam camera.Camera, x, y, z, w, h float32) Corners {
+	sx, sy := cam.Project(x, y, z)
+	zoom := cam.Zoom()
+	hw, hh := w*zoom/2, h*zoom
+	return Corners{{sx - hw, sy - hh}, {sx + hw, sy - hh}, {sx - hw, sy}, {sx + hw, sy}}
+}
+
 // Flush draws every quad appended since Reset, one call per chunk of vertices.
 func (b *QuadBatch) Flush(screen *ebiten.Image) {
 	for start := 0; start < len(b.vertices); start += chunkVertices {

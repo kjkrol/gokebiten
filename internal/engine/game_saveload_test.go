@@ -13,6 +13,7 @@ import (
 	"github.com/kjkrol/gram/plugin"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 	"github.com/kjkrol/gram/render"
 )
 
@@ -172,11 +173,11 @@ func TestGame_SaveLoad_KeepsWhatAKindGivesItsEntities(t *testing.T) {
 	basePath := t.TempDir() + "/save"
 	define := func(kinds *world.Kinds) []kind.Entry {
 		marked := kind.Define[struct{}](kinds, "marked", kind.Spec{
-			kind.Const(world.Position{AABB: plane.NewAABB(geom.NewVec(100, 100), 10, 10)}),
-			kind.Const(world.Velocity{}),
-			kind.Const(saveTestTag{}),
-			kind.Const(saveTestMark{Left: 3}),
-			kind.Const(world.Steering{TurnRate: 0.5}),
+			comp.Const(world.Position{AABB: plane.NewAABB(geom.NewVec(100, 100), 10, 10)}),
+			comp.Const(world.Velocity{}),
+			comp.Const(saveTestTag{}),
+			comp.Const(saveTestMark{Left: 3}),
+			comp.Const(world.Steering{TurnRate: 0.5}),
 		})
 		return []kind.Entry{marked.Entry(struct{}{})}
 	}

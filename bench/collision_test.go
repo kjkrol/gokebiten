@@ -14,6 +14,7 @@ import (
 	"github.com/kjkrol/gram/plugins/collision/behavior"
 	"github.com/kjkrol/gram/plugins/world"
 	"github.com/kjkrol/gram/plugins/world/kind"
+	"github.com/kjkrol/gram/plugins/world/kind/comp"
 )
 
 // The collision scenes are the collision demo's: a 1024x1024 torus filled to a share of its
@@ -70,10 +71,10 @@ func benchCollision(b *testing.B, rect uint32, percent float64) (*goke.ECS, int,
 		b.Fatal(err)
 	}
 	boxes := kind.Define[body](w.Kinds(), "box", kind.Spec{
-		kind.Load(func(r body) world.Position { return r.pos }),
-		kind.Load(func(r body) world.Velocity { return r.vel }),
-		kind.Const(collision.Collider{}),
-		kind.Const(collision.Physics{Restitution: 1}),
+		comp.Load(func(r body) world.Position { return r.pos }),
+		comp.Load(func(r body) world.Velocity { return r.vel }),
+		comp.Const(collision.Collider{}),
+		comp.Const(collision.Physics{Restitution: 1}),
 	})
 	placement := world.NewGridPlacement(sceneWidth, sceneHeight, rect)
 	entries := make([]kind.Entry, count)
